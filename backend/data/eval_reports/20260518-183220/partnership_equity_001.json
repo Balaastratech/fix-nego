@@ -1,0 +1,533 @@
+{
+  "scenario_id": "partnership_equity_001",
+  "title": "Three-way founder equity split with vesting and role tradeoff",
+  "family": "equity_split",
+  "session_id": "8d23ebc5-e2b6-4bf1-a016-ee278e139157",
+  "created_at": "2026-05-18T18:52:00+05:30",
+  "summary": {
+    "score": 0.735,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.762,
+    "judge_average": 0.713
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "CTO wants more for full-time work. How do I justify sixty without breaking the relationship?",
+      "expected_direction": "Justify 60 with IP and capital contribution; protect vesting and cliff; do not concede below the target by trading on relationship pressure alone.",
+      "response": "The current gap is between the counterparty's proposal of a 33/33/33 split and your target of 60/25/15. To justify your 60% stake, frame it as a reflection of your unique, pre-existing contributions of IP and the initial $200,000 in capital, which are separate from the future full-time commitment you are all making.\n\nProtect your 60% target by separating the value of past contributions (IP, capital) from future contributions (full-time work). You can justify the split by anchoring the conversation on founder equity models that reward pre-founding risk and investment, while acknowledging their full-time commitment is also critical and is reflected in their substantial stakes. This approach validates their contribution without devaluing your own.",
+      "timestamp_ms": 1779110444439,
+      "deterministic_score": {
+        "score": 0.65,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.0,
+          "actionable": 1.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "60"
+        ],
+        "relevant_terms": [
+          "vesting",
+          "cliff"
+        ],
+        "number_hits": [
+          "60"
+        ],
+        "term_hits": []
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 1,
+          "speaker_attribution": 1,
+          "actionability": 2,
+          "commercial_quality": 2,
+          "non_genericness": 3,
+          "constraint_obedience": 2,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 2.13,
+        "passed": false,
+        "rationale": "The response hallucinates multiple key facts not present in the scenario. It invents a \"33/33/33 split\" proposal from the counterparty (the scenario states the CTO wants 30%) and a \"$200,000 in capital\" figure (the scenario only mentions \"initial capital\"). These hallucinations provide the user with a dangerously incorrect view of the negotiation.",
+        "best_fix": "Remove the hallucinated numbers and proposals. The advice should state the current gap based on the provided numbers (60/30/20) and justify the user's position based on the conceptual contributions (IP, capital) without inventing specific dollar amounts."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to close at sixty twenty five fifteen with four year vesting and one year cliff.",
+      "expected_direction": "Offer 60/25/15 split explicitly with 4 year vesting and 1 year cliff in one sentence.",
+      "response": "Say: 'My contribution of IP and capital is reflected at sixty; the sixty, twenty-five, fifteen split with a four-year vest and one-year cliff for all is the structure that gets this deal done.'",
+      "timestamp_ms": 1779110463634,
+      "deterministic_score": {
+        "score": 0.875,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "60",
+          "25",
+          "15",
+          "4",
+          "1"
+        ],
+        "relevant_terms": [
+          "vesting",
+          "cliff"
+        ],
+        "number_hits": [
+          "60",
+          "25",
+          "15",
+          "4",
+          "1"
+        ],
+        "term_hits": [
+          "cliff"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response is excellent. It's a single, actionable sentence that directly addresses the user's request to close the deal. It incorporates all the specified numbers (60/25/15), the vesting terms (4-year vest, 1-year cliff), and even reinforces the user's justification (IP and capital contribution) in a commercially savvy and assertive way.",
+        "best_fix": "No fix is needed; the response is optimal."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "8d23ebc5-e2b6-4bf1-a016-ee278e139157",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110423.5076466
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110423.5188253
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "8d23ebc5-e2b6-4bf1-a016-ee278e139157",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "8d23ebc5-e2b6-4bf1-a016-ee278e139157"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Equal three-way split is the cleanest start. Thirty three each.",
+        "timestamp": 1779110431602,
+        "start_time": 1779110431.602,
+        "end_time": 1779110431.602,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "I brought the IP and the initial two hundred thousand of capital. A clean split does not reflect that.",
+        "timestamp": 1779110432402,
+        "start_time": 1779110432.402,
+        "end_time": 1779110432.402,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "But we are all going full-time. Capital can be recognized as a loan.",
+        "timestamp": 1779110433202,
+        "start_time": 1779110433.202,
+        "end_time": 1779110433.202,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is sixty for me, twenty five for CTO, fifteen for CMO with four year vesting.",
+        "timestamp": 1779110434002,
+        "start_time": 1779110434.002,
+        "end_time": 1779110434.002,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110444439",
+        "speaker": "ai",
+        "text": "The current gap is between the counterparty's proposal of a 33/33/33 split and your target of 60/25/15. To justify your 60% stake, frame it as a reflection of your unique, pre-existing contributions of IP and the initial $200,000 in capital, which are separate from the future full-time commitment you are all making.\n\nProtect your 60% target by separating the value of past contributions (IP, capital) from future contributions (full-time work). You can justify the split by anchoring the conversation on founder equity models that reward pre-founding risk and investment, while acknowledging their full-time commitment is also critical and is reflected in their substantial stakes. This approach validates their contribution without devaluing your own.",
+        "timestamp": 1779110444439,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "three-way split",
+        "negotiation_type": "other",
+        "seller_price": 33,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To achieve an equal split among three parties.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Counterparty opens the negotiation by proposing an equal three-way split at 33 each."
+          }
+        ],
+        "leverage_points": [],
+        "transcript_snippet": "Counterparty [0:01]: Equal three-way split is the cleanest start. Thirty three each.",
+        "market_data": null,
+        "cycle": 15
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The context of the 'three-way split' is unknown; it's unclear what is being divided (e.g., equity, costs, profits) and what the contributions of each party are."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT -  read  this  verbatim,  do not  paraphrase,  do not  add  or remove  any  number  or term]:  The current  gap  is between  the counterparty's  proposal  of a  33/33/33  split  and your  target  of 60/25/15.  To justify  your 60%  stake,  frame  it as  a reflection  of your  unique,  pre-existing  contributions  of  IP  and the  initial  $200,000  in capital,  which  are separate  from the  future  full-time  commitment  you are  all making.  Protect  your 60%  target  by separating  the value  of past  contributions  (IP,  capital)  from  future  contributions  (full-time  work).",
+        "timestamp": 1779110452853,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Fifteen percent for marketing leadership in a B2B startup is too low.",
+        "timestamp": 1779110434802,
+        "start_time": 1779110434.802,
+        "end_time": 1779110434.802,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "We can add a one year cliff for everyone to align incentives.",
+        "timestamp": 1779110435602,
+        "start_time": 1779110435.602,
+        "end_time": 1779110435.602,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "What about fifty five, twenty five, twenty?",
+        "timestamp": 1779110436402,
+        "start_time": 1779110436.402,
+        "end_time": 1779110436.402,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "partnership_equity_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Fifty five drops below my target. Sixty is the anchor with four year vesting and one year cliff.",
+        "timestamp": 1779110437202,
+        "start_time": 1779110437.202,
+        "end_time": 1779110437.202,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "partnership_equity_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "partnership_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110463634",
+        "speaker": "ai",
+        "text": "Say: 'My contribution of IP and capital is reflected at sixty; the sixty, twenty-five, fifteen split with a four-year vest and one-year cliff for all is the structure that gets this deal done.'",
+        "timestamp": 1779110463634,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110468.8677602
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110469.4699745
+      }
+    }
+  ]
+}

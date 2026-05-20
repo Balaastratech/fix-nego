@@ -1,0 +1,582 @@
+{
+  "scenario_id": "multi_vendor_rfp_001",
+  "title": "Multi-vendor RFP with three competitors on price and SLA",
+  "family": "vendor_selection",
+  "session_id": "6153f90b-5ebe-4691-86f7-1b448974409a",
+  "created_at": "2026-05-18T18:44:16+05:30",
+  "summary": {
+    "score": 0.936,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.887,
+    "judge_average": 0.975
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 6,
+      "mode": "advice",
+      "query": "They want to drop white-glove onboarding to hit eighty four. What should I push for instead given Vendor A is also at eighty four?",
+      "expected_direction": "Use Vendor A as anchor; push toward 75-78 while keeping uptime credits and 30 day overlap; do not give up onboarding for free.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\nTheir offer to drop to $84k by removing white-glove onboarding only makes them equal to Vendor A on price, but worse on terms. You should protect the white-glove onboarding as it's a key differentiator over Vendor A. Push them to match your target price of $75k while keeping their superior SLA and the onboarding service. This frames the $9k gap between their current $84k offer and your $75k target as the cost of winning the deal against two competitors.",
+      "timestamp_ms": 1779109986014,
+      "deterministic_score": {
+        "score": 0.775,
+        "checks": {
+          "number_grounding": 0.6666666666666666,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "84000",
+          "75000",
+          "30"
+        ],
+        "relevant_terms": [
+          "onboarding",
+          "uptime credits"
+        ],
+        "number_hits": [
+          "84000",
+          "75000"
+        ],
+        "term_hits": [
+          "onboarding"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI response provides excellent, commercially-savvy advice that is highly specific to the user's situation. It correctly identifies the leverage from Vendor A, advises protecting the key differentiator (onboarding), and provides a clear, actionable path to reach the user's target price, including a narrative to use in the negotiation.",
+        "best_fix": "The response is near-perfect. A minor improvement would be to explicitly mention securing the 30-day overlap support as well, e.g., \"...while keeping their superior SLA, the onboarding service, and the required 30-day overlap support.\""
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to counter eighty two while protecting uptime credits and thirty day overlap.",
+      "expected_direction": "Counter with a price near 76-78 explicitly preserving uptime credits and 30 day overlap support.",
+      "response": "[SYSTEM: COMMAND MODE ACTIVE]\nSay: 'I can get this deal done today at seventy-five thousand with the uptime credits and thirty-day overlap support included.'",
+      "timestamp_ms": 1779110003353,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "30"
+        ],
+        "relevant_terms": [
+          "overlap support",
+          "uptime credits"
+        ],
+        "number_hits": [
+          "30"
+        ],
+        "term_hits": [
+          "overlap support",
+          "uptime credits"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 4,
+          "non_genericness": 5,
+          "constraint_obedience": 4,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 4.75,
+        "passed": true,
+        "rationale": "The response is strong and actionable, but it jumps directly to the user's target price of $75k rather than making a more strategic counter in the $76-78k range as suggested by the expected direction. This is a very aggressive counter from an implied $82k offer and leaves no further room for the user to negotiate.",
+        "best_fix": "Change the price from seventy-five thousand to seventy-seven thousand to align with the more strategic counter-offer suggested in the expected direction."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "6153f90b-5ebe-4691-86f7-1b448974409a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779109964.8349035
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779109964.8466723
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "6153f90b-5ebe-4691-86f7-1b448974409a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "6153f90b-5ebe-4691-86f7-1b448974409a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "We are evaluating three vendors and need to pick a winner this week.",
+        "timestamp": 1779109972830,
+        "start_time": 1779109972.83,
+        "end_time": 1779109972.83,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We are at ninety thousand with ninety nine point ninety five percent SLA and white-glove onboarding.",
+        "timestamp": 1779109973630,
+        "start_time": 1779109973.63,
+        "end_time": 1779109973.63,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "Vendor B is at seventy two thousand with ninety nine point five SLA. You are eighteen thousand higher.",
+        "timestamp": 1779109974430,
+        "start_time": 1779109974.43,
+        "end_time": 1779109974.43,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Our SLA is materially better and we include uptime credits for any breach over fifteen minutes.",
+        "timestamp": 1779109975230,
+        "start_time": 1779109975.23,
+        "end_time": 1779109975.23,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Vendor A is at eighty four thousand with ninety nine point nine SLA. My target is seventy five with ninety nine point nine or better.",
+        "timestamp": 1779109976030,
+        "start_time": 1779109976.03,
+        "end_time": 1779109976.03,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We could move to eighty four if we drop the white-glove onboarding piece.",
+        "timestamp": 1779109976830,
+        "start_time": 1779109976.83,
+        "end_time": 1779109976.83,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109986014",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\nTheir offer to drop to $84k by removing white-glove onboarding only makes them equal to Vendor A on price, but worse on terms. You should protect the white-glove onboarding as it's a key differentiator over Vendor A. Push them to match your target price of $75k while keeping their superior SLA and the onboarding service. This frames the $9k gap between their current $84k offer and your $75k target as the cost of winning the deal against two competitors.",
+        "timestamp": 1779109986014,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "vendor services",
+        "negotiation_type": "service",
+        "seller_price": null,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": "To be selected as the chosen vendor from a pool of three competitors this week.",
+        "key_moments": [
+          "User creates urgency and introduces competition by stating they are evaluating three vendors and will make a decision this week."
+        ],
+        "leverage_points": [
+          "The user has two other vendors they are considering, creating a competitive environment.",
+          "The user has a short deadline ('this week'), which puts pressure on the counterparty to be responsive and competitive."
+        ],
+        "transcript_snippet": "We are evaluating three vendors and need to pick a winner this week.",
+        "market_data": null,
+        "cycle": 14
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  MODE  ACTIVE]  Their offer  to drop  to $84k  by removing  white-glove  onboarding  only  makes  them equal  to Vendor  A on  price,  but worse  on terms.  You should  protect  the white-glove  onboarding  as it's  a key  differentiator  over  Vendor  A.  Push  them to  match  your target  price  of $75k  while  keeping  their superior  SLA  and the  onboarding  service.  This  frames  the $9k  gap  between  their current  $84k  offer  and your  $75k  target  as the  cost  of winning  the deal  against  two competitors.  [/ADVISOR_OUTPUT]",
+        "timestamp": 1779109992999,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_7",
+        "speaker": "user",
+        "language": null,
+        "text": "I need thirty days of overlap support during migration and uptime credits intact.",
+        "timestamp": 1779109977630,
+        "start_time": 1779109977.63,
+        "end_time": 1779109977.63,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_7",
+        "speaker": "user",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_8",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We could keep uptime credits and thirty day overlap if you accept eighty two thousand instead of seventy five.",
+        "timestamp": 1779109978430,
+        "start_time": 1779109978.43,
+        "end_time": 1779109978.43,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "multi_vendor_rfp_001_turn_8",
+        "speaker": "counterparty",
+        "scenario_id": "multi_vendor_rfp_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110003353",
+        "speaker": "ai",
+        "text": "[SYSTEM: COMMAND MODE ACTIVE]\nSay: 'I can get this deal done today at seventy-five thousand with the uptime credits and thirty-day overlap support included.'",
+        "timestamp": 1779110003353,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Vendor Service Contract",
+        "negotiation_type": "service",
+        "seller_price": 84000,
+        "user_offer": 75000,
+        "user_target_price": 75000,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To win the contract by justifying a premium price through superior service features like a higher SLA and white-glove onboarding.",
+        "key_moments": [
+          "User creates urgency and introduces competition by stating they are evaluating three vendors and will make a decision this week.",
+          "User establishes a competitive environment and a deadline, mentioning they are evaluating three vendors.",
+          "Counterparty opens at $90,000, highlighting a 99.95% SLA and white-glove onboarding.",
+          "User counters by citing a competitor's price ($72k) and another's SLA (99.9% at $84k), then states their target of $75,000 with a 99.9% SLA.",
+          "Counterparty makes a concession to $84,000 but ties it to the removal of the 'white-glove onboarding' service."
+        ],
+        "leverage_points": [
+          "The user has two other vendors they are considering, creating a competitive environment.",
+          "The user has a short deadline ('this week'), which puts pressure on the counterparty to be responsive and competitive.",
+          "User has multiple competing offers from 'Vendor A' and 'Vendor B', creating price pressure.",
+          "User has a firm deadline ('this week'), which pressures the counterparty to make a decision quickly.",
+          "User has specific price and feature data from competitors to anchor the negotiation."
+        ],
+        "transcript_snippet": "User [0:04]: Vendor A is at eighty four thousand with ninety nine point nine SLA. My target is seventy five with ninety nine point nine or better.\nCounterparty [0:05]: We could move to eighty four if we drop the white-glove onboarding piece.",
+        "market_data": null,
+        "cycle": 16
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to determine the market value of 'white-glove onboarding' and the cost difference between a 99.95% and 99.9% SLA to evaluate the counterparty's concession."
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110009.3381705
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110009.975493
+      }
+    }
+  ]
+}

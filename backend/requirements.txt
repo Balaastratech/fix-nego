@@ -2,9 +2,34 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 websockets>=12.0
 google-genai>=1.0.0
+google-cloud-speech>=2.33.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 pillow>=10.0.0
 python-json-logger>=2.0.7
 asgi-correlation-id>=4.0.0
+speechbrain
+# Speaker Recognition Dependencies
+# NOTE: webrtcvad-wheels satisfies resemblyzer at runtime; install resemblyzer with --no-deps
+webrtcvad-wheels>=2.0.14
+# torch 2.1.0 was compiled against NumPy 1.x ABI — do NOT upgrade to numpy 2.x
+# k2 1.24.4+cpu.torch2.1.0 pins torch==2.1.0, so we are stuck on numpy 1.x
+numpy>=1.24,<2
+scipy>=1.10.0
+torch==2.1.0
+librosa>=0.9.1
+
+# Conv-TasNet + Pyannote + WeSpeaker Pipeline Dependencies
+# NOTE: hdbscan>=0.8.38.post2 required for numpy 2.x compatibility
+hdbscan>=0.8.38.post2
+pyannote.audio>=3.1.1
+wespeaker
+onnxruntime
+s3prl
+peft
+openai-whisper
+asteroid-filterbanks
+torchaudio==2.1.0
+soundfile>=0.12.0
+pyttsx3>=2.90; sys_platform == "win32"

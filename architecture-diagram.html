@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Negotiation Copilot — Architecture Diagram</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f1117;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  h1 {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    color: #6b7280;
+    font-size: 13px;
+    margin-bottom: 36px;
+  }
+
+  .diagram {
+    width: 960px;
+    max-width: 100%;
+    background: #161b27;
+    border: 1px solid #2a3144;
+    border-radius: 20px;
+    padding: 40px;
+  }
+
+  /* ── ROW LAYOUT ── */
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 0;
+  }
+
+  /* ── BOXES ── */
+  .box {
+    border-radius: 14px;
+    padding: 16px 20px;
+    text-align: center;
+    min-width: 140px;
+    position: relative;
+  }
+  .box .icon { font-size: 28px; margin-bottom: 6px; }
+  .box .label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.3;
+  }
+  .box .sublabel {
+    font-size: 10px;
+    color: #9ca3af;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .box .tag {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* colors */
+  .box-user    { background: #1e293b; border: 1.5px solid #334155; }
+  .box-fe      { background: #0f2a1e; border: 1.5px solid #166534; }
+  .box-be      { background: #0f1f3a; border: 1.5px solid #1d4ed8; }
+  .box-gemini  { background: #1a1030; border: 1.5px solid #7c3aed; }
+  .box-flash   { background: #1a1030; border: 1.5px solid #a855f7; }
+  .box-infra   { background: #1c1008; border: 1.5px solid #92400e; }
+  .box-secret  { background: #1a0a0a; border: 1.5px solid #dc2626; }
+
+  .tag-gcp    { background: #166534; color: #86efac; }
+  .tag-vertex { background: #4c1d95; color: #c4b5fd; }
+  .tag-ws     { background: #1e40af; color: #93c5fd; }
+  .tag-rest   { background: #92400e; color: #fcd34d; }
+
+  /* ── ARROWS ── */
+  .arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-width: 80px;
+  }
+  .arrow .line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, #334155, #4b5563);
+    position: relative;
+  }
+  .arrow .line::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left-color: #4b5563;
+  }
+  .arrow .arrow-label {
+    font-size: 9px;
+    color: #6b7280;
+    margin-top: 4px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .arrow-ws   .line { background: linear-gradient(90deg, #1d4ed8, #3b82f6); }
+  .arrow-ws   .line::after { border-left-color: #3b82f6; }
+  .arrow-ws   .arrow-label { color: #60a5fa; }
+
+  .arrow-audio .line { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+  .arrow-audio .line::after { border-left-color: #a78bfa; }
+  .arrow-audio .arrow-label { color: #c4b5fd; }
+
+  .arrow-rest .line { background: linear-gradient(90deg, #d97706, #fbbf24); }
+  .arrow-rest .line::after { border-left-color: #fbbf24; }
+  .arrow-rest .arrow-label { color: #fcd34d; }
+
+  /* vertical arrow */
+  .varrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 auto;
+    height: 44px;
+    justify-content: center;
+  }
+  .varrow .vline {
+    width: 2px;
+    flex: 1;
+    background: linear-gradient(180deg, #334155, #4b5563);
+    position: relative;
+  }
+  .varrow .vline::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: -4px;
+    border: 5px solid transparent;
+    border-top-color: #4b5563;
+  }
+  .varrow .vlabel {
+    font-size: 9px;
+    color: #6b7280;
+    margin-left: 8px;
+    white-space: nowrap;
+  }
+  .varrow-secret .vline { background: linear-gradient(180deg, #dc2626, #f87171); }
+  .varrow-secret .vline::after { border-top-color: #f87171; }
+  .varrow-secret .vlabel { color: #fca5a5; }
+
+  /* ── SECTIONS ── */
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #4b5563;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1f2937;
+  }
+
+  .google-cloud-box {
+    border: 1.5px dashed #2563eb44;
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    margin-top: 10px;
+  }
+  .google-cloud-box .gc-label {
+    position: absolute;
+    top: -10px;
+    left: 16px;
+    background: #161b27;
+    padding: 0 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #3b82f6;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .vertex-box {
+    border: 1.5px dashed #7c3aed44;
+    border-radius: 16px;
+    padding: 16px;
+    position: relative;
+    margin-top: 10px;
+  }
+  .vertex-box .vx-label {
+    position: absolute;
+    top: -10px;
+    left: 16px;
+    background: #161b27;
+    padding: 0 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #a78bfa;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* main layout */
+  .top-row { display: flex; align-items: center; justify-content: center; gap: 0; }
+  .mid-section { margin-top: 20px; }
+  .bottom-row { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+
+  .col { display: flex; flex-direction: column; align-items: center; }
+
+  /* dual arrows (bidirectional) */
+  .barrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 90px;
+    gap: 2px;
+  }
+  .barrow .bline {
+    width: 100%;
+    height: 2px;
+    position: relative;
+  }
+  .barrow .bline-top {
+    background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  }
+  .barrow .bline-top::after {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: -4px;
+    border: 5px solid transparent;
+    border-right-color: #3b82f6;
+  }
+  .barrow .bline-bot {
+    background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  }
+  .barrow .bline-bot::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left-color: #3b82f6;
+  }
+  .barrow .blabel {
+    font-size: 9px;
+    color: #60a5fa;
+    text-align: center;
+    margin-top: 3px;
+    white-space: nowrap;
+  }
+
+  /* infra row */
+  .infra-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #1f2937;
+  }
+  .infra-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a1f2e;
+    border: 1px solid #2a3144;
+    border-radius: 10px;
+    padding: 8px 14px;
+  }
+  .infra-item .i-icon { font-size: 18px; }
+  .infra-item .i-text { font-size: 11px; color: #9ca3af; }
+  .infra-item .i-text strong { color: #e5e7eb; display: block; font-size: 12px; }
+
+  /* legend */
+  .legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #6b7280;
+  }
+  .legend-line {
+    width: 24px;
+    height: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🤝 AI Negotiation Copilot</h1>
+<p class="subtitle">System Architecture — Gemini Live Agent Challenge</p>
+
+<div class="diagram">
+
+  <!-- ═══ TOP ROW: User → Frontend → Backend ═══ -->
+  <div class="top-row">
+
+    <!-- User -->
+    <div class="box box-user">
+      <div class="icon">🧑‍💼</div>
+      <div class="label">User Browser</div>
+      <div class="sublabel">Microphone + Speaker<br/>Web Audio API</div>
+      <span class="tag" style="background:#1e293b;color:#94a3b8;">CLIENT</span>
+    </div>
+
+    <!-- Arrow: bidirectional WebSocket -->
+    <div class="barrow" style="min-width:100px;">
+      <div class="bline bline-top"></div>
+      <div class="bline bline-bot"></div>
+      <div class="blabel">WebSocket<br/>wss:// + binary PCM</div>
+    </div>
+
+    <!-- Google Cloud wrapper -->
+    <div class="google-cloud-box" style="flex:1;">
+      <span class="gc-label">☁️ Google Cloud — us-central1</span>
+
+      <div style="display:flex; align-items:center; justify-content:center; gap:0;">
+
+        <!-- Frontend -->
+        <div class="box box-fe">
+          <div class="icon">⚛️</div>
+          <div class="label">Frontend</div>
+          <div class="sublabel">Next.js 15 / React 19<br/>TypeScript + Tailwind</div>
+          <span class="tag tag-gcp">Cloud Run</span>
+        </div>
+
+        <!-- Arrow: WebSocket -->
+        <div class="barrow" style="min-width:90px;">
+          <div class="bline bline-top"></div>
+          <div class="bline bline-bot"></div>
+          <div class="blabel">WebSocket /ws<br/>JSON + binary audio</div>
+        </div>
+
+        <!-- Backend -->
+        <div class="box box-be" style="min-width:160px;">
+          <div class="icon">⚙️</div>
+          <div class="label">Backend</div>
+          <div class="sublabel">FastAPI + Uvicorn<br/>Python 3.11 · Port 8080</div>
+          <span class="tag tag-gcp">Cloud Run</span>
+        </div>
+
+        <!-- Arrow to Vertex AI -->
+        <div class="barrow" style="min-width:80px;">
+          <div class="bline bline-top" style="background:linear-gradient(90deg,#7c3aed,#a78bfa);"></div>
+          <div class="bline bline-bot" style="background:linear-gradient(90deg,#a78bfa,#7c3aed);"></div>
+          <div class="blabel" style="color:#c4b5fd;">Live Audio<br/>Bidirectional</div>
+        </div>
+
+        <!-- Vertex AI wrapper -->
+        <div class="vertex-box">
+          <span class="vx-label">🔮 Vertex AI</span>
+
+          <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+
+            <!-- Gemini Live -->
+            <div class="box box-gemini" style="min-width:160px; padding:10px 14px;">
+              <div class="icon" style="font-size:22px;">🎙️</div>
+              <div class="label">Gemini Live</div>
+              <div class="sublabel">gemini-live-2.5-flash<br/>-native-audio<br/>Real-time voice I/O</div>
+              <span class="tag tag-vertex">PRIMARY</span>
+            </div>
+
+            <!-- Arrow between models -->
+            <div style="width:2px;height:16px;background:#4b5563;margin:0 auto;"></div>
+
+            <!-- Gemini Flash -->
+            <div class="box box-flash" style="min-width:160px; padding:10px 14px;">
+              <div class="icon" style="font-size:22px;">👂</div>
+              <div class="label">Gemini Flash</div>
+              <div class="sublabel">gemini-2.5-flash<br/>ListenerAgent<br/>Poll every 2s via REST</div>
+              <span class="tag tag-vertex">BACKGROUND</span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══ INFRA ROW ═══ -->
+      <div class="infra-row">
+
+        <div class="infra-item">
+          <span class="i-icon">🔑</span>
+          <div class="i-text">
+            <strong>Secret Manager</strong>
+            GEMINI_API_KEY
+          </div>
+        </div>
+
+        <div class="infra-item">
+          <span class="i-icon">📦</span>
+          <div class="i-text">
+            <strong>Artifact Registry</strong>
+            Docker images
+          </div>
+        </div>
+
+        <div class="infra-item">
+          <span class="i-icon">🔨</span>
+          <div class="i-text">
+            <strong>Cloud Build</strong>
+            CI/CD pipeline
+          </div>
+        </div>
+
+        <div class="infra-item">
+          <span class="i-icon">📊</span>
+          <div class="i-text">
+            <strong>Cloud Logging</strong>
+            Structured JSON logs
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ DATA FLOW DESCRIPTION ═══ -->
+  <div style="margin-top: 24px; background: #0f1520; border-radius: 12px; padding: 16px 20px;">
+    <div class="section-label">Data Flow</div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between;">
+
+      <div style="display:flex; align-items:flex-start; gap:8px; flex:1; min-width:200px;">
+        <span style="font-size:18px; margin-top:1px;">🎤</span>
+        <div>
+          <div style="color:#e5e7eb; font-size:12px; font-weight:600;">Audio Capture</div>
+          <div style="color:#6b7280; font-size:11px; margin-top:2px;">Browser mic → 16kHz Int16 PCM<br/>Binary WebSocket frames → Backend</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:flex-start; gap:8px; flex:1; min-width:200px;">
+        <span style="font-size:18px; margin-top:1px;">🧠</span>
+        <div>
+          <div style="color:#e5e7eb; font-size:12px; font-weight:600;">Dual-Model AI</div>
+          <div style="color:#6b7280; font-size:11px; margin-top:2px;">Gemini Live: real-time voice coaching<br/>Listener Agent: background context extraction</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:flex-start; gap:8px; flex:1; min-width:200px;">
+        <span style="font-size:18px; margin-top:1px;">📡</span>
+        <div>
+          <div style="color:#e5e7eb; font-size:12px; font-weight:600;">State Machine</div>
+          <div style="color:#6b7280; font-size:11px; margin-top:2px;">IDLE → CONSENTED → ACTIVE → ENDING<br/>JSON messages over WebSocket</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:flex-start; gap:8px; flex:1; min-width:200px;">
+        <span style="font-size:18px; margin-top:1px;">🔊</span>
+        <div>
+          <div style="color:#e5e7eb; font-size:12px; font-weight:600;">AI Voice Response</div>
+          <div style="color:#6b7280; font-size:11px; margin-top:2px;">24kHz Int16 PCM audio from Gemini<br/>Played back via Web Audio API</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ LEGEND ═══ -->
+  <div class="legend" style="margin-top:16px;">
+    <div class="legend-item">
+      <div class="legend-line" style="background:#3b82f6;"></div>
+      WebSocket (bidirectional)
+    </div>
+    <div class="legend-item">
+      <div class="legend-line" style="background:#a78bfa;"></div>
+      Gemini Live Stream
+    </div>
+    <div class="legend-item">
+      <div class="legend-line" style="background:#fbbf24; height:2px; border-top: 2px dashed #fbbf24; background:none;"></div>
+      REST API (polling)
+    </div>
+    <div class="legend-item">
+      <div class="legend-line" style="background:#f87171;"></div>
+      Secret Injection
+    </div>
+    <div class="legend-item">
+      <div style="width:24px;height:12px;border:1.5px dashed #2563eb44;border-radius:3px;"></div>
+      Google Cloud boundary
+    </div>
+  </div>
+
+</div>
+
+<p style="color:#374151; font-size:11px; margin-top:16px;">
+  AI Negotiation Copilot · Gemini Live Agent Challenge · Built with Google Gemini Live API + Google Cloud Run
+</p>
+
+</body>
+</html>

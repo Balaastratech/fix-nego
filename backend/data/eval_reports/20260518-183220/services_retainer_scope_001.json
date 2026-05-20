@@ -1,0 +1,510 @@
+{
+  "scenario_id": "services_retainer_scope_001",
+  "title": "Marketing services retainer with scope creep risk",
+  "family": "services_contract",
+  "session_id": "9ab02a64-9d32-4704-9010-eba44502b350",
+  "created_at": "2026-05-18T18:37:42+05:30",
+  "summary": {
+    "score": 0.91,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.846,
+    "judge_average": 0.963
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They offered twenty seven if deliverables are capped. Should I accept the scope cap or keep pushing price?",
+      "expected_direction": "Do not accept vague scope reduction; define deliverables and push toward 25 or 24 with reporting.",
+      "response": "Keep pushing on price. Their willingness to drop from 30k to 27k is a signal they have room to move further. The current gap between their 27k position and your 24k target is still significant.\n\nProtect your need for clear scope control, but use their offer of a cap as a way to anchor the price lower. You can accept the principle of a cap while still pushing for your target price. Their first move was a 10% price drop; your goal is another 10% drop from their new position.",
+      "timestamp_ms": 1779109580079,
+      "deterministic_score": {
+        "score": 0.775,
+        "checks": {
+          "number_grounding": 0.6666666666666666,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "27000",
+          "24000",
+          "25000"
+        ],
+        "relevant_terms": [
+          "scope",
+          "reporting"
+        ],
+        "number_hits": [
+          "27000",
+          "24000"
+        ],
+        "term_hits": [
+          "scope"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response provides excellent, commercially savvy advice that is highly actionable and specific to the user's situation. It correctly interprets the state of the negotiation, understands the user's goals, and provides a clear strategy for how to proceed. It perfectly aligns with the expected direction by advising the user to keep pushing on price while using the scope cap as leverage, rather than accepting the vague term.",
+        "best_fix": "No fix needed. The response is excellent."
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to close at twenty five while protecting reporting and performance review.",
+      "expected_direction": "Offer 25 only with reporting, performance review, and clear scope.",
+      "response": "Say: 'Twenty five thousand works, provided we have monthly reporting and the ninety day performance review we discussed.'",
+      "timestamp_ms": 1779109600180,
+      "deterministic_score": {
+        "score": 0.917,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.6666666666666666,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "25000"
+        ],
+        "relevant_terms": [
+          "scope",
+          "reporting",
+          "performance review"
+        ],
+        "number_hits": [
+          "25000"
+        ],
+        "term_hits": [
+          "reporting",
+          "performance review"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 4,
+          "non_genericness": 4,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 4,
+          "timing_relevance": 5
+        },
+        "average": 4.625,
+        "passed": true,
+        "rationale": "The response is strong and follows the user's direct instructions. However, it misses the most critical element from the scenario's context: defining the scope. By omitting this, it leaves the user exposed to the primary risk of 'scope creep', which slightly lowers its commercial quality.",
+        "best_fix": "Say: 'Twenty-five thousand works, provided we lock in the scope of work and have monthly reporting and the ninety-day performance review we discussed.'"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "9ab02a64-9d32-4704-9010-eba44502b350",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779109561.472187
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779109561.4951425
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "9ab02a64-9d32-4704-9010-eba44502b350",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "9ab02a64-9d32-4704-9010-eba44502b350"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "The thirty thousand per month retainer is above what we planned, especially with the scope still broad.",
+        "timestamp": 1779109568788,
+        "start_time": 1779109568.788,
+        "end_time": 1779109568.788,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The thirty thousand includes strategy, content, paid media management, and weekly reporting.",
+        "timestamp": 1779109569588,
+        "start_time": 1779109569.588,
+        "end_time": 1779109569.588,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "I need either a lower number or much clearer scope control.",
+        "timestamp": 1779109570388,
+        "start_time": 1779109570.388,
+        "end_time": 1779109570.388,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We could move to twenty seven thousand if the number of content deliverables is capped.",
+        "timestamp": 1779109571188,
+        "start_time": 1779109571.188,
+        "end_time": 1779109571.188,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109580079",
+        "speaker": "ai",
+        "text": "Keep pushing on price. Their willingness to drop from 30k to 27k is a signal they have room to move further. The current gap between their 27k position and your 24k target is still significant.\n\nProtect your need for clear scope control, but use their offer of a cap as a way to anchor the price lower. You can accept the principle of a cap while still pushing for your target price. Their first move was a 10% price drop; your goal is another 10% drop from their new position.",
+        "timestamp": 1779109580079,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "monthly service retainer",
+        "negotiation_type": "service",
+        "seller_price": 30000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": "To secure a $30,000 per month retainer agreement.",
+        "key_moments": [
+          "User states the counterparty's proposed $30,000/month retainer is higher than their budget.",
+          "User connects the high price to the broad and undefined scope of work."
+        ],
+        "leverage_points": [
+          "The scope of work is not yet clearly defined, which the user can leverage to argue for a lower price until the scope is narrowed."
+        ],
+        "transcript_snippet": "The thirty thousand per month retainer is above what we planned, especially with the scope still broad.",
+        "market_data": null,
+        "cycle": 14
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to research market rates for comparable service retainers and better define the scope of work to justify a different price point."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT  The current  gap  between  their 27k  position  and your  24k  target  is  still  significant.  Protect  your need  for clear  scope  control,  but  use  their offer  of a  cap  as a  way to  anchor  the price  lower.  You can  accept  the principle  of a cap  while  still  pushing  for your  target  price.  Their first  move  was  a 10%  price  drop;  your goal  is another  10%  drop  from their  new position.  [/ADVISOR_OUTPUT]",
+        "timestamp": 1779109587469,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is twenty four thousand, with monthly reporting and a ninety day performance review.",
+        "timestamp": 1779109571988,
+        "start_time": 1779109571.988,
+        "end_time": 1779109571.988,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Twenty four is tight, but twenty five may be possible if termination rights are standard.",
+        "timestamp": 1779109572788,
+        "start_time": 1779109572.788,
+        "end_time": 1779109572.788,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109600180",
+        "speaker": "ai",
+        "text": "Say: 'Twenty five thousand works, provided we have monthly reporting and the ninety day performance review we discussed.'",
+        "timestamp": 1779109600180,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "RESEARCH_COMPLETE",
+      "payload": {
+        "query": "The user needs to research market rates for comparable service retainers and better define the scope of work to justify a different price point.",
+        "market_data": "Price Range: For marketing and consulting services, monthly retainers can range from $2,000 to $10,000 for small to mid-sized agencies, and $10,000 to $50,000 for large firms. [6] Sales-as-a-service retainers typically fall between $2,500 and $15,000+ per month. [7] | Key Facts: The primary defense against 'scope creep' (clients adding more work without more pay) is to be crystal clear from the start about what is included in the contract and what is not. [18] Input-based contracts (e.g., billable hours) are better insulated against scope creep than output-based contracts (e.g., project-based fees). [18] | Leverage: Since the scope is undefined, propose a short-term, paid trial period or a pilot project. This lowers the client's perceived risk of a long-term commitment, allows you to demonstrate value, and provides a basis for defining a more accurate scope and price for a longer-term retainer. [1, 2] | Tactics: Tactic 1: Scope Reduction - If the client's budget is firm, propose reducing the scope of deliverables to match the price they can afford, thereby increasing your effective hourly rate. [12] Tactic 2: Tiered Options - Present two or three tiered retainer packages (e.g., Basic, Premium, Enterprise) with different service levels and price points to give the client a sense of control and anchor your value. [3, 5] Tactic 3: Value-Based Framing - Shift the conversation from cost to the return on investment (ROI) the client will receive, justifying your fee based on the value you will create for their business. [22] | Gap Answer: Market rates for service retainers vary widely based on the specific service. For example, marketing and consulting retainers can range from $2,000 to over $50,000 per month depending on the agency size and scope. [6] To better define the scope of work, you should ask open-ended questions about the client's objectives and internal pressures, brainstorm additional services your team can provide, and clearly document what is included and excluded. [10, 18] You can then propose different pricing models, such as tiered packages, an initial paid trial, or a reduced scope to align the price with the client's budget. [2, 3, 12]",
+        "timestamp": 1779109605.0677278,
+        "trigger_reason": "first_research"
+      }
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779109606.1736174
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779109606.913153
+      }
+    }
+  ]
+}

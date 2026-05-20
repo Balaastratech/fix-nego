@@ -4,11 +4,28 @@ import { Camera, CameraOff, Video } from 'lucide-react';
 interface VideoCaptureProps {
   isActive: boolean;
   onToggle: () => void;
+  /** Called each frame with base64 JPEG and a live_mode flag */
+  onFrameCapture?: (base64Jpeg: string, isLiveMode: boolean) => void;
+  /** Capture interval in ms. Defaults to 1000ms (1 FPS). Scene-change filter
+   *  in the backend means Pro only fires when content actually changes. */
+  frameIntervalMs?: number;
+  /** True when the user is holding the "talk to AI" button — frames are also
+   *  forwarded to the Gemini Live session so it can see while listening. */
+  isLiveActive?: boolean;
 }
 
-export function VideoCapture({ isActive, onToggle }: VideoCaptureProps) {
+export function VideoCapture({
+  isActive,
+  onToggle,
+  onFrameCapture,
+  frameIntervalMs = 1000,
+  isLiveActive = false,
+}: VideoCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const captureTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLiveActiveRef = useRef(isLiveActive);
+  const lastFrameSignatureRef = useRef<string>('');
 
   useEffect(() => {
     let active = true;
@@ -48,12 +65,64 @@ export function VideoCapture({ isActive, onToggle }: VideoCaptureProps) {
 
     return () => {
       active = false;
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+        captureTimerRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
+      lastFrameSignatureRef.current = '';
     };
   }, [isActive]);
+
+  // Keep ref in sync so the interval callback always sees the latest value
+  useEffect(() => {
+    isLiveActiveRef.current = isLiveActive;
+  }, [isLiveActive]);
+
+  useEffect(() => {
+    if (!isActive || !onFrameCapture || !videoRef.current) {
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+        captureTimerRef.current = null;
+      }
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    captureTimerRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      const maxWidth = 640;
+      const scale = Math.min(1, maxWidth / video.videoWidth);
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+      const base64 = dataUrl.split(',')[1];
+      if (base64) {
+        const frameSignature = `${base64.length}:${base64.slice(0, 96)}:${base64.slice(-96)}`;
+        if (frameSignature === lastFrameSignatureRef.current) {
+          return;
+        }
+        lastFrameSignatureRef.current = frameSignature;
+        onFrameCapture(base64, isLiveActiveRef.current);
+      }
+    }, frameIntervalMs);
+
+    return () => {
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+        captureTimerRef.current = null;
+      }
+    };
+  }, [frameIntervalMs, isActive, onFrameCapture]);
 
   return (
     <div className="relative w-full aspect-video bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-neutral-800 flex flex-col group transition-all">
@@ -75,10 +144,13 @@ export function VideoCapture({ isActive, onToggle }: VideoCaptureProps) {
         )}
 
         {isActive && (
-          <div className="absolute top-4 left-4 flex flex-col items-center text-neutral-400 z-10">
-            <span className="relative flex h-3 w-3 mb-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-full w-full bg-red-500"></span>
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLiveActive ? 'bg-blue-400' : 'bg-red-400'}`}></span>
+              <span className={`relative inline-flex rounded-full h-full w-full ${isLiveActive ? 'bg-blue-500' : 'bg-red-500'}`}></span>
+            </span>
+            <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide">
+              {isLiveActive ? 'Live Vision' : 'AI Observing'}
             </span>
           </div>
         )}

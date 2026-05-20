@@ -58,18 +58,26 @@ export function TranscriptPanel({ entries, title = 'Transcript' }: TranscriptPan
           const isUser = entry.speaker === 'user';
           const isCounterparty = entry.speaker === 'counterparty';
           const isAi = entry.speaker === 'ai';
+          const isUnknown = entry.speaker === 'unknown';
 
           const avatarStyle = isUser
             ? { background: 'linear-gradient(135deg, #f5c518, #ffd700)', boxShadow: '0 0 12px rgba(245,197,24,0.4)' }
             : isCounterparty
             ? { background: 'rgba(251,146,60,0.7)' }
+            : isUnknown
+            ? { background: 'rgba(156,163,175,0.7)' }
             : { background: 'rgba(96,165,250,0.7)' };
 
           const bubbleStyle = isUser
             ? { background: 'rgba(245,197,24,0.1)', border: '1px solid rgba(245,197,24,0.28)', color: 'rgba(255,255,255,0.97)' }
             : isCounterparty
             ? { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.97)' }
+            : isUnknown
+            ? { background: 'rgba(156,163,175,0.05)', border: '1px solid rgba(156,163,175,0.2)', color: 'rgba(255,255,255,0.85)' }
             : { background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.22)', color: 'rgba(255,255,255,0.97)', fontStyle: 'italic' as const };
+
+          const speakerLabel = isUser ? 'User' : isCounterparty ? 'Counterparty' : isUnknown ? 'Unknown' : 'AI';
+          const speakerColor = isUser ? '#f5c518' : isCounterparty ? '#fb923c' : isUnknown ? '#9ca3af' : '#60a5fa';
 
           return (
             <div key={entry.id || `t-${index}`} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -85,10 +93,15 @@ export function TranscriptPanel({ entries, title = 'Transcript' }: TranscriptPan
                   <div className={`px-3 py-2 rounded-2xl ${isUser ? 'rounded-br-none' : 'rounded-bl-none'}`} style={bubbleStyle}>
                     <p className="text-sm leading-relaxed">{entry.text}</p>
                   </div>
-                  <div className={`text-[10px] font-medium tracking-wide flex items-center ${isUser ? 'justify-end' : 'justify-start'}`}
+                  <div className={`text-[10px] font-medium tracking-wide flex items-center gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
                     style={{ color: TM }}>
-                    <span className="uppercase mr-1">{entry.speaker}</span>
+                    <span className="uppercase" style={{ color: speakerColor }}>{speakerLabel}</span>
                     <span>• {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {entry.confidence !== undefined && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                        {Math.round(entry.confidence * 100)}%
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

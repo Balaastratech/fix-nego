@@ -1,0 +1,518 @@
+{
+  "scenario_id": "walk_away_decision_001",
+  "title": "Counterparty offer is below walk-away and AI must recommend walking",
+  "family": "walk_away",
+  "session_id": "0fcf4176-2df3-49b5-b391-7bde4eeced2b",
+  "created_at": "2026-05-18T18:50:21+05:30",
+  "summary": {
+    "score": 0.932,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.85,
+    "judge_average": 1.0
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 6,
+      "mode": "advice",
+      "query": "Their best is one point three. My walk-away is one point eight. Should I split or walk?",
+      "expected_direction": "Recommend walking, not splitting; the gap is too large and walk-away is principled, not a negotiating ploy.",
+      "response": "Based on their current offer of $1.3M and your stated walk-away of $1.8M, you should walk. Their offer is $500,000 below your absolute minimum, and they have only moved $100,000 from their opening position. Splitting the difference would land you far below your floor. You have correctly anchored on the value of your customer base, which they have not yet acknowledged in their price.",
+      "timestamp_ms": 1779110362440,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "1.8"
+        ],
+        "relevant_terms": [
+          "walk-away"
+        ],
+        "number_hits": [
+          "1.8"
+        ],
+        "term_hits": [
+          "walk-away"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI provides a clear, actionable recommendation to walk away, which aligns perfectly with the expected direction. It grounds its advice in the specific numbers of the deal, correctly calculates the gap, and reinforces the user's position by referencing the strategic value of the customer base. The response is commercially savvy and highly specific to the user's situation.",
+        "best_fix": "N/A"
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to end the negotiation cleanly at one point four.",
+      "expected_direction": "Close the conversation explicitly; do not soften the walk-away by counter-offering inside the unacceptable zone.",
+      "response": "Say: 'I appreciate the offer, but since one point four is below my walk-away, I don't see a path forward.'",
+      "timestamp_ms": 1779110378513,
+      "deterministic_score": {
+        "score": 0.7,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [],
+        "relevant_terms": [
+          "walk-away"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "walk-away"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI correctly identifies that the user's query ('end the negotiation... at one point four') contradicts their stated walk-away of $1.8M. Instead of helping the user make a bad deal, the AI provides a firm, professional sentence that upholds the user's strategy and ends the negotiation, perfectly following the expected direction.",
+        "best_fix": "N/A"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "0fcf4176-2df3-49b5-b391-7bde4eeced2b",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110343.763023
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110343.773878
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "0fcf4176-2df3-49b5-b391-7bde4eeced2b",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "0fcf4176-2df3-49b5-b391-7bde4eeced2b"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We are prepared to offer one point two million all-cash, closing in thirty days.",
+        "timestamp": 1779110351656,
+        "start_time": 1779110351.656,
+        "end_time": 1779110351.656,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "That is below my floor. My walk-away is one point eight million.",
+        "timestamp": 1779110352456,
+        "start_time": 1779110352.456,
+        "end_time": 1779110352.456,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Comparable software acquisitions of this size are landing between one and one and a half.",
+        "timestamp": 1779110353256,
+        "start_time": 1779110353.256,
+        "end_time": 1779110353.256,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Comparable acquisitions do not have my customer base.",
+        "timestamp": 1779110354056,
+        "start_time": 1779110354.056,
+        "end_time": 1779110354.056,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We could go to one point three but the cash certainty should matter.",
+        "timestamp": 1779110354856,
+        "start_time": 1779110354.856,
+        "end_time": 1779110354.856,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Cash certainty does not bridge a six hundred thousand gap.",
+        "timestamp": 1779110355656,
+        "start_time": 1779110355.656,
+        "end_time": 1779110355.656,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110362440",
+        "speaker": "ai",
+        "text": "Based on their current offer of $1.3M and your stated walk-away of $1.8M, you should walk. Their offer is $500,000 below your absolute minimum, and they have only moved $100,000 from their opening position. Splitting the difference would land you far below your floor. You have correctly anchored on the value of your customer base, which they have not yet acknowledged in their price.",
+        "timestamp": 1779110362440,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Based on  their current  offer  of $1.3M  and your  stated  walk-away  of $1.8M,  you should  walk.  Their offer  is $500,000  below  your absolute  minimum,  and they  have only  moved  $100,000  from their  opening  position.  Splitting  the difference  would land  you far  below  your floor.  You have  correctly  anchored  on the  value  of your  customer  base,  which  they have  not  yet  acknowledged  in their  price.",
+        "timestamp": 1779110368458,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Final number is one point four. After that we will look elsewhere.",
+        "timestamp": 1779110356456,
+        "start_time": 1779110356.456,
+        "end_time": 1779110356.456,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "walk_away_decision_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "One point four is still four hundred thousand below my walk-away.",
+        "timestamp": 1779110357256,
+        "start_time": 1779110357.256,
+        "end_time": 1779110357.256,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "walk_away_decision_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "walk_away_decision_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": null,
+        "negotiation_type": "selling_goods",
+        "seller_price": 1200000,
+        "user_offer": 1200000,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "The counterparty wants a quick, all-cash closing within thirty days.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "description": "Counterparty opens with an all-cash offer of $1.2 million and a 30-day closing period."
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "counterparty",
+            "description": "The 'all-cash' offer and '30-day closing' are strong leverage points, indicating a serious buyer and promising a fast, clean transaction."
+          }
+        ],
+        "transcript_snippet": "Counterparty [0:01]: We are prepared to offer one point two million all-cash, closing in thirty days.",
+        "market_data": null,
+        "cycle": 16
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to determine the fair market value of the item being sold to properly assess the counterparty's offer."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110378513",
+        "speaker": "ai",
+        "text": "Say: 'I appreciate the offer, but since one point four is below my walk-away, I don't see a path forward.'",
+        "timestamp": 1779110378513,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'I  appreciate  the offer,  but  since  one  point  four  is below  my walk-away,  I don't  see a  path  forward.'",
+        "timestamp": 1779110380810,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110381.4069784
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110381.98711
+      }
+    }
+  ]
+}

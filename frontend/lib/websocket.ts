@@ -81,7 +81,8 @@ export class NegotiationWebSocket {
       this.ws.onmessage = (event: MessageEvent) => {
         if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
           // BINARY frame = PCM audio from Gemini (24kHz Int16)
-          logger.debug({ correlationId: this.correlationId, size: event.data.byteLength }, 'WebSocket received binary message');
+          const size = event.data instanceof ArrayBuffer ? event.data.byteLength : event.data.size;
+          logger.debug({ correlationId: this.correlationId, size }, 'WebSocket received binary message');
           if (event.data instanceof Blob) {
             event.data.arrayBuffer().then(buf => this.audioManager.playChunk(buf));
           } else {
@@ -117,7 +118,8 @@ export class NegotiationWebSocket {
    */
   sendAudioChunk(buffer: ArrayBuffer): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      logger.debug({ correlationId: this.correlationId, size: buffer.byteLength }, 'WebSocket sending audio chunk');
+      // Reduced logging during enrollment to prevent resource exhaustion
+      // logger.debug({ correlationId: this.correlationId, size: buffer.byteLength }, 'WebSocket sending audio chunk');
       this.ws.send(buffer);
     } else {
       logger.warn({ correlationId: this.correlationId }, 'WebSocket not open, cannot send audio');
@@ -128,15 +130,30 @@ export class NegotiationWebSocket {
    * Send a standard JSON control message (e.g. strategy choices, start commands)
    */
   sendControl(type: string, payload: any): void {
-    console.log('[WebSocket] sendControl called:', type, payload);
+    // Skip verbose logging for high-frequency vision frames to avoid console flooding
+    if (type !== 'VISION_FRAME') {
+      console.log('[WebSocket] sendControl called:', type, payload);
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const message = { type, payload };
-      console.log('[WebSocket] Sending:', JSON.stringify(message));
-      logger.debug({ correlationId: this.correlationId, message }, 'WebSocket sending control message');
+      if (type !== 'VISION_FRAME') {
+        console.log('[WebSocket] Sending:', JSON.stringify(message));
+        logger.debug({ correlationId: this.correlationId, message }, 'WebSocket sending control message');
+      }
       this.ws.send(JSON.stringify(message));
     } else {
       logger.warn({ correlationId: this.correlationId, type }, `Cannot send ${type} - WebSocket not open (readyState: ${this.ws?.readyState})`);
     }
+  }
+
+  sendUtteranceEnd(payload: {
+    utterance_id: string;
+    started_at: number;
+    ended_at: number;
+    duration_ms: number;
+    rms: number;
+  }): void {
+    this.sendControl('UTTERANCE_END', payload);
   }
 
   onMessage(listener: (message: any) => void): () => void {

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Negotiation Companion</title>
+  <link rel="stylesheet" href="./full.css" />
+</head>
+<body>
+  <div class="shell">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <span class="logo-dot"></span>
+        <span class="logo-text">Negotiation Companion</span>
+      </div>
+      <div class="header-right">
+        <span id="session-pill" class="pill pill-idle">Idle</span>
+        <button id="btn-minimize" class="icon-btn" title="Minimize">—</button>
+      </div>
+    </header>
+
+    <!-- Meeting status bar -->
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-dot" id="dot-session"></span>
+        <span id="label-session">No session</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot" id="dot-meeting"></span>
+        <span id="label-meeting">No meeting selected</span>
+      </div>
+      <div class="status-item" id="hold-badge" style="display:none">
+        <span class="status-dot dot-red pulsing"></span>
+        <span>AI Listening</span>
+      </div>
+    </div>
+
+    <!-- Meeting picker card -->
+    <section class="card" id="card-picker">
+      <div class="card-title">
+        <span class="card-icon">⊞</span>
+        Meeting Window
+      </div>
+      <p class="card-hint">
+        Select your meeting app window. Mic routing, VB-CABLE, and output device are configured automatically.
+      </p>
+      <div id="meeting-list" class="target-list">
+        <div class="empty-state">Looking for meeting windows…</div>
+      </div>
+      <button id="btn-refresh" class="ghost-btn small-btn">↺ Refresh</button>
+    </section>
+
+    <!-- Device status card -->
+    <section class="card" id="card-devices">
+      <div class="card-title">
+        <span class="card-icon">⚙</span>
+        Audio Routing
+      </div>
+      <div class="device-grid">
+        <div class="device-row">
+          <span class="device-label">Your mic</span>
+          <span id="label-mic" class="device-value">Auto-detecting…</span>
+          <span id="dot-mic" class="device-dot"></span>
+        </div>
+        <div class="device-row">
+          <span class="device-label">Meeting mic (VB-CABLE)</span>
+          <span id="label-vbcable" class="device-value">Detecting…</span>
+          <span id="dot-vbcable" class="device-dot"></span>
+        </div>
+        <div class="device-row">
+          <span class="device-label">AI reply output</span>
+          <span id="label-output" class="device-value">Detecting…</span>
+          <span id="dot-output" class="device-dot"></span>
+        </div>
+      </div>
+      <div id="vbcable-hint" class="hint-box" style="display:none">
+        ⚠ VB-CABLE not detected. Set your meeting app microphone to <strong>CABLE Output</strong>.
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <div class="controls-row">
+      <button id="btn-start" class="accent-btn" disabled>Start Session</button>
+      <button id="btn-end" class="ghost-btn" style="display:none">End Session</button>
+    </div>
+
+    <!-- Full transcript -->
+    <section class="card expand-card">
+      <div class="card-title">
+        <span class="card-icon">◈</span>
+        Full Transcript
+        <span id="transcript-count" class="count-badge">0</span>
+      </div>
+      <div id="transcript-list" class="entry-list">
+        <div class="empty-state">Transcript appears once the session starts.</div>
+      </div>
+    </section>
+
+    <!-- Private AI asks -->
+    <section class="card">
+      <div class="card-title">
+        <span class="card-icon">◉</span>
+        Private AI Asks
+        <span id="private-count" class="count-badge">0</span>
+      </div>
+      <div id="private-list" class="entry-list">
+        <div class="empty-state">
+          Hold <kbd>Space</kbd> or hold left mouse for 3 s to privately ask AI.
+        </div>
+      </div>
+    </section>
+
+  </div>
+  <script src="./full.js"></script>
+</body>
+</html>

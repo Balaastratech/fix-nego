@@ -1,4 +1,4 @@
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web';
 
 export type Speaker = 'USER' | 'COUNTERPARTY';
 
@@ -6,25 +6,27 @@ export type CaptureState = 'idle' | 'starting' | 'capturing' | 'stopping' | 'err
 export type PlaybackState = 'idle' | 'initializing' | 'ready' | 'error';
 
 export interface AudioManagerConfig {
-  /** RMS threshold for speech detection. Default: 500 */
-  silenceThreshold?: number;
-  /** Milliseconds of silence before firing onSilence. Default: 500 */
   silenceDebounceMs?: number;
-  /** Sample rate for capture. Default: 16000 */
   captureSampleRate?: number;
-  /** Sample rate for playback (Gemini output). Default: 24000 */
   playbackSampleRate?: number;
+  vadOptions?: Partial<RealTimeVADOptions>;
 }
 
 export interface CaptureCallbacks {
   onChunk: (buffer: ArrayBuffer) => void;
   onSilence?: () => void;
   onSpeech?: () => void;
+  onUtteranceStart?: (utterance: { utteranceId: string; startedAt: number }) => void;
+  onUtteranceEnd?: (utterance: {
+    utteranceId: string;
+    startedAt: number;
+    endedAt: number;
+    durationMs: number;
+    rms: number;
+  }) => void;
   onStateChange?: (state: CaptureState) => void;
   onError?: (error: AudioManagerError) => void;
 }
-
-// ─── Errors ───────────────────────────────────────────────────────────────────
 
 export class AudioManagerError extends Error {
   constructor(
@@ -47,68 +49,41 @@ export enum AudioErrorCode {
   CONTEXT_SUSPENDED = 'CONTEXT_SUSPENDED',
 }
 
-// ─── AudioWorkletManager ──────────────────────────────────────────────────────
-
-/**
- * AudioWorkletManager
- *
- * Manages microphone capture and audio playback for the Gemini Live API.
- * - Capture outputs Int16 PCM @ 16kHz (raw ArrayBuffers, no base64).
- * - Playback expects Int16 PCM @ 24kHz ArrayBuffers from Gemini.
- *
- * Lifecycle:
- *   1. new AudioWorkletManager(config?)
- *   2. await startCapture(cbs)    — starts mic
- *   3. await initPlayback()       — prepares playback pipeline
- *   4. playChunk(buffer)          — feed Gemini audio
- *   5. stopCapture()              — mic off, playback stays alive
- *   6. cleanup()                  — full teardown
- */
 export class AudioWorkletManager {
-  // ── Config ──────────────────────────────────────────────────────────────────
-
   private readonly cfg: Required<AudioManagerConfig> = {
-    silenceThreshold: 50,
-    silenceDebounceMs: 1500,  // keep speaking window open longer
+    silenceDebounceMs: 800,
     captureSampleRate: 16000,
     playbackSampleRate: 24000,
+    vadOptions: {},
   };
-
-  // ── State ───────────────────────────────────────────────────────────────────
 
   private captureState: CaptureState = 'idle';
   private playbackState: PlaybackState = 'idle';
-  private _bypassVAD = false; // when true, send all audio regardless of silence
+  private _bypassVAD = false;
 
-  // ── Capture resources ───────────────────────────────────────────────────────
+  // Pre-speech ring buffer — stores the last PRE_SPEECH_FRAMES audio frames so
+  // they can be flushed at the start of a new utterance, preventing first-word clipping.
+  private preSpeechBuffer: ArrayBuffer[] = [];
+  private readonly PRE_SPEECH_FRAMES = 16; // ~480ms at 30ms frames
 
   private captureCtx: AudioContext | null = null;
   private captureNode: AudioWorkletNode | null = null;
   private micStream: MediaStream | null = null;
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private browserVad: MicVAD | null = null;
   private isSpeaking = false;
-
-  // ── Playback resources ──────────────────────────────────────────────────────
+  private currentUtteranceId: string | null = null;
+  private currentUtteranceStartedAt: number | null = null;
+  private currentUtteranceRms = 0;
 
   private playbackCtx: AudioContext | null = null;
   private playbackNode: AudioWorkletNode | null = null;
 
-  // ── Callbacks ───────────────────────────────────────────────────────────────
-
   private callbacks: CaptureCallbacks | null = null;
-
-  // ────────────────────────────────────────────────────────────────────────────
 
   constructor(config: AudioManagerConfig = {}) {
     Object.assign(this.cfg, config);
   }
 
-  // ── Public: capture ─────────────────────────────────────────────────────────
-
-  /**
-   * Start microphone capture. Resolves when the pipeline is live.
-   * Emits raw Int16 PCM ArrayBuffers at 16kHz via `callbacks.onChunk`.
-   */
   async startCapture(callbacks: CaptureCallbacks): Promise<void> {
     if (this.captureState !== 'idle' && this.captureState !== 'error') {
       throw new AudioManagerError(
@@ -125,48 +100,47 @@ export class AudioWorkletManager {
       await this.loadWorklet(this.captureCtx, '/worklets/pcm-processor.js');
 
       this.micStream = await this.requestMicrophone();
+      if (!this._bypassVAD) {
+        this.browserVad = await this.createBrowserVad(this.micStream);
+      }
+
       const source = this.captureCtx.createMediaStreamSource(this.micStream);
       this.captureNode = new AudioWorkletNode(this.captureCtx, 'pcm-capture-processor');
       this.captureNode.port.onmessage = this.handleCaptureMessage;
 
       source.connect(this.captureNode);
-      // Connect to destination so the AudioContext scheduler stays alive
       this.captureNode.connect(this.captureCtx.destination);
 
+      this.browserVad?.start();
       this.setCaptureState('capturing');
     } catch (err) {
       this.setCaptureState('error');
       const wrapped = this.wrapError(err);
       this.callbacks?.onError?.(wrapped);
-      await this.teardownCapture();
+      await this.cleanupCaptureResources();
       throw wrapped;
     }
   }
 
-  /**
-   * Stop microphone capture. Playback is unaffected.
-   * Safe to call from any capture state.
-   */
   stopCapture(): void {
-    if (this.captureState === 'idle') return;
+    if (this.captureState === 'idle') {
+      return;
+    }
     this.setCaptureState('stopping');
-    this.teardownCapture();
-    this.setCaptureState('idle');
+    void this.cleanupCaptureResources().finally(() => {
+      this.setCaptureState('idle');
+    });
   }
 
-  /**
-   * Records audio for a specific duration and returns the combined chunk.
-   * This is a self-contained, one-shot recording method.
-   */
   async startRecording(durationMs: number): Promise<ArrayBuffer | null> {
     if (this.captureState !== 'idle') {
-      console.error("Cannot start one-shot recording while another capture is active.");
+      console.error('Cannot start one-shot recording while another capture is active.');
       return null;
     }
 
     return new Promise(async (resolve, reject) => {
       const recordedChunks: ArrayBuffer[] = [];
-      
+
       const tempCallbacks: CaptureCallbacks = {
         onChunk: (chunk) => {
           recordedChunks.push(chunk);
@@ -174,7 +148,7 @@ export class AudioWorkletManager {
         onError: (error) => {
           this.stopCapture();
           reject(error);
-        }
+        },
       };
 
       try {
@@ -182,7 +156,7 @@ export class AudioWorkletManager {
 
         setTimeout(() => {
           this.stopCapture();
-          
+
           const totalLength = recordedChunks.reduce((acc, chunk) => acc + chunk.byteLength, 0);
           const combined = new Uint8Array(totalLength);
           let offset = 0;
@@ -190,25 +164,19 @@ export class AudioWorkletManager {
             combined.set(new Uint8Array(chunk), offset);
             offset += chunk.byteLength;
           }
-          
+
           resolve(combined.buffer);
         }, durationMs);
-
       } catch (error) {
         reject(error);
       }
     });
   }
 
-
-  // ── Public: playback ────────────────────────────────────────────────────────
-
-  /**
-   * Initialize the playback pipeline. Call once before the first playChunk().
-   * Idempotent — safe to call multiple times.
-   */
   async initPlayback(): Promise<void> {
-    if (this.playbackState === 'ready') return;
+    if (this.playbackState === 'ready') {
+      return;
+    }
     if (this.playbackState === 'initializing') {
       throw new AudioManagerError(
         'Playback initialization already in progress',
@@ -231,28 +199,18 @@ export class AudioWorkletManager {
     }
   }
 
-  /**
-   * Feed a Gemini audio response chunk to the playback pipeline.
-   * @param chunk  Int16 PCM ArrayBuffer @ 24kHz (ownership is transferred).
-   */
   playChunk(chunk: ArrayBuffer): void {
     if (!this.playbackNode || this.playbackState !== 'ready') {
-      console.warn('[AudioManager] playChunk ignored — playback not ready');
+      console.warn('[AudioManager] playChunk ignored - playback not ready');
       return;
     }
     if (!(chunk instanceof ArrayBuffer) || chunk.byteLength === 0) {
       console.warn('[AudioManager] playChunk received empty or invalid buffer');
       return;
     }
-    // Transferable: zero-copy hand-off to worklet thread
     this.playbackNode.port.postMessage(chunk, [chunk]);
   }
 
-  // ── Public: resume (handles browser autoplay policy) ───────────────────────
-
-  /**
-   * Resume suspended AudioContexts. Call from a user gesture if needed.
-   */
   async resumeContexts(): Promise<void> {
     await Promise.allSettled([
       this.captureCtx?.state === 'suspended' ? this.captureCtx.resume() : Promise.resolve(),
@@ -260,30 +218,30 @@ export class AudioWorkletManager {
     ]);
   }
 
-  // ── Public: full teardown ───────────────────────────────────────────────────
-
-  /**
-   * Fully destroy all audio resources. Call on session end or unmount.
-   */
   async cleanup(): Promise<void> {
-    this.stopCapture();
+    await this.cleanupCaptureResources();
     await this.teardownPlayback();
     this.callbacks = null;
   }
-
-  // ── Public: state getters ───────────────────────────────────────────────────
 
   get isCapturing(): boolean {
     return this.captureState === 'capturing';
   }
 
-  /** Bypass VAD — send all audio chunks regardless of silence detection */
   setBypassVAD(bypass: boolean): void {
     this._bypassVAD = bypass;
+    this.preSpeechBuffer = [];
     if (bypass) {
-      // Immediately mark as speaking so chunks flow right away
       this.isSpeaking = true;
+      this.currentUtteranceId = null;
+      this.currentUtteranceStartedAt = null;
+      this.currentUtteranceRms = 0;
+      return;
     }
+    this.isSpeaking = false;
+    this.currentUtteranceId = null;
+    this.currentUtteranceStartedAt = null;
+    this.currentUtteranceRms = 0;
   }
 
   get isPlaybackReady(): boolean {
@@ -298,71 +256,140 @@ export class AudioWorkletManager {
     return this.playbackState;
   }
 
-  // ── Private: worklet message handler ────────────────────────────────────────
-
   private handleCaptureMessage = (event: MessageEvent): void => {
     const buffer = event.data as ArrayBuffer;
-    if (!buffer || buffer.byteLength === 0) return;
+    if (!buffer || buffer.byteLength === 0) {
+      return;
+    }
 
     const int16 = new Int16Array(buffer);
-    
-    // Guard against corrupted frames from AudioContext resume glitch
-    // (browser suspend/resume side-effects can yield frames of pure zeros)
     let isAllZeros = true;
     for (let i = 0; i < int16.length; i++) {
-        if (int16[i] !== 0) {
-            isAllZeros = false;
-            break;
-        }
+      if (int16[i] !== 0) {
+        isAllZeros = false;
+        break;
+      }
     }
-    if (isAllZeros) return; // Drop it, don't send to Gemini
+    if (isAllZeros) {
+      return;
+    }
 
-    // 2. Speech / silence detection
-    const speaking = this.isAboveSilenceThreshold(int16);
-    this.handleSpeechActivity(speaking);
+    const frameRms = this.calculateRms(int16);
+    this.currentUtteranceRms = Math.max(this.currentUtteranceRms, frameRms);
 
-    // Forward raw PCM to caller if we are in a speech window OR VAD is bypassed.
-    // _bypassVAD is set when user is press-and-holding to talk to AI — all audio
-    // must flow immediately without waiting for the silence debounce.
+    if (!this._bypassVAD && !this.isSpeaking) {
+      // Keep a rolling pre-speech buffer so handleVadSpeechStart can replay it,
+      // preventing the first word from being clipped.
+      this.preSpeechBuffer.push(buffer.slice(0));
+      if (this.preSpeechBuffer.length > this.PRE_SPEECH_FRAMES) {
+        this.preSpeechBuffer.shift();
+      }
+    }
+
     if (this._bypassVAD || this.isSpeaking) {
       this.callbacks?.onChunk(buffer);
     }
   };
 
-  // ── Private: speech / silence ────────────────────────────────────────────────
-
-  private handleSpeechActivity(speaking: boolean): void {
-    if (speaking) {
-      if (!this.isSpeaking) {
-        this.isSpeaking = true;
-        this.callbacks?.onSpeech?.();
-      }
-      this.resetSilenceTimer();
+  private handleVadSpeechStart = (): void => {
+    if (this._bypassVAD || this.isSpeaking) {
+      return;
     }
-  }
 
-  private resetSilenceTimer(): void {
-    if (this.silenceTimer !== null) clearTimeout(this.silenceTimer);
-    this.silenceTimer = setTimeout(() => {
-      this.isSpeaking = false;
-      this.silenceTimer = null;
+    this.isSpeaking = true;
+    this.currentUtteranceId = crypto.randomUUID();
+    // Back-date start to the beginning of the pre-speech buffer so duration is accurate.
+    this.currentUtteranceStartedAt = Date.now() - this.preSpeechBuffer.length * 30;
+    this.currentUtteranceRms = 0;
+
+    // Flush pre-speech ring buffer so the first word is not clipped.
+    for (const frame of this.preSpeechBuffer) {
+      this.callbacks?.onChunk(frame);
+    }
+    this.preSpeechBuffer = [];
+
+    this.callbacks?.onSpeech?.();
+    this.callbacks?.onUtteranceStart?.({
+      utteranceId: this.currentUtteranceId,
+      startedAt: this.currentUtteranceStartedAt,
+    });
+  };
+
+  private handleVadSpeechEnd = (): void => {
+    if (this._bypassVAD) {
+      return;
+    }
+
+    if (!this.isSpeaking) {
+      this.preSpeechBuffer = [];
       this.callbacks?.onSilence?.();
-    }, this.cfg.silenceDebounceMs);
+      return;
+    }
+
+    const endedAt = Date.now();
+    const utteranceId = this.currentUtteranceId;
+    const startedAt = this.currentUtteranceStartedAt;
+    const durationMs = startedAt ? endedAt - startedAt : 0;
+
+    this.isSpeaking = false;
+    this.preSpeechBuffer = [];
+
+    if (utteranceId && startedAt) {
+      this.callbacks?.onUtteranceEnd?.({
+        utteranceId,
+        startedAt,
+        endedAt,
+        durationMs,
+        rms: this.currentUtteranceRms,
+      });
+    }
+
+    this.currentUtteranceId = null;
+    this.currentUtteranceStartedAt = null;
+    this.currentUtteranceRms = 0;
+    this.callbacks?.onSilence?.();
+  };
+
+  private async createBrowserVad(stream: MediaStream): Promise<MicVAD> {
+    const evalVadOptions =
+      typeof window !== 'undefined'
+        ? (window as typeof window & { __audioEvalVadOptions?: Partial<RealTimeVADOptions> })
+            .__audioEvalVadOptions
+        : undefined;
+
+    return MicVAD.new({
+      stream,
+      baseAssetPath: '/vad/',
+      onnxWASMBasePath: '/onnx/',
+      positiveSpeechThreshold: 0.55,
+      negativeSpeechThreshold: 0.35,
+      redemptionFrames: 6,
+      preSpeechPadFrames: 12,
+      minSpeechFrames: 3,
+      ...this.cfg.vadOptions,
+      ...(evalVadOptions || {}),
+      onSpeechStart: this.handleVadSpeechStart,
+      onSpeechEnd: () => {
+        this.handleVadSpeechEnd();
+      },
+      onVADMisfire: () => {
+        this.handleVadSpeechEnd();
+      },
+    });
   }
 
-  private isAboveSilenceThreshold(samples: Int16Array): boolean {
+  private calculateRms(samples: Int16Array): number {
     let sum = 0;
     for (let i = 0; i < samples.length; i++) {
       sum += samples[i] * samples[i];
     }
-    return Math.sqrt(sum / samples.length) > this.cfg.silenceThreshold;
+    return Math.sqrt(sum / samples.length);
   }
-
-  // ── Private: AudioContext helpers ────────────────────────────────────────────
 
   private async createAudioContext(sampleRate: number): Promise<AudioContext> {
     const Ctor: typeof AudioContext =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
 
     if (!Ctor) {
       throw new AudioManagerError('AudioContext not supported', AudioErrorCode.CONTEXT_CREATION_FAILED);
@@ -370,8 +397,9 @@ export class AudioWorkletManager {
 
     const ctx = new Ctor({ sampleRate, latencyHint: 'interactive' });
 
-    // Immediately try to resume (needed if first gesture already fired)
-    if (ctx.state === 'suspended') await ctx.resume();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
 
     return ctx;
   }
@@ -393,9 +421,9 @@ export class AudioWorkletManager {
       return await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
         video: false,
       });
@@ -408,34 +436,37 @@ export class AudioWorkletManager {
     }
   }
 
-  // ── Private: teardown helpers ────────────────────────────────────────────────
-
-  private teardownCapture(): void {
-    if (this.silenceTimer !== null) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
-    }
+  private async cleanupCaptureResources(): Promise<void> {
+    this._bypassVAD = false;
+    this.preSpeechBuffer = [];
+    this.browserVad?.destroy();
+    this.browserVad = null;
     this.isSpeaking = false;
+    this.currentUtteranceId = null;
+    this.currentUtteranceStartedAt = null;
+    this.currentUtteranceRms = 0;
 
     this.captureNode?.disconnect();
     this.captureNode = null;
 
-    this.micStream?.getTracks().forEach(t => t.stop());
+    this.micStream?.getTracks().forEach((track) => track.stop());
     this.micStream = null;
 
-    void this.captureCtx?.close();
+    if (this.captureCtx) {
+      await this.captureCtx.close();
+    }
     this.captureCtx = null;
   }
 
   private async teardownPlayback(): Promise<void> {
     this.playbackNode?.disconnect();
     this.playbackNode = null;
-    await this.playbackCtx?.close();
+    if (this.playbackCtx) {
+      await this.playbackCtx.close();
+    }
     this.playbackCtx = null;
     this.playbackState = 'idle';
   }
-
-  // ── Private: state helpers ───────────────────────────────────────────────────
 
   private setCaptureState(state: CaptureState): void {
     this.captureState = state;
@@ -443,13 +474,13 @@ export class AudioWorkletManager {
   }
 
   private wrapError(err: unknown): AudioManagerError {
-    if (err instanceof AudioManagerError) return err;
+    if (err instanceof AudioManagerError) {
+      return err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     return new AudioManagerError(message, AudioErrorCode.CONTEXT_CREATION_FAILED, err);
   }
 }
-
-// ─── Pure utility functions ───────────────────────────────────────────────────
 
 function int16ToFloat32(int16: Int16Array): Float32Array {
   const out = new Float32Array(int16.length);

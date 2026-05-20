@@ -1,0 +1,528 @@
+{
+  "scenario_id": "salary_competing_offers_001",
+  "title": "Using a competing offer to lift the primary offer",
+  "family": "salary",
+  "session_id": "6ed3a9b6-fe9a-4ddb-92ad-3fc59e60e92b",
+  "created_at": "2026-05-18T18:55:20+05:30",
+  "summary": {
+    "score": 0.888,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.95,
+    "judge_average": 0.838
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 2,
+      "mode": "advice",
+      "query": "I want to use Offer B to lift Offer A without sounding like I am bluffing. How?",
+      "expected_direction": "Cite Offer B specifically and ask for parity on base and sign-on; do not bluff; anchor on the real numbers from Offer B.",
+      "response": "To use Offer B effectively without sounding like you are bluffing, you must be direct, specific, and tie your request back to your preference for their company. The counterparty has asked \"Where do you need us to land?\", which is a direct invitation for you to state your terms. You have a confirmed competing offer, which is your strongest form of leverage.\n\nState the exact numbers from the competing offer and frame your request as what it would take for you to sign with them, your preferred choice. This makes it a solvable problem for them, not a threat. Your competing offer of $220k base and $40k sign-on is your anchor. Your target is $220k base and $35k sign-on. You should ask for your target directly.",
+      "timestamp_ms": 1779110649112,
+      "deterministic_score": {
+        "score": 0.9,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "220000",
+          "40000",
+          "35000"
+        ],
+        "relevant_terms": [
+          "sign-on"
+        ],
+        "number_hits": [
+          "220000",
+          "40000",
+          "35000"
+        ],
+        "term_hits": [
+          "sign-on"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 2,
+          "speaker_attribution": 3,
+          "actionability": 4,
+          "commercial_quality": 4,
+          "non_genericness": 5,
+          "constraint_obedience": 3,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 3.375,
+        "passed": false,
+        "rationale": "The response's primary failure is a significant hallucination. It invents a direct quote from the counterparty ('Where do you need us to land?'), which is not mentioned in the scenario context. This provides advice based on a false premise, which is a critical error for a copilot that must be grounded in the facts of the user's situation.",
+        "best_fix": "Remove the hallucinated sentence: \"The counterparty has asked 'Where do you need us to land?', which is a direct invitation for you to state your terms.\" The advice is otherwise strong and would be excellent without this invented detail."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to close with two twenty base path, thirty five sign-on, and a six month review.",
+      "expected_direction": "Accept the offer explicitly with 35 sign-on now, 6 month review, path to 220 base with clear performance targets.",
+      "response": "Say: 'Excellent, if you can send over the offer letter with the thirty five thousand sign-on and the six month review language targeting two hundred twenty thousand base, I will sign today.'",
+      "timestamp_ms": 1779110670104,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "220000",
+          "35000"
+        ],
+        "relevant_terms": [
+          "sign-on"
+        ],
+        "number_hits": [
+          "220000",
+          "35000"
+        ],
+        "term_hits": [
+          "sign-on"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI provides a single, actionable sentence that perfectly incorporates all the user's specific requests from the query: the $35k sign-on, the path to a $220k base, and the six-month review. The phrasing is professional, confident, and commercially effective.",
+        "best_fix": "N/A. The response is excellent and requires no improvement."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "6ed3a9b6-fe9a-4ddb-92ad-3fc59e60e92b",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110625.4564466
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110625.4674392
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "6ed3a9b6-fe9a-4ddb-92ad-3fc59e60e92b",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "6ed3a9b6-fe9a-4ddb-92ad-3fc59e60e92b"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "I want to accept your offer but I have another at two hundred twenty base and forty thousand sign-on.",
+        "timestamp": 1779110637456,
+        "start_time": 1779110637.456,
+        "end_time": 1779110637.456,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We came in at two hundred and thirty thousand sign-on. Where do you need us to land?",
+        "timestamp": 1779110638256,
+        "start_time": 1779110638.256,
+        "end_time": 1779110638.256,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110649112",
+        "speaker": "ai",
+        "text": "To use Offer B effectively without sounding like you are bluffing, you must be direct, specific, and tie your request back to your preference for their company. The counterparty has asked \"Where do you need us to land?\", which is a direct invitation for you to state your terms. You have a confirmed competing offer, which is your strongest form of leverage.\n\nState the exact numbers from the competing offer and frame your request as what it would take for you to sign with them, your preferred choice. This makes it a solvable problem for them, not a threat. Your competing offer of $220k base and $40k sign-on is your anchor. Your target is $220k base and $35k sign-on. You should ask for your target directly.",
+        "timestamp": 1779110649112,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "To use  Offer  B  effectively  without  sounding  like you're  bluffing,  you must  be direct,  specific,  and tie  your request  back  to your  preference  for their  company.  The counterparty  has asked  \"Where do  you need  us to  land?\",  which  is a  direct  invitation  for you  to state  your terms.  You have  a confirmed  competing  offer,  which  is your  strongest  form  of leverage.  State  the exact  numbers  from the  competing  offer  and frame  your request  as what  it would  take  for you  to sign  with them,  your preferred  choice.  This  makes  it a solvable  problem  for them,  not  a threat.  Your competing  offer  of $220k  base  and $40k  sign-on  is your  anchor.  Your target",
+        "timestamp": 1779110657488,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "If you can match base at two hundred twenty and meet me at thirty five sign-on, I close today.",
+        "timestamp": 1779110639056,
+        "start_time": 1779110639.056,
+        "end_time": 1779110639.056,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two twenty base is above our band ceiling, but I have flexibility on sign-on.",
+        "timestamp": 1779110639856,
+        "start_time": 1779110639.856,
+        "end_time": 1779110639.856,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Then I need a path to two twenty within the first year, with thirty five sign-on now.",
+        "timestamp": 1779110640656,
+        "start_time": 1779110640.656,
+        "end_time": 1779110640.656,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We can write in a six month review with a path to two ten base, sign-on at thirty five.",
+        "timestamp": 1779110641456,
+        "start_time": 1779110641.456,
+        "end_time": 1779110641.456,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_7",
+        "speaker": "user",
+        "language": null,
+        "text": "Six months is fine if the path explicitly targets two twenty, not two ten.",
+        "timestamp": 1779110642256,
+        "start_time": 1779110642.256,
+        "end_time": 1779110642.256,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_7",
+        "speaker": "user",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_8",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I can put two twenty in the review language if performance targets are clear.",
+        "timestamp": 1779110643056,
+        "start_time": 1779110643.056,
+        "end_time": 1779110643.056,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_competing_offers_001_turn_8",
+        "speaker": "counterparty",
+        "scenario_id": "salary_competing_offers_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Salary package",
+        "negotiation_type": "salary",
+        "seller_price": null,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": "To hire the user for the position.",
+        "key_moments": [
+          {
+            "type": "Competing Offer",
+            "description": "User reveals a competing offer of $220k base and a $40k sign-on bonus to gain leverage."
+          }
+        ],
+        "leverage_points": [
+          {
+            "type": "BATNA",
+            "description": "User has a strong Best Alternative to a Negotiated Agreement (BATNA) with a competing job offer of $220k base and $40k sign-on."
+          }
+        ],
+        "transcript_snippet": "I want to accept your offer but I have another at two hundred twenty base and forty thousand sign-on.",
+        "market_data": null,
+        "cycle": 17
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to research typical salary packages (base + bonus) for their specific role, industry, location, and experience level to benchmark both offers."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110670104",
+        "speaker": "ai",
+        "text": "Say: 'Excellent, if you can send over the offer letter with the thirty five thousand sign-on and the six month review language targeting two hundred twenty thousand base, I will sign today.'",
+        "timestamp": 1779110670104,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'Excellent,  if you  can send  over the  offer  letter  with the  thirty-five  thousand  sign-on  and the  six  month  review  language  targeting  two hundred  twenty thousand  base,  I will  sign today.'",
+        "timestamp": 1779110673032,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110673.6469772
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110674.1944277
+      }
+    }
+  ]
+}

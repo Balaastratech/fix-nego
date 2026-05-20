@@ -1,0 +1,585 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "saas_renewal_terms_001",
+      "family": "vendor_renewal",
+      "title": "SaaS renewal with price and payment-term tradeoff",
+      "context": "The user is buying a 120-seat customer support SaaS renewal. Last contract was 84000 annual. Vendor opened at 96000. User target is 80000 and cap is 82000 only with key protections.",
+      "must_track_numbers": ["84000", "96000", "88000", "84000", "82000", "80000"],
+      "must_track_terms": ["price lock", "onboarding", "service credits", "net 60", "no auto-renewal"],
+      "turns": [
+        {"speaker": "user", "text": "Thanks for joining. I want to close the renewal today if we can get to a workable structure for one hundred twenty seats."},
+        {"speaker": "counterparty", "text": "We want to keep the account, but the ninety six thousand quote reflects current usage, support coverage, and the expanded footprint from the last cycle."},
+        {"speaker": "user", "text": "The ninety six thousand quote is too high, especially when last year we were at eighty four thousand."},
+        {"speaker": "counterparty", "text": "I understand the comparison to eighty four, but your environment and support expectations are larger now."},
+        {"speaker": "user", "text": "My benchmark for a serious renewal starts around eighty, not ninety six."},
+        {"speaker": "counterparty", "text": "If we are talking about a fast approval path, I can likely move this to eighty eight thousand with standard terms."},
+        {"speaker": "user", "text": "If price cannot come down enough, the protections need to get materially better."},
+        {"speaker": "counterparty", "text": "If you want stronger protections, I need to trade somewhere because richer terms and lower price do not usually move together."},
+        {"speaker": "user", "text": "I can take eighty two forward only if it includes a price lock, onboarding, service credits, net sixty, and no auto-renewal."},
+        {"speaker": "counterparty", "text": "I can probably get to eighty four, but that would still need standard payment terms and normal renewal language."},
+        {"speaker": "user", "text": "If you cannot do eighty two with those protections, I need your best executable position today."},
+        {"speaker": "counterparty", "text": "Eighty two is harder, and if I go there I will need to narrow what is included."},
+        {"speaker": "user", "text": "If you can get to eighty with the protections, I can push to close this."},
+        {"speaker": "counterparty", "text": "My best likely path is eighty thousand with price lock, onboarding, service credits, and no auto-renewal, but standard payment timing instead of net sixty."}
+      ],
+      "queries": [
+        {
+          "after_turn": 6,
+          "mode": "advice",
+          "text": "What should I do with their eighty eight offer when my target is eighty and my cap is eighty two only with protections?",
+          "expected_direction": "Reject 88 as insufficient, acknowledge movement, push toward 82 or 80, and keep protections in the frame."
+        },
+        {
+          "after_turn": 12,
+          "mode": "advice",
+          "text": "They are resisting eighty two with full protections. Which term should I trade last and which term should I trade first?",
+          "expected_direction": "Protect recurring risk terms like no auto-renewal, price lock, and service credits; trade lower-value implementation or payment timing first."
+        },
+        {
+          "after_turn": 14,
+          "mode": "advice",
+          "text": "They are offering eighty with standard payment timing instead of net sixty. Should I close, push once more, or trade something else?",
+          "expected_direction": "Recommend closing or one final minor push because target price and core protections are achieved; recognize net 60 as the traded concession."
+        }
+      ]
+    },
+    {
+      "id": "salary_equity_001",
+      "family": "salary",
+      "title": "Salary offer with base, sign-on, and equity tradeoff",
+      "context": "The user is negotiating a senior product manager offer. Company offered 185000 base, 20000 sign-on, and 60000 annual equity. User target is 205000 base or 195000 base with stronger sign-on and equity.",
+      "must_track_numbers": ["185000", "20000", "60000", "205000", "195000", "35000", "80000"],
+      "must_track_terms": ["base salary", "sign-on", "equity", "review cycle"],
+      "turns": [
+        {"speaker": "user", "text": "I appreciate the offer. I want to make the package work, but the base salary is below where I expected for this scope."},
+        {"speaker": "counterparty", "text": "The current offer is one hundred eighty five thousand base, twenty thousand sign-on, and sixty thousand annual equity."},
+        {"speaker": "user", "text": "For this role and scope, my target is two hundred five thousand base."},
+        {"speaker": "counterparty", "text": "Two hundred five is above the band midpoint for this level, so that will be difficult."},
+        {"speaker": "user", "text": "If the base cannot reach two hundred five, I need the total package to close the gap."},
+        {"speaker": "counterparty", "text": "We might be able to discuss one hundred ninety five base if the rest of the package remains unchanged."},
+        {"speaker": "user", "text": "One ninety five helps, but I would need thirty five thousand sign-on and eighty thousand annual equity to make that work."},
+        {"speaker": "counterparty", "text": "Equity has more flexibility than base, but sign-on above twenty five will require approval."}
+      ],
+      "queries": [
+        {
+          "after_turn": 6,
+          "mode": "advice",
+          "text": "They may move base to one ninety five but want the rest unchanged. What should I push next?",
+          "expected_direction": "Push total compensation, not base alone; use equity and sign-on as trade levers."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence that asks for equity and sign-on without sounding inflexible.",
+          "expected_direction": "Ask for a concrete package around 195 base, 35 sign-on, and 80 equity or equivalent total value."
+        }
+      ]
+    },
+    {
+      "id": "services_retainer_scope_001",
+      "family": "services_contract",
+      "title": "Marketing services retainer with scope creep risk",
+      "context": "The user is buying a monthly marketing services retainer. Agency quoted 30000 per month for strategy, content, and paid media management. User target is 24000 with clear scope and performance reporting.",
+      "must_track_numbers": ["30000", "27000", "24000", "25000"],
+      "must_track_terms": ["scope", "reporting", "termination", "performance review"],
+      "turns": [
+        {"speaker": "user", "text": "The thirty thousand per month retainer is above what we planned, especially with the scope still broad."},
+        {"speaker": "counterparty", "text": "The thirty thousand includes strategy, content, paid media management, and weekly reporting."},
+        {"speaker": "user", "text": "I need either a lower number or much clearer scope control."},
+        {"speaker": "counterparty", "text": "We could move to twenty seven thousand if the number of content deliverables is capped."},
+        {"speaker": "user", "text": "My target is twenty four thousand, with monthly reporting and a ninety day performance review."},
+        {"speaker": "counterparty", "text": "Twenty four is tight, but twenty five may be possible if termination rights are standard."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They offered twenty seven if deliverables are capped. Should I accept the scope cap or keep pushing price?",
+          "expected_direction": "Do not accept vague scope reduction; define deliverables and push toward 25 or 24 with reporting."
+        },
+        {
+          "after_turn": 6,
+          "mode": "command",
+          "text": "Give me one sentence to close at twenty five while protecting reporting and performance review.",
+          "expected_direction": "Offer 25 only with reporting, performance review, and clear scope."
+        }
+      ]
+    },
+    {
+      "id": "hardware_bulk_purchase_001",
+      "family": "b2b_purchase",
+      "title": "Bulk laptop purchase with warranty and delivery tradeoff",
+      "context": "The user is buying 50 laptops. Seller quoted 65000 each. User target is 59000 each, cap 61000 if warranty and delivery are included.",
+      "must_track_numbers": ["50", "65000", "62000", "61000", "59000"],
+      "must_track_terms": ["warranty", "delivery", "replacement", "payment"],
+      "turns": [
+        {"speaker": "user", "text": "We need fifty laptops, but sixty five thousand per unit is above our budget."},
+        {"speaker": "counterparty", "text": "Sixty five thousand includes current stock, standard warranty, and delivery within ten days."},
+        {"speaker": "user", "text": "For fifty units, I expected the price closer to fifty nine thousand."},
+        {"speaker": "counterparty", "text": "I can move to sixty two thousand if payment is immediate."},
+        {"speaker": "user", "text": "Sixty two still does not solve it. My cap is sixty one only if warranty and delivery stay included."},
+        {"speaker": "counterparty", "text": "Sixty one is possible, but replacement coverage would need to be standard, not premium."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They moved to sixty two with immediate payment. What should I do next?",
+          "expected_direction": "Use volume and cap, push to 61 with warranty/delivery, do not give payment without value."
+        },
+        {
+          "after_turn": 6,
+          "mode": "command",
+          "text": "Give me one sentence to accept sixty one only if warranty delivery and replacement terms are clear.",
+          "expected_direction": "Condition acceptance on 61 with included warranty, delivery, and explicit replacement coverage."
+        }
+      ]
+    },
+    {
+      "id": "commercial_lease_001",
+      "family": "lease",
+      "title": "Office lease with rent-free period and lock-in tradeoff",
+      "context": "The user is leasing office space. Landlord asks 180 per square foot annually, 3-year lock-in, no rent-free period. User target is 160 with 3 months rent-free and 1-year break option.",
+      "must_track_numbers": ["180", "170", "160", "3", "1"],
+      "must_track_terms": ["rent-free", "lock-in", "break option", "fit-out"],
+      "turns": [
+        {"speaker": "user", "text": "One eighty per square foot with a three year lock-in is too aggressive for us."},
+        {"speaker": "counterparty", "text": "The building is in demand, and one eighty reflects the current market for this location."},
+        {"speaker": "user", "text": "My target is one sixty with three months rent-free and a one year break option."},
+        {"speaker": "counterparty", "text": "One sixty is low, and the break option creates too much vacancy risk."},
+        {"speaker": "user", "text": "Then we need either movement on price or meaningful fit-out support."},
+        {"speaker": "counterparty", "text": "I may be able to do one seventy with two months rent-free, but no one year break option."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They are resisting the one year break option. What should I protect and what can I trade?",
+          "expected_direction": "Protect flexibility or rent-free value; trade break option only for lower price or fit-out support."
+        },
+        {
+          "after_turn": 6,
+          "mode": "command",
+          "text": "Give me one sentence to push from one seventy toward one sixty while preserving rent-free value.",
+          "expected_direction": "Counter 170 by asking for 165 or 160 equivalent with rent-free/fit-out economics."
+        }
+      ]
+    },
+    {
+      "id": "supplier_moq_001",
+      "family": "supplier_terms",
+      "title": "Supplier minimum order quantity and payment terms negotiation",
+      "context": "The user is buying components. Supplier asks 10000 unit MOQ at 4.80 per unit with upfront payment. User wants 5000 units at 4.40 and net 45 terms.",
+      "must_track_numbers": ["10000", "5000", "4.80", "4.40", "4.55", "45"],
+      "must_track_terms": ["MOQ", "payment terms", "forecast", "quality holdback"],
+      "turns": [
+        {"speaker": "user", "text": "Ten thousand unit MOQ at four eighty per unit with upfront payment is too much commitment for our first order."},
+        {"speaker": "counterparty", "text": "The MOQ is what lets us hold the four eighty price and reserve production capacity."},
+        {"speaker": "user", "text": "I can start with five thousand units if we get closer to four forty and net forty five terms."},
+        {"speaker": "counterparty", "text": "Five thousand units at four forty is not workable, but four fifty five may be possible with a forecast commitment."},
+        {"speaker": "user", "text": "A forecast is possible, but I need a quality holdback and payment terms before I commit volume."},
+        {"speaker": "counterparty", "text": "We can discuss net thirty and a quality holdback, but net forty five is a stretch."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They offered four fifty five with a forecast commitment. What should I trade next?",
+          "expected_direction": "Trade forecast for lower MOQ/payment protection, not for price alone."
+        },
+        {
+          "after_turn": 6,
+          "mode": "command",
+          "text": "Give me one sentence that protects payment terms and quality holdback while accepting a reasonable forecast.",
+          "expected_direction": "Accept forecast only if quality holdback and improved payment terms are included."
+        }
+      ]
+    },
+    {
+      "id": "multi_vendor_rfp_001",
+      "family": "vendor_selection",
+      "title": "Multi-vendor RFP with three competitors on price and SLA",
+      "context": "The user is running an RFP for cloud monitoring tools. Vendor A quoted 84000 with 99.9 SLA, Vendor B quoted 72000 with 99.5 SLA, Vendor C quoted 90000 with 99.95 SLA and white-glove onboarding. User target is 75000 with 99.9 SLA or better, with at least 30 days of overlap support during migration.",
+      "must_track_numbers": ["84000", "72000", "90000", "75000", "99.9", "99.5", "99.95", "30"],
+      "must_track_terms": ["SLA", "overlap support", "onboarding", "migration", "uptime credits"],
+      "turns": [
+        {"speaker": "user", "text": "We are evaluating three vendors and need to pick a winner this week."},
+        {"speaker": "counterparty", "text": "We are at ninety thousand with ninety nine point ninety five percent SLA and white-glove onboarding."},
+        {"speaker": "user", "text": "Vendor B is at seventy two thousand with ninety nine point five SLA. You are eighteen thousand higher."},
+        {"speaker": "counterparty", "text": "Our SLA is materially better and we include uptime credits for any breach over fifteen minutes."},
+        {"speaker": "user", "text": "Vendor A is at eighty four thousand with ninety nine point nine SLA. My target is seventy five with ninety nine point nine or better."},
+        {"speaker": "counterparty", "text": "We could move to eighty four if we drop the white-glove onboarding piece."},
+        {"speaker": "user", "text": "I need thirty days of overlap support during migration and uptime credits intact."},
+        {"speaker": "counterparty", "text": "We could keep uptime credits and thirty day overlap if you accept eighty two thousand instead of seventy five."}
+      ],
+      "queries": [
+        {
+          "after_turn": 6,
+          "mode": "advice",
+          "text": "They want to drop white-glove onboarding to hit eighty four. What should I push for instead given Vendor A is also at eighty four?",
+          "expected_direction": "Use Vendor A as anchor; push toward 75-78 while keeping uptime credits and 30 day overlap; do not give up onboarding for free."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to counter eighty two while protecting uptime credits and thirty day overlap.",
+          "expected_direction": "Counter with a price near 76-78 explicitly preserving uptime credits and 30 day overlap support."
+        }
+      ]
+    },
+    {
+      "id": "anchoring_tactic_001",
+      "family": "tactic_detection",
+      "title": "Counterparty opens with an extreme anchor 3x above market",
+      "context": "The user is buying a used commercial espresso machine. Market price for the model is 4500-6000. The seller opened at 14000 to anchor high. User target is 5500 with a 90 day warranty included.",
+      "must_track_numbers": ["14000", "4500", "6000", "5500", "90"],
+      "must_track_terms": ["warranty", "anchor", "market range", "comparable sales"],
+      "turns": [
+        {"speaker": "counterparty", "text": "The machine has been serviced and I am asking fourteen thousand for it."},
+        {"speaker": "user", "text": "Fourteen thousand is well above what these sell for. Comparable units are between forty five hundred and six thousand."},
+        {"speaker": "counterparty", "text": "Mine has been better maintained than most comparable listings."},
+        {"speaker": "user", "text": "Maintenance history matters but not three times the market price."},
+        {"speaker": "counterparty", "text": "What did you have in mind?"},
+        {"speaker": "user", "text": "My target is fifty five hundred with a ninety day warranty included."},
+        {"speaker": "counterparty", "text": "Fifty five hundred is low for a unit in this condition. Ten thousand and no warranty is closer to fair."},
+        {"speaker": "user", "text": "Ten thousand is still over the top of the market range I shared."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They opened at fourteen thousand. How do I refuse the anchor without sounding hostile?",
+          "expected_direction": "Reject the anchor by citing the 4500-6000 market range; do not counter inside the anchored frame; reset to market data."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to push back on ten thousand and re-anchor to fifty five hundred with warranty.",
+          "expected_direction": "Counter explicitly at 5500 with 90 day warranty and cite market comparables to justify."
+        }
+      ]
+    },
+    {
+      "id": "deadline_pressure_001",
+      "family": "tactic_detection",
+      "title": "Counterparty manufactures urgency to force capitulation",
+      "context": "The user is buying a SaaS analytics platform. Vendor quoted 60000 annual and is pushing for end-of-day signature claiming the discount expires today. User target is 48000 with quarterly billing and a 30 day exit clause.",
+      "must_track_numbers": ["60000", "48000", "30"],
+      "must_track_terms": ["quarterly billing", "exit clause", "deadline", "discount"],
+      "turns": [
+        {"speaker": "counterparty", "text": "If we sign today, I can hold the sixty thousand annual rate. After today it returns to seventy two."},
+        {"speaker": "user", "text": "I do not make decisions to artificial deadlines. My budget target is forty eight thousand."},
+        {"speaker": "counterparty", "text": "Forty eight is well below our floor. The sixty figure already reflects the urgency discount."},
+        {"speaker": "user", "text": "Then I am happy to wait and see what the seventy two number actually delivers in your standard quote."},
+        {"speaker": "counterparty", "text": "Let us not lose momentum. I can do fifty five thousand if we sign by end of week."},
+        {"speaker": "user", "text": "I also need quarterly billing and a thirty day exit clause."},
+        {"speaker": "counterparty", "text": "Annual billing is our standard, but I can consider quarterly with a small uplift."},
+        {"speaker": "user", "text": "Quarterly billing without uplift, exit clause, and a number close to my target is what closes this."}
+      ],
+      "queries": [
+        {
+          "after_turn": 2,
+          "mode": "advice",
+          "text": "They claim the price expires today. Should I accept the pressure or push back?",
+          "expected_direction": "Push back on artificial deadline; do not concede; reset to the user's target of 48000 with quarterly billing and exit clause."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence that closes at forty eight thousand with quarterly billing and the exit clause.",
+          "expected_direction": "Offer 48000 explicitly contingent on quarterly billing and 30 day exit clause."
+        }
+      ]
+    },
+    {
+      "id": "batna_exploration_001",
+      "family": "batna",
+      "title": "User has weak BATNA and must build it before pushing",
+      "context": "The user is a freelance designer renegotiating a retainer with a single anchor client. Current retainer is 8000/month. Client wants to reduce to 6000. User target is 9000 but has no other clients lined up.",
+      "must_track_numbers": ["8000", "6000", "9000"],
+      "must_track_terms": ["retainer", "BATNA", "scope", "alternative clients"],
+      "turns": [
+        {"speaker": "counterparty", "text": "Budgets are tight this quarter and we need to drop the retainer from eight thousand to six thousand."},
+        {"speaker": "user", "text": "Six thousand is a steep cut. The scope has actually grown over the last six months."},
+        {"speaker": "counterparty", "text": "We understand, but six is what fits the new budget."},
+        {"speaker": "user", "text": "Given the expanded scope, my target for the next cycle is nine thousand."},
+        {"speaker": "counterparty", "text": "Nine is not possible right now. Six is our ceiling."},
+        {"speaker": "user", "text": "Then we need to talk about reducing scope, not just price."},
+        {"speaker": "counterparty", "text": "What scope reduction would you accept at six thousand?"},
+        {"speaker": "user", "text": "Half the deliverables stay, half move to project-based pricing. Otherwise I need to take on additional clients."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "I have no other clients lined up. How do I push for nine thousand without bluffing a fake BATNA?",
+          "expected_direction": "Recommend building real BATNA before pushing harder; reframe the negotiation around scope reduction rather than price alone; do not bluff alternatives."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence that accepts six thousand only if half the deliverables move to project-based pricing.",
+          "expected_direction": "Accept 6000 explicitly conditional on half of deliverables moving to project-based pricing."
+        }
+      ]
+    },
+    {
+      "id": "walk_away_decision_001",
+      "family": "walk_away",
+      "title": "Counterparty offer is below walk-away and AI must recommend walking",
+      "context": "The user is selling a piece of legacy software with active enterprise customers. Buyer offered 1.2M cash. User walk-away is 1.8M. Strategic value (preserved customer relationships) justifies the higher number.",
+      "must_track_numbers": ["1200000", "1800000", "1.2", "1.8"],
+      "must_track_terms": ["walk-away", "strategic value", "customer relationships", "all-cash"],
+      "turns": [
+        {"speaker": "counterparty", "text": "We are prepared to offer one point two million all-cash, closing in thirty days."},
+        {"speaker": "user", "text": "That is below my floor. My walk-away is one point eight million."},
+        {"speaker": "counterparty", "text": "Comparable software acquisitions of this size are landing between one and one and a half."},
+        {"speaker": "user", "text": "Comparable acquisitions do not have my customer base."},
+        {"speaker": "counterparty", "text": "We could go to one point three but the cash certainty should matter."},
+        {"speaker": "user", "text": "Cash certainty does not bridge a six hundred thousand gap."},
+        {"speaker": "counterparty", "text": "Final number is one point four. After that we will look elsewhere."},
+        {"speaker": "user", "text": "One point four is still four hundred thousand below my walk-away."}
+      ],
+      "queries": [
+        {
+          "after_turn": 6,
+          "mode": "advice",
+          "text": "Their best is one point three. My walk-away is one point eight. Should I split or walk?",
+          "expected_direction": "Recommend walking, not splitting; the gap is too large and walk-away is principled, not a negotiating ploy."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to end the negotiation cleanly at one point four.",
+          "expected_direction": "Close the conversation explicitly; do not soften the walk-away by counter-offering inside the unacceptable zone."
+        }
+      ]
+    },
+    {
+      "id": "partnership_equity_001",
+      "family": "equity_split",
+      "title": "Three-way founder equity split with vesting and role tradeoff",
+      "context": "Three founders are deciding equity. CEO (the user) wants 60 percent given they brought the IP and initial capital. CTO wants 30 percent for full-time technical leadership. CMO wants 20 percent for marketing leadership. Total cannot exceed 100. User target is 60/25/15 with 4 year vesting and 1 year cliff for all three.",
+      "must_track_numbers": ["60", "30", "20", "25", "15", "4", "1"],
+      "must_track_terms": ["vesting", "cliff", "IP contribution", "full-time commitment", "equity split"],
+      "turns": [
+        {"speaker": "counterparty", "text": "Equal three-way split is the cleanest start. Thirty three each."},
+        {"speaker": "user", "text": "I brought the IP and the initial two hundred thousand of capital. A clean split does not reflect that."},
+        {"speaker": "counterparty", "text": "But we are all going full-time. Capital can be recognized as a loan."},
+        {"speaker": "user", "text": "My target is sixty for me, twenty five for CTO, fifteen for CMO with four year vesting."},
+        {"speaker": "counterparty", "text": "Fifteen percent for marketing leadership in a B2B startup is too low."},
+        {"speaker": "user", "text": "We can add a one year cliff for everyone to align incentives."},
+        {"speaker": "counterparty", "text": "What about fifty five, twenty five, twenty?"},
+        {"speaker": "user", "text": "Fifty five drops below my target. Sixty is the anchor with four year vesting and one year cliff."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "CTO wants more for full-time work. How do I justify sixty without breaking the relationship?",
+          "expected_direction": "Justify 60 with IP and capital contribution; protect vesting and cliff; do not concede below the target by trading on relationship pressure alone."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to close at sixty twenty five fifteen with four year vesting and one year cliff.",
+          "expected_direction": "Offer 60/25/15 split explicitly with 4 year vesting and 1 year cliff in one sentence."
+        }
+      ]
+    },
+    {
+      "id": "contract_renegotiation_001",
+      "family": "renegotiation",
+      "title": "Renegotiating an existing two-year vendor relationship under price-increase request",
+      "context": "The user is the buyer in an existing two-year vendor relationship for managed IT services. Current price is 4500/month. Vendor wants to raise to 6000 citing inflation and scope creep. User target is to hold at 4500 or accept 5000 only if response SLA is improved from 4 hours to 2 hours.",
+      "must_track_numbers": ["4500", "6000", "5000", "4", "2"],
+      "must_track_terms": ["response SLA", "scope creep", "relationship history", "scope reset"],
+      "turns": [
+        {"speaker": "counterparty", "text": "After two years of strong service, we need to raise the monthly rate from forty five hundred to six thousand."},
+        {"speaker": "user", "text": "Thirty three percent jump is steep. What is driving it?"},
+        {"speaker": "counterparty", "text": "Inflation and the additional endpoints you have added over the relationship."},
+        {"speaker": "user", "text": "We have not formally expanded scope. If endpoints crept up, we should reset scope, not the price."},
+        {"speaker": "counterparty", "text": "Let us call current usage the new baseline. Five thousand is our compromise."},
+        {"speaker": "user", "text": "Five thousand only works if response SLA improves from four hours to two hours."},
+        {"speaker": "counterparty", "text": "Two hour SLA changes our staffing model. That is harder to absorb."},
+        {"speaker": "user", "text": "If the SLA does not improve, the price stays at forty five hundred."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They claim scope creep. How do I push back without damaging the relationship?",
+          "expected_direction": "Reset scope formally rather than absorb price jump; leverage two years of relationship without ratifying the claimed scope creep."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to accept five thousand only if response SLA improves to two hours.",
+          "expected_direction": "Accept 5000 explicitly contingent on 2 hour response SLA replacing the 4 hour SLA."
+        }
+      ]
+    },
+    {
+      "id": "salary_competing_offers_001",
+      "family": "salary",
+      "title": "Using a competing offer to lift the primary offer",
+      "context": "The user has two offers. Offer A from preferred company at 200000 base, 30000 sign-on. Offer B from another company at 220000 base, 40000 sign-on. User target is to lift Offer A to 220000 base, 35000 sign-on without losing the cultural fit.",
+      "must_track_numbers": ["200000", "30000", "220000", "40000", "35000"],
+      "must_track_terms": ["base salary", "sign-on", "competing offer", "cultural fit"],
+      "turns": [
+        {"speaker": "user", "text": "I want to accept your offer but I have another at two hundred twenty base and forty thousand sign-on."},
+        {"speaker": "counterparty", "text": "We came in at two hundred and thirty thousand sign-on. Where do you need us to land?"},
+        {"speaker": "user", "text": "If you can match base at two hundred twenty and meet me at thirty five sign-on, I close today."},
+        {"speaker": "counterparty", "text": "Two twenty base is above our band ceiling, but I have flexibility on sign-on."},
+        {"speaker": "user", "text": "Then I need a path to two twenty within the first year, with thirty five sign-on now."},
+        {"speaker": "counterparty", "text": "We can write in a six month review with a path to two ten base, sign-on at thirty five."},
+        {"speaker": "user", "text": "Six months is fine if the path explicitly targets two twenty, not two ten."},
+        {"speaker": "counterparty", "text": "I can put two twenty in the review language if performance targets are clear."}
+      ],
+      "queries": [
+        {
+          "after_turn": 2,
+          "mode": "advice",
+          "text": "I want to use Offer B to lift Offer A without sounding like I am bluffing. How?",
+          "expected_direction": "Cite Offer B specifically and ask for parity on base and sign-on; do not bluff; anchor on the real numbers from Offer B."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to close with two twenty base path, thirty five sign-on, and a six month review.",
+          "expected_direction": "Accept the offer explicitly with 35 sign-on now, 6 month review, path to 220 base with clear performance targets."
+        }
+      ]
+    },
+    {
+      "id": "sla_penalty_001",
+      "family": "services_contract",
+      "title": "SLA penalty negotiation for managed hosting",
+      "context": "The user is buying managed hosting. Vendor proposed 0.5 percent monthly fee credit per hour of downtime beyond 99.9 SLA. User wants 3 percent per hour with a 30 day notice clause. Settle with a tiered credit structure.",
+      "must_track_numbers": ["0.5", "3", "99.9", "30"],
+      "must_track_terms": ["SLA credits", "tiered credits", "notice clause", "downtime", "credit cap"],
+      "turns": [
+        {"speaker": "counterparty", "text": "Our standard SLA credit is half a percent of monthly fee per hour of downtime beyond ninety nine point nine."},
+        {"speaker": "user", "text": "Half a percent is not enough to be a real deterrent. I need three percent per hour."},
+        {"speaker": "counterparty", "text": "Three percent uncapped would expose us to massive credits for any incident."},
+        {"speaker": "user", "text": "Then propose a cap, not a lower rate."},
+        {"speaker": "counterparty", "text": "Two percent per hour capped at twenty percent of the monthly fee."},
+        {"speaker": "user", "text": "Two percent works if we add a thirty day notice clause for any planned maintenance."},
+        {"speaker": "counterparty", "text": "Thirty day notice for maintenance is reasonable."},
+        {"speaker": "user", "text": "Also, I need a tiered structure - higher percentage for longer outages."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "They want a cap on the three percent. Should I accept the cap or push tiered credits?",
+          "expected_direction": "Push tiered credits where percentage scales with outage length; cap is acceptable only with the tier; protect the 30 day notice clause."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to settle at two percent capped, tiered, with thirty day notice clause.",
+          "expected_direction": "Accept 2 percent with tiered structure, capped, and 30 day notice clause for maintenance, all in one sentence."
+        }
+      ]
+    },
+    {
+      "id": "hostile_tone_001",
+      "family": "de_escalation",
+      "title": "Counterparty uses hostile pressure language",
+      "context": "The user is buying a used company vehicle for the business. Seller listed at 22000. Market is 17500-19500. User target is 18500 with a 30 day mechanical guarantee. Seller used 'take it or leave it' language.",
+      "must_track_numbers": ["22000", "18500", "17500", "19500", "30"],
+      "must_track_terms": ["mechanical guarantee", "market range", "take it or leave it", "de-escalate"],
+      "turns": [
+        {"speaker": "counterparty", "text": "The price is twenty two thousand. Take it or leave it."},
+        {"speaker": "user", "text": "I understand you have your number. Let me share where the market is."},
+        {"speaker": "counterparty", "text": "I do not care about your market data. Twenty two or walk."},
+        {"speaker": "user", "text": "Comparable units are between seventeen five and nineteen five. My target is eighteen five with a thirty day mechanical guarantee."},
+        {"speaker": "counterparty", "text": "A guarantee will cost you another thousand."},
+        {"speaker": "user", "text": "A guarantee that costs the buyer is not a guarantee. It needs to be included."},
+        {"speaker": "counterparty", "text": "Twenty thousand and no guarantee."},
+        {"speaker": "user", "text": "Eighteen five with the guarantee. Otherwise I have two other vehicles I am looking at."}
+      ],
+      "queries": [
+        {
+          "after_turn": 2,
+          "mode": "advice",
+          "text": "They are aggressive. How do I stay calm and get the numbers back on the table?",
+          "expected_direction": "De-escalate without conceding; pivot back to market data and the user's target; do not match their tone."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence that holds firm at eighteen five with the guarantee.",
+          "expected_direction": "Hold at 18500 with the 30 day mechanical guarantee, explicit, in one sentence; do not escalate or capitulate."
+        }
+      ]
+    },
+    {
+      "id": "info_asymmetry_001",
+      "family": "leverage_management",
+      "title": "Counterparty knows the user has a hard deadline",
+      "context": "The user is renting office space and the company is moving in 60 days regardless. The landlord knows this. Asking rent is 8000/month. User target is 6800/month with two months rent-free and a 3 year lock-in.",
+      "must_track_numbers": ["8000", "6800", "2", "3", "60"],
+      "must_track_terms": ["rent-free", "lock-in", "deadline", "leverage", "build-out"],
+      "turns": [
+        {"speaker": "counterparty", "text": "The space is eight thousand a month. You said you need to move in sixty days, so let us not drag this out."},
+        {"speaker": "user", "text": "Sixty days is the move date but I have backup options."},
+        {"speaker": "counterparty", "text": "Most of the comparable spaces in this submarket are at or above my number."},
+        {"speaker": "user", "text": "My target is sixty eight hundred with two months rent-free and a three year lock-in."},
+        {"speaker": "counterparty", "text": "Two months rent-free is generous. We could maybe do one month."},
+        {"speaker": "user", "text": "Two months is needed for build-out. The three year lock-in is the trade for that."},
+        {"speaker": "counterparty", "text": "If you are locked in for three years, I can offer seventy two hundred with the two months."},
+        {"speaker": "user", "text": "Closer. The number needs to be sixty eight hundred. The three year lock-in protects you on the back end."}
+      ],
+      "queries": [
+        {
+          "after_turn": 2,
+          "mode": "advice",
+          "text": "They know my deadline. How do I create leverage that does not depend on time?",
+          "expected_direction": "Shift focus to the three year lock-in and build-out leverage; do not let the deadline be the dominant frame."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to close at sixty eight hundred with two months rent-free and three year lock-in.",
+          "expected_direction": "Close at 6800 with 2 months rent-free and 3 year lock-in explicitly in one sentence."
+        }
+      ]
+    },
+    {
+      "id": "integrative_winwin_001",
+      "family": "integrative",
+      "title": "Joint venture across cash, IP rights, and market exclusivity",
+      "context": "The user is a startup founder negotiating a joint venture with a large industrial partner. Three dimensions: cash investment, IP rights, market exclusivity. Partner offered 2M for 40 percent equity, joint IP, and 5 year exclusivity. User target is 3M for 30 percent equity, founder retains IP, 3 year exclusivity with renewal option.",
+      "must_track_numbers": ["2", "3", "40", "30", "5"],
+      "must_track_terms": ["IP rights", "market exclusivity", "renewal option", "equity stake", "cash investment"],
+      "turns": [
+        {"speaker": "counterparty", "text": "Our offer is two million for forty percent, joint IP ownership, and five year exclusivity in our verticals."},
+        {"speaker": "user", "text": "Three dimensions to discuss. Let me start with IP. Founder needs to retain IP."},
+        {"speaker": "counterparty", "text": "We are funding the development. Joint IP is the cleanest structure for us."},
+        {"speaker": "user", "text": "What if you get a perpetual royalty-free license, but founder retains ownership?"},
+        {"speaker": "counterparty", "text": "Perpetual royalty-free could work. What about cash and equity?"},
+        {"speaker": "user", "text": "Three million for thirty percent equity, given founder retains IP."},
+        {"speaker": "counterparty", "text": "Three for thirty is reasonable if exclusivity stays at five years."},
+        {"speaker": "user", "text": "Three years with a renewal option works better. Five locks us out of adjacent markets."}
+      ],
+      "queries": [
+        {
+          "after_turn": 4,
+          "mode": "advice",
+          "text": "We are aligning on IP. Should I push hardest on cash, exclusivity, or equity next?",
+          "expected_direction": "Find Pareto improvement: trade flexibility on exclusivity duration for cash/equity terms; do not split-the-difference on all three at once."
+        },
+        {
+          "after_turn": 8,
+          "mode": "command",
+          "text": "Give me one sentence to close at three million for thirty percent, founder IP retained, three year exclusivity with renewal option.",
+          "expected_direction": "Close all four dimensions explicitly in one sentence: 3M cash, 30 percent equity, founder IP, 3 year exclusivity with renewal."
+        }
+      ]
+    }
+  ]
+}

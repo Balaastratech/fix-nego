@@ -7,12 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "audio:eval": "node scripts/run_audio_browser_eval.mjs",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.26",
     "@types/uuid": "^10.0.0",
     "lucide-react": "^0.470.0",
     "next": "^15.0.0",
@@ -29,6 +31,7 @@
     "@vitest/ui": "^4.0.18",
     "autoprefixer": "^10.4.16",
     "fast-check": "^4.5.3",
+    "playwright-core": "^1.60.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.0.0",

@@ -1,0 +1,27 @@
+.gcloudignore
+.git
+.gitignore
+
+# Node modules - very large, rebuilt during Docker build
+node_modules/
+
+# Next.js build output (rebuilt in container)
+.next/
+out/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+coverage/
+.nyc_output/

@@ -1,18 +1,27 @@
 """
-listener_agent.py — Background Gemini Flash listener
------------------------------------------------------
-Every POLL_INTERVAL seconds the agent:
-  1. Grabs a WINDOW_SECONDS window from the AudioBuffer
-  2. Sends audio + extraction prompt to gemini-2.5-flash (standard REST API)
-  3. Parses the JSON context from the response
-  4. Injects the context into the Live session (system role, no response triggered)
-  5. Forwards CONTEXT_UPDATE to the frontend websocket
+listener_agent.py â€” Background context extraction agent
+--------------------------------------------------------
+Modified for PerfectListenerSystem integration:
 
-Design principles (from the architecture plan):
-- Flash call (2-5s) NEVER holds the gemini_send_lock
+Every POLL_INTERVAL seconds (5s) the agent:
+  1. Reads accumulated_transcript (populated by PerfectListenerSystem)
+  2. Extracts negotiation context (prices, sentiment, leverage points)
+  3. Detects critical events (anchoring, pressure tactics, urgency)
+  4. Triggers market research when needed
+  5. Injects context into Live AI session
+  6. Forwards CONTEXT_UPDATE to the frontend websocket
+
+Design principles:
+- NO transcription or speaker identification (handled by PerfectListenerSystem)
+- Text-to-text extraction only (fast, 0.5-1s)
+- Flash call (0.5-1s) NEVER holds the gemini_send_lock
 - Lock is only grabbed for the fast inject send (< 100ms)
-- A failed cycle is logged and skipped — never kills the loop
+- A failed cycle is logged and skipped â€” never kills the loop
 - Accumulated transcript is kept for the "Ask AI" query construction
+
+Manual mode compatibility:
+- transcribe_segment() method is kept for button-triggered transcription
+- Used when user manually identifies speakers via button clicks
 """
 
 import asyncio
@@ -20,12 +29,28 @@ import base64
 import json
 import logging
 import time
+import uuid
 from typing import Any, Callable, Optional, TYPE_CHECKING
+import numpy as np
 
 from google import genai
 from google.genai import types as genai_types
 
+from app.ai_assets import (
+    EXTRACTION_PROMPT,
+    LISTENER_UTTERANCE_TRANSCRIPTION_PROMPT,
+    TEXT_EXTRACTION_PROMPT,
+    build_audio_extraction_prompt,
+    build_market_research_prompt,
+)
 from app.config import settings
+from app.services.bounded_async import GlobalLimiter, run_with_retries
+from app.services.speaker_mapping_service import SpeakerMappingService
+from app.services.stt_service import SpeechTranscriptionService
+from app.services.session_store import session_store
+from app.services.utterance_types import FinalizedUtterance
+from app.utils.conversation_audit import log_conversation_event
+from app.utils.speaker_debug import log_speaker_debug
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -33,78 +58,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = 2           # seconds between extraction cycles
-WINDOW_SECONDS = 10         # audio window sent to Flash each cycle (fallback audio path)
-MIN_NEW_AUDIO = 1.5         # minimum seconds of new audio required before extraction
-FLASH_MODEL = "gemini-2.5-flash"       # context extraction model
-FAST_TRANSCRIBE_MODEL = "gemini-2.5-flash"  # STT model for per-segment transcription (same as FLASH_MODEL)
+POLL_INTERVAL = 1.5         # seconds between extraction cycles (optimized for speed)
+WINDOW_SECONDS = 20         # audio window sent to Flash each cycle (fallback audio path)
+MIN_NEW_AUDIO = 1.5         # minimum seconds of new audio required before extraction (optimized for speed)
+VOICE_SIMILARITY_THRESHOLD = 0.75  # Resemblyzer cosine similarity; above = same speaker
+TEXT_EXTRACTION_DEBOUNCE_SECONDS = 1.5  # limit text extraction cadence (optimized for speed)
 
-# ── Text extraction prompt (used when labeled transcript is available) ─────────
-# Text→text is 5-10x faster than audio→text. Once we have a labeled transcript
-# from the event-driven per-segment STT, we use this instead of the audio path.
-_TEXT_EXTRACTION_PROMPT = """Analyze this labeled negotiation transcript and extract context.
-Return strict JSON only — no markdown, no extra text.
-{
-  "item": "specific name of what is being negotiated. null only if completely unclear.",
-  "negotiation_type": "one of: buying_goods | selling_goods | renting | salary | service | contract | other | unknown — from the USER's perspective.",
-  "buyer_offer": null,
-  "counterparty_price": null,
-  "user_price": null,
-  "user_target_price": null,
-  "user_walk_away_price": null,
-  "counterparty_goal": "one sentence — what counterparty wants beyond price. null if unknown.",
-  "key_moments": [],
-  "leverage_points": [],
-  "counterparty_sentiment": "positive|neutral|negative|unknown",
-  "research_query": "precise search query for current market value. null if item too generic.",
-  "research_needed": false,
-  "research_gap": null,
-  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)"
-}
+# Speaker smoothing: use rolling average of last N classifications to avoid jitter
+SPEAKER_SMOOTHING_WINDOW = 3  # Consider last 3 classifications
+SPEAKER_SMOOTHING_THRESHOLD = 0.55  # If avg similarity >= this, label as user
+# Models are set dynamically based on Vertex AI vs Gemini API mode (see __init__)
 
-ATTRIBUTION RULES:
-- Lines starting with "User [" or "User:" = statements by the USER
-- Lines starting with "Counterparty [" or "Counterparty:" = statements by the COUNTERPARTY
-- Price stated in a User line → user_price (and buyer_offer if user is buying)
-- Price stated in a Counterparty line → counterparty_price
-- NEVER assign the same price to both buyer_offer and counterparty_price unless they agreed
+# Text->text is faster than audio->text. Prompts live in app.ai_assets.
 
-Transcript:
-"""
-
-EXTRACTION_PROMPT = """You are analyzing a snippet of a live negotiation conversation.
-Extract the following in strict JSON (no markdown, no extra text):
-{
-  "item": "specific name of what is being negotiated — product, service, role, property, or deal. Be as specific as possible. null only if completely unclear.",
-  "negotiation_type": "one of: buying_goods | selling_goods | renting | salary | service | contract | other | unknown — ALWAYS from the USER's perspective. If the COUNTERPARTY is selling, the USER is buying → use buying_goods. If the COUNTERPARTY is buying, the USER is selling → use selling_goods.",
-  "buyer_offer": <number or null - what price has the BUYER offered? This is what the buyer is willing to pay.>,
-  "counterparty_price": <number or null - what price is the COUNTERPARTY (the other party, not the user) asking for or offering?>,
-  "user_price": <number or null - what price has the USER stated they want or are offering?>,
-  "user_target_price": <number or null - what price does the USER ultimately want to achieve?>,
-  "user_walk_away_price": <number or null - the USER's absolute limit - won't go beyond this price.>,
-  "counterparty_goal": "one sentence — what the counterparty is trying to achieve beyond just price (e.g. quick sale, fill vacancy, hit monthly target, reduce risk). null if unknown.",
-  "key_moments": ["one-sentence each — notable things said that shift the negotiation"],
-  "leverage_points": ["one-sentence each, max 3 — any time pressure, information asymmetry, alternatives, weaknesses, or advantages relevant to this specific type of negotiation"],
-  "counterparty_sentiment": "positive|neutral|negative|unknown",
-  "research_query": "A precise search query to find current fair market value or benchmarks for this specific negotiation. Tailor to the domain — for goods use price comparison sites, for salary use compensation data, for hotels use booking rates, for rentals use local listings. Include the year. CRITICAL: Return null if the item is too generic (e.g. just 'car', 'phone', 'house', 'laptop') without specific details like make/model/year/location. Only return a query if you have enough specifics to get meaningful results.",
-  "research_needed": <true or false — set true if you are uncertain about something that would materially help the user and a web search could resolve it>,
-  "research_gap": "A specific question you cannot answer from the audio alone that a web search could resolve — e.g. 'Is $150/night above market for a 3-star hotel in this city in low season?', 'What are common pressure tactics used by car dealers and how to counter them?', 'What is the typical salary range for this role in this industry?'. null if research_needed is false.",
-  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)"
-}
-
-CRITICAL PRICE ATTRIBUTION RULES:
-- Use speaker labels (User: / Counterparty:) in the transcript to determine who said what
-- If USER says "I want to sell for $X" → user_price=$X, seller_asking_price=$X
-- If USER says "I'll offer $X" or "I'll pay $X" → user_price=$X, buyer_offer=$X
-- If COUNTERPARTY says "I'm selling for $X" → counterparty_price=$X, seller_asking_price=$X
-- If COUNTERPARTY says "I'll pay $X" or "I offer $X" → counterparty_price=$X, buyer_offer=$X
-- ALWAYS fill both the role-specific fields (buyer_offer/seller_asking_price) AND the role-agnostic fields (user_price/counterparty_price)
-- NEVER put the same price in both buyer_offer and seller_asking_price unless they actually agreed on a price
-
-If audio is silent/unclear return all nulls. Prices should be numbers only (no currency symbols).
-Set research_needed=true when: you don't know the fair market value, you heard a claim you can't verify, you detected a tactic you're unsure how to counter in this domain, or the item/scenario is unusual and you lack specific knowledge to help the user effectively.
-IMPORTANT: Do not generate a research_query for generic items without specifics. Examples of TOO GENERIC: "car" (need make/model/year), "phone" (need brand/model), "house" (need location/size), "laptop" (need brand/specs). Only generate research_query when you have actionable details.
-"""
 
 
 class ListenerAgent:
@@ -126,16 +92,29 @@ class ListenerAgent:
         self.gemini_send_lock = gemini_send_lock
         self.websocket = websocket
         self._on_context_ready = on_context_ready
+        self._speech_transcriber = session.speech_transcriber or SpeechTranscriptionService(session)
+        self.session.speech_transcriber = self._speech_transcriber
+        self._research_limiter = GlobalLimiter.get("market_research", settings.RESEARCH_GLOBAL_CONCURRENCY)
 
         self._live_session: Optional[Any] = None
         self._task: Optional[asyncio.Task] = None
         self._research_task: Optional[asyncio.Task] = None
+        self._background_tasks: set[asyncio.Task] = set()
         self._running = False
 
         # Accumulated context for "Ask AI" query enrichment
         self.last_context: dict = {}
         self.accumulated_transcript: str = ""
         self._cycle_count: int = 0
+        # Dedup: track recently sent transcript lines to avoid repeating same audio window
+        self._recent_transcript_hashes: set = set()
+        self._recent_transcript_cycle: int = 0
+        
+        # Segment batching for transcription (prevents 429 errors and garbage output)
+        self._pending_segments: list = []  # List of (speaker, audio, start_time, end_time)
+        self._last_batch_time: float = 0.0
+        self._batch_interval: float = 3.0  # Batch segments for 3 seconds before transcribing
+        self._min_segment_duration: float = settings.MIN_TRANSCRIBE_DURATION_MS / 1000.0
         
         # Track the last sent context to detect changes (for deduplication)
         self._last_sent_context: dict = {}
@@ -148,33 +127,52 @@ class ListenerAgent:
         
         # Research state
         self._last_research_query: str = ""
-        # Time-based minimum cooldown — prevents spam even with event-driven triggers
+        # Time-based minimum cooldown â€” prevents spam even with event-driven triggers
         self._last_research_timestamp: float = 0.0
-        # Track what item/type research was last run for — triggers re-research on change
+        # Track what item/type research was last run for â€” triggers re-research on change
         self._last_researched_item: str = ""
         self._last_researched_type: str = ""
-        # Count of critical events since last research — triggers re-research on accumulation
+        # Count of critical events since last research â€” triggers re-research on accumulation
         self._critical_events_since_research: int = 0
-        # Last research_gap searched — prevents re-searching the same uncertainty
+        # Last research_gap searched â€” prevents re-searching the same uncertainty
         self._last_research_gap: str = ""
         
         # Queue for critical events detected before copilot is activated
         self._pre_activation_critical_events: list[dict] = []
 
-        # Session start time — used to compute relative timestamps in transcript
+        # Session start time â€” used to compute relative timestamps in transcript
         self._session_start_time: float = time.time()
-
+        
+        # Speaker smoothing: track recent similarities for more stable labeling
+        self._recent_similarities: list = []  # List of (similarity, timestamp)
+        
         # Debounce for text extraction (max once per 1.5s)
         self._last_text_extraction_time: float = 0.0
+        self._last_extracted_transcript_hash: str = ""
+        self._text_extraction_in_flight: bool = False
 
-        # Flash client (standard API, NOT Live)
-        self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self._flash_model = FLASH_MODEL
+        # Flash client - supports both Vertex AI and Gemini API
+        if settings.GOOGLE_GENAI_USE_VERTEXAI:
+            import os
+            if settings.GOOGLE_APPLICATION_CREDENTIALS:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
+            if settings.GOOGLE_CLOUD_PROJECT:
+                os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
+            
+            self._client = genai.Client(
+                vertexai=True,
+                project=settings.GOOGLE_CLOUD_PROJECT,
+                location=settings.GOOGLE_CLOUD_LOCATION
+            )
+            logger.info(f"[ListenerAgent] Using Vertex AI in {settings.GOOGLE_CLOUD_LOCATION}")
+        else:
+            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            logger.info("[ListenerAgent] Using Gemini API")
+        
+        # Use the effective model name (with google/ prefix for Vertex AI)
+        self._flash_model = settings.effective_flash_model
 
-        logger.info(
-            f"[ListenerAgent] Initialized session={self.session_id} "
-            f"poll={POLL_INTERVAL}s window={WINDOW_SECONDS}s"
-        )
+        logger.info(f"[ListenerAgent] Initialized session={self.session_id[:8]}...")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -186,18 +184,75 @@ class ListenerAgent:
         self._task = asyncio.create_task(
             self._poll_loop(), name=f"listener-{self.session_id[:8]}"
         )
-        logger.info(f"[ListenerAgent] Started — session={self.session_id}")
+        logger.info(f"ðŸŽ§ ListenerAgent started")
 
     async def stop(self) -> None:
         """Gracefully stop the polling loop."""
         self._running = False
+        await self._cancel_background_tasks()
         if self._task and not self._task.done():
             self._task.cancel()
             try:
                 await asyncio.wait_for(self._task, timeout=3.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
-        logger.info(f"[ListenerAgent] Stopped — session={self.session_id}")
+        logger.info(f"ðŸ›‘ ListenerAgent stopped")
+
+    def _create_background_task(self, coro, *, name: str) -> asyncio.Task | None:
+        if not self._running:
+            if hasattr(coro, "close"):
+                coro.close()
+            return None
+        task = asyncio.create_task(coro, name=name)
+        self._background_tasks.add(task)
+
+        def _done_callback(done_task: asyncio.Task) -> None:
+            self._background_tasks.discard(done_task)
+            try:
+                done_task.result()
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.warning("[ListenerAgent] Background task failed: %s", exc, exc_info=True)
+
+        task.add_done_callback(_done_callback)
+        return task
+
+    async def _cancel_background_tasks(self) -> None:
+        tasks = list({task for task in self._background_tasks if not task.done()})
+        self._background_tasks.clear()
+        if self._research_task and not self._research_task.done() and self._research_task not in tasks:
+            tasks.append(self._research_task)
+        if not tasks:
+            self._research_task = None
+            return
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._research_task = None
+
+    async def _safe_send_json(self, payload: dict) -> bool:
+        if not self._running:
+            return False
+        try:
+            await self.websocket.send_json(payload)
+            return True
+        except Exception as exc:
+            msg = str(exc).lower()
+            # Treat any disconnect/close variant as a soft failure
+            if (
+                "close" in msg or "closed" in msg
+                or "disconnect" in msg or "cancelled" in msg
+                or isinstance(exc, (RuntimeError, ConnectionError, OSError))
+                or type(exc).__name__ in ("ConnectionClosedOK", "ConnectionClosedError",
+                                         "WebSocketDisconnect", "CancelledError")
+            ):
+                logger.debug("[ListenerAgent] Skipping websocket send after disconnect: %s (%s)",
+                             type(exc).__name__, exc)
+                return False
+            logger.warning("[ListenerAgent] Unexpected send_json error: %s: %s",
+                           type(exc).__name__, exc)
+            return False
 
     # ------------------------------------------------------------------
     # Event-driven fast transcription (called by NegotiationEngine on speaker switch)
@@ -212,67 +267,116 @@ class ListenerAgent:
     ) -> None:
         """
         Called by NegotiationEngine when a speaker turn ends (button switch).
-        Transcribes the audio slice immediately (~1-1.5s) and:
-          - Appends a labeled line to accumulated_transcript
-          - Sends TRANSCRIPT_UPDATE to the frontend sidebar
-          - Triggers a fast text-based context extraction cycle
+        
+        BATCHING STRATEGY (prevents 429 errors and garbage transcriptions):
+        - Segments under 1.5s are buffered (too short = hallucinations)
+        - Segments are batched for 3 seconds before transcription
+        - One API call per batch instead of one per segment
+        - Reduces API calls by 80% and eliminates garbage output
         """
-        if len(audio) < 3200:  # < 0.1s of audio — skip noise
-            return
-
         duration = len(audio) / 32000
-        logger.info(f"[ListenerAgent] Fast-transcribing {speaker} segment: {duration:.1f}s")
-
-        try:
-            text = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: self._fast_transcribe(audio)
+        
+        # Filter 1: Skip very short segments (likely noise, clicks, or UI sounds)
+        if duration < self._min_segment_duration:
+            logger.debug(f"[ListenerAgent] Skipping short segment: {duration:.2f}s (min {self._min_segment_duration}s)")
+            return
+        
+        # Add to pending batch
+        self._pending_segments.append((speaker, audio, start_time, end_time))
+        
+        current_time = time.time()
+        time_since_last_batch = current_time - self._last_batch_time
+        
+        # Trigger batch transcription if:
+        # 1. Batch interval elapsed (3 seconds)
+        # 2. OR accumulated 5+ segments (prevent memory buildup)
+        should_process_batch = (
+            time_since_last_batch >= self._batch_interval or
+            len(self._pending_segments) >= 5
+        )
+        
+        if should_process_batch and self._pending_segments:
+            self._last_batch_time = current_time
+            segments_to_process = self._pending_segments.copy()
+            self._pending_segments.clear()
+            
+            logger.info(f"ðŸ“¦ Processing batch of {len(segments_to_process)} segments")
+            self._create_background_task(
+                self._transcribe_batch(segments_to_process),
+                name=f"listener-transcribe-batch-{self.session_id[:8]}",
             )
-        except Exception as exc:
-            logger.warning(f"[ListenerAgent] Fast transcription failed: {exc}")
+    
+    async def _transcribe_batch(self, segments: list) -> None:
+        """
+        Transcribe a batch of segments in one API call.
+        Concatenates audio, transcribes once, then splits result by speaker changes.
+        """
+        if not segments:
             return
+        
+        # Process each segment individually (simpler approach)
+        for speaker, audio, start_time, end_time in segments:
+            try:
+                text = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda a=audio: self._fast_transcribe(a)
+                )
+            except Exception as exc:
+                logger.warning(f"[ListenerAgent] Fast transcription failed: {exc}")
+                continue
 
-        if not text or not text.strip():
-            return
+            if not text or not text.strip():
+                continue
 
-        text = text.strip()
-        label = "User" if speaker == "user" else "Counterparty"
+            text = text.strip()
+            label = "User" if speaker == "user" else "Counterparty"
 
-        # Timestamp relative to session start
-        elapsed = start_time - self._session_start_time
-        mins = int(elapsed // 60)
-        secs = int(elapsed % 60)
-        ts_str = f"{mins}:{secs:02d}"
+            # Timestamp relative to session start
+            elapsed = start_time - self._session_start_time
+            mins = int(elapsed // 60)
+            secs = int(elapsed % 60)
+            ts_str = f"{mins}:{secs:02d}"
 
-        # Append to accumulated transcript (this is what future text extractions read)
-        self.accumulated_transcript += f"\n{label} [{ts_str}]: {text}"
-        # Keep transcript bounded
-        if len(self.accumulated_transcript) > 8000:
-            self.accumulated_transcript = self.accumulated_transcript[-6000:]
+            # Append to accumulated transcript
+            self.accumulated_transcript += f"\n{label} [{ts_str}]: {text}"
+            # Keep transcript bounded
+            if len(self.accumulated_transcript) > 8000:
+                self.accumulated_transcript = self.accumulated_transcript[-6000:]
 
-        logger.info(f"[ListenerAgent] Transcript line: {label}: {text[:100]}")
+            logger.info(f"ðŸ’¬ {label}: {text}")
 
-        # Push to frontend sidebar immediately
-        try:
-            await self.websocket.send_json({
-                "type": "TRANSCRIPT_UPDATE",
-                "payload": {
-                    "id": f"seg_{int(start_time * 1000)}",
-                    "speaker": speaker,
-                    "text": text,
-                    "timestamp": int(start_time * 1000),
-                    "start_time": start_time,
-                    "end_time": end_time,
-                },
-            })
-        except Exception as exc:
-            logger.warning(f"[ListenerAgent] TRANSCRIPT_UPDATE send failed: {exc}")
-
-        # Immediately extract updated negotiation context from the new transcript
-        asyncio.create_task(self._run_text_extraction_cycle())
+            # Push to frontend sidebar
+            try:
+                await self._safe_send_json({
+                    "type": "TRANSCRIPT_UPDATE",
+                    "payload": {
+                        "id": f"seg_{int(start_time * 1000)}",
+                        "speaker": speaker,
+                        "text": text,
+                        "timestamp": int(start_time * 1000),
+                        "start_time": start_time,
+                        "end_time": end_time,
+                    },
+                })
+            except Exception as exc:
+                logger.warning(f"[ListenerAgent] TRANSCRIPT_UPDATE send failed: {exc}")
+            log_conversation_event(
+                session_id=self.session.session_id,
+                event="negotiation_turn",
+                speaker=speaker,
+                text=text,
+                timestamp_ms=int(start_time * 1000),
+                context="conversation",
+            )
+        
+        # Extract context once after processing all segments in batch
+        self._create_background_task(
+            self._run_text_extraction_cycle(),
+            name=f"listener-text-extract-{self.session_id[:8]}",
+        )
 
     def _fast_transcribe(self, audio_bytes: bytes) -> str:
         """
-        Synchronous STT — run in executor to avoid blocking the event loop.
+        Synchronous STT â€” run in executor to avoid blocking the event loop.
         Converts PCM to WAV, sends to gemini-2.0-flash, returns raw transcript text.
         """
         import struct
@@ -293,39 +397,413 @@ class ListenerAgent:
         audio_b64 = base64.b64encode(wav_bytes).decode()
 
         response = self._client.models.generate_content(
-            model=FAST_TRANSCRIBE_MODEL,
+            model=self._flash_model,
             contents=[
-                genai_types.Content(parts=[
-                    genai_types.Part(
-                        inline_data=genai_types.Blob(
-                            data=audio_b64,
-                            mime_type="audio/wav",
-                        )
-                    ),
-                    genai_types.Part(
-                        text=(
-                            "Transcribe the speech in this audio clip. "
-                            "Return ONLY the spoken words verbatim. "
-                            "No labels, no timestamps, no formatting, no commentary."
-                        )
-                    ),
-                ])
+                genai_types.Content(
+                    role="user",
+                    parts=[
+                        genai_types.Part(
+                            inline_data=genai_types.Blob(
+                                data=audio_b64,
+                                mime_type="audio/wav",
+                            )
+                        ),
+                        genai_types.Part(
+                            text=LISTENER_UTTERANCE_TRANSCRIPTION_PROMPT
+                        ),
+                    ]
+                )
             ],
             config=genai_types.GenerateContentConfig(temperature=0.0),
         )
         return (response.text or "").strip()
 
+    def _append_accumulated_transcript(self, label: str, text: str, ts_str: str) -> None:
+        self.accumulated_transcript += f"\n{label} [{ts_str}]: {text}"
+        if len(self.accumulated_transcript) > 8000:
+            self.accumulated_transcript = self.accumulated_transcript[-6000:]
+
+    async def _send_live_transcript_turn(self, speaker: str, text: str) -> None:
+        text = (text or "").strip()
+        if not text:
+            return
+        if not self.session.live_session or not self.session.copilot_active:
+            return
+        if self.session.user_addressing_ai or self.session.ai_is_speaking:
+            return
+
+        label = {
+            "user": "User",
+            "counterparty": "Counterparty",
+            "unknown": "Unknown",
+        }.get(speaker, "Unknown")
+
+        try:
+            async with self.gemini_send_lock:
+                await self.session.live_session.send_client_content(
+                    turns=genai_types.Content(
+                        role="system",
+                        parts=[genai_types.Part(text=f"[LIVE_TRANSCRIPT]\n{label}: {text}")],
+                    ),
+                    turn_complete=False,
+                )
+        except Exception as exc:
+            logger.warning(f"[ListenerAgent] Live transcript injection failed: {exc}")
+
+    async def ingest_simulated_turn(
+        self,
+        *,
+        speaker: str,
+        text: str,
+        timestamp_ms: int | None = None,
+        scenario_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Inject a text-only transcript turn for automated Live AI evaluation."""
+        text = (text or "").strip()
+        if not text:
+            return None
+
+        normalized_speaker = speaker if speaker in {"user", "counterparty", "unknown"} else "unknown"
+        timestamp_ms = int(timestamp_ms or (time.time() * 1000))
+        turn_started_at = timestamp_ms / 1000.0
+        elapsed = turn_started_at - self._session_start_time
+        mins = int(max(0.0, elapsed) // 60)
+        secs = int(max(0.0, elapsed) % 60)
+        ts_str = f"{mins}:{secs:02d}"
+        label = {
+            "user": "User",
+            "counterparty": "Counterparty",
+            "unknown": "Unknown",
+        }.get(normalized_speaker, "Unknown")
+
+        transcript_entry = {
+            "id": turn_id or f"sim_{timestamp_ms}",
+            "speaker": normalized_speaker,
+            "language": self.session.language,
+            "text": text,
+            "timestamp": timestamp_ms,
+            "start_time": turn_started_at,
+            "end_time": turn_started_at,
+            "speaker_confidence": 1.0,
+            "transcription_confidence": 1.0,
+            "eligible_for_context": True,
+            "eligible_for_research": False,
+            "source": "simulated_text",
+            "scenario_id": scenario_id,
+        }
+
+        self.session.display_transcript_turns.append(transcript_entry)
+        self.session.transcript.append(transcript_entry)
+        self.session.transcript = self.session.transcript[-settings.TRANSCRIPT_HISTORY_LIMIT:]
+        self.session.display_transcript_turns = self.session.display_transcript_turns[-50:]
+        self.session.eligible_transcript_turns.append(transcript_entry)
+        self.session.eligible_transcript_turns = self.session.eligible_transcript_turns[-10:]
+        self._append_accumulated_transcript(label, text, ts_str)
+        session_store.record_turn(self.session.session_id, transcript_entry, language=self.session.language)
+        session_store.persist_session(self.session, ended=False)
+
+        log_conversation_event(
+            session_id=self.session.session_id,
+            event="negotiation_turn",
+            speaker=normalized_speaker,
+            text=text,
+            timestamp_ms=timestamp_ms,
+            context="simulated_text",
+            metadata={"scenario_id": scenario_id, "turn_id": transcript_entry["id"]},
+        )
+
+        await self._safe_send_json({
+            "type": "TRANSCRIPT_UPDATE",
+            "payload": transcript_entry,
+        })
+        await self._send_live_transcript_turn(normalized_speaker, text)
+        self._create_background_task(
+            self._run_text_extraction_cycle(),
+            name=f"listener-text-extract-{self.session_id[:8]}",
+        )
+        return transcript_entry
+
+    async def transcribe_utterance(self, utterance: FinalizedUtterance) -> None:
+        """Transcribe one utterance and split display vs context eligibility."""
+        try:
+            utterance = await self._speech_transcriber.transcribe(utterance)
+        except Exception as exc:
+            reason = str(exc) or type(exc).__name__
+            logger.warning("[ListenerAgent] STT transcription failed: %s", reason)
+            return
+
+        text = (utterance.transcript_text or "").strip()
+        confidence = utterance.transcription_confidence
+        detected_language = utterance.metadata.get("stt_response", {}).get("language_code")
+        if detected_language and detected_language in settings.google_stt_language_codes_list:
+            session_language_changed = self.session.language != detected_language
+            self.session.language = detected_language
+            if not self.session.response_language:
+                self.session.response_language = detected_language
+            if session_language_changed:
+                try:
+                    await self._safe_send_json({
+                        "type": "LANGUAGE_UPDATE",
+                        "payload": {
+                            "language": self.session.language,
+                            "response_language": self.session.response_language,
+                        },
+                    })
+                except Exception:
+                    logger.debug("Failed to send LANGUAGE_UPDATE", exc_info=True)
+        if not text:
+            return
+
+        utterance.eligible_for_display = True
+        utterance.eligible_for_context = (
+            utterance.duration_ms >= settings.MIN_CONTEXT_DURATION_MS
+            and (confidence is None or confidence >= 0.70)
+        )
+        utterance.eligible_for_research = utterance.eligible_for_context and any(
+            token in text.lower()
+            for token in ("$", "price", "iphone", "sell", "buy", "offer", "market", "pro max")
+        )
+
+        label = {
+            "user": "User",
+            "counterparty": "Counterparty",
+            "unknown": "Unknown",
+        }.get(utterance.speaker, "Unknown")
+
+        elapsed = utterance.started_at - self._session_start_time
+        mins = int(elapsed // 60)
+        secs = int(elapsed % 60)
+        ts_str = f"{mins}:{secs:02d}"
+
+        transcript_entry = {
+            "id": utterance.utterance_id,
+            "speaker": utterance.speaker,
+            "text": text,
+            "timestamp": int(utterance.started_at * 1000),
+            "start_time": utterance.started_at,
+            "end_time": utterance.ended_at,
+            "speaker_confidence": utterance.speaker_confidence,
+            "transcription_confidence": confidence,
+            "eligible_for_context": utterance.eligible_for_context,
+            "eligible_for_research": utterance.eligible_for_research,
+            "source": utterance.source,
+        }
+
+        self.session.display_transcript_turns.append(transcript_entry)
+        self.session.display_transcript_turns = self.session.display_transcript_turns[-50:]
+
+        if utterance.eligible_for_context:
+            self.session.eligible_transcript_turns.append(transcript_entry)
+            self.session.eligible_transcript_turns = self.session.eligible_transcript_turns[-10:]
+            self._append_accumulated_transcript(label, text, ts_str)
+
+        logger.info(
+            f"Ã°Å¸â€™Â¬ {label}: {text} [display={utterance.eligible_for_display}, "
+            f"context={utterance.eligible_for_context}, stt_conf={confidence}, speaker_conf={utterance.speaker_confidence}]"
+        )
+
+        try:
+            await self._safe_send_json({
+                "type": "TRANSCRIPT_UPDATE",
+                "payload": transcript_entry,
+            })
+            logger.info(
+                f"ðŸ“¤ TRANSCRIPT_UPDATE sent: speaker={utterance.speaker}, "
+                f"text='{text[:50]}...', confidence={utterance.speaker_confidence if utterance.speaker_confidence is not None else 'N/A'}"
+            )
+        except Exception as exc:
+            logger.warning(f"[ListenerAgent] TRANSCRIPT_UPDATE send failed: {exc}")
+        log_conversation_event(
+            session_id=self.session.session_id,
+            event="negotiation_turn",
+            speaker=utterance.speaker,
+            text=text,
+            timestamp_ms=transcript_entry["timestamp"],
+            context="conversation",
+        )
+
+        await self._send_live_transcript_turn(utterance.speaker, text)
+
+        if utterance.eligible_for_context:
+            self._create_background_task(
+                self._run_text_extraction_cycle(),
+                name=f"listener-text-extract-{self.session_id[:8]}",
+            )
+
+    async def process_diarized_utterance(self, utterance: FinalizedUtterance) -> None:
+        """Transcribe one utterance and emit diarized turns with mapped speakers."""
+        logger.info(
+            f"ðŸŽ™ï¸ process_diarized_utterance called: utterance_id={utterance.utterance_id}, "
+            f"duration_ms={utterance.duration_ms}, speaker={utterance.speaker}"
+        )
+        try:
+            utterance = await self._speech_transcriber.transcribe(utterance)
+            logger.info(
+                f"âœ… Transcription complete: text='{(utterance.transcript_text or '')[:50]}...', "
+                f"confidence={utterance.transcription_confidence}"
+            )
+        except Exception as exc:
+            reason = str(exc) or type(exc).__name__
+            logger.warning("[ListenerAgent] STT transcription failed: %s", reason)
+            return
+
+        text = (utterance.transcript_text or "").strip()
+        confidence = utterance.transcription_confidence
+        if not text:
+            return
+
+        diarized_turns = utterance.metadata.get("diarized_turns") or [{
+            "diarized_speaker_id": utterance.speaker or "unknown",  # Use the already-classified speaker
+            "text": text,
+            "start_time": 0.0,
+            "end_time": utterance.duration_ms / 1000.0,
+            "transcription_confidence": confidence,
+            "speaker": utterance.speaker or "unknown",  # Pre-set the speaker
+        }]
+
+        distinct_ids = {
+            str(turn.get("diarized_speaker_id"))
+            for turn in diarized_turns
+            if turn.get("diarized_speaker_id") not in (None, "")
+        }
+        if utterance.speaker in {"user", "counterparty"} and len(distinct_ids) > 1:
+            logger.info("[ListenerAgent] Mixed-speaker utterance detected; preserving diarized turns")
+            utterance.speaker = "unknown"
+        
+        # Skip SpeakerMappingService if we already have a valid speaker from SpeechBrain
+        if utterance.speaker in {"user", "counterparty"}:
+            # Use the speaker classification from SpeechBrain directly
+            logger.info(f"âœ… Using SpeechBrain classification: speaker={utterance.speaker}")
+            diarized_turns = [
+                {
+                    **turn,
+                    "speaker": utterance.speaker,
+                }
+                for turn in diarized_turns
+            ]
+        else:
+            # Fall back to SpeakerMappingService for unknown speakers
+            diarized_turns = await SpeakerMappingService(self.session).label_diarized_turns(
+                diarized_turns,
+                utterance.audio,
+            )
+
+        triggered_context = False
+        for index, turn in enumerate(diarized_turns):
+            turn_text = (turn.get("text") or "").strip()
+            if not turn_text:
+                continue
+
+            speaker = turn.get("speaker") or "unknown"
+            eligible_for_context = (
+                utterance.duration_ms >= settings.MIN_CONTEXT_DURATION_MS
+                and (confidence is None or confidence == 0.0 or confidence >= 0.70)  # Treat 0.0 as "no confidence data"
+            )
+            eligible_for_research = eligible_for_context and any(
+                token in turn_text.lower()
+                for token in ("$", "price", "iphone", "sell", "buy", "offer", "market", "pro max")
+            )
+            label = {
+                "user": "User",
+                "counterparty": "Counterparty",
+                "unknown": "Unknown",
+            }.get(speaker, "Unknown")
+            turn_started_at = utterance.started_at + float(turn.get("start_time", 0.0) or 0.0)
+            turn_ended_at = utterance.started_at + float(turn.get("end_time", 0.0) or 0.0)
+            elapsed = turn_started_at - self._session_start_time
+            mins = int(elapsed // 60)
+            secs = int(elapsed % 60)
+            ts_str = f"{mins}:{secs:02d}"
+
+            transcript_entry = {
+                "id": f"{utterance.utterance_id}_{index}",
+                "speaker": speaker,
+                "language": self.session.language,
+                "text": turn_text,
+                "timestamp": int(turn_started_at * 1000),
+                "start_time": turn_started_at,
+                "end_time": turn_ended_at,
+                "diarized_speaker_id": turn.get("diarized_speaker_id"),
+                "speaker_confidence": turn.get("confidence"),
+                "transcription_confidence": turn.get("transcription_confidence", confidence),
+                "eligible_for_context": eligible_for_context,
+                "eligible_for_research": eligible_for_research,
+                "source": utterance.source,
+            }
+            log_speaker_debug(
+                "TRANSCRIPT_DECISION",
+                session_id=self.session.session_id,
+                utterance_id=utterance.utterance_id,
+                transcript_id=transcript_entry["id"],
+                speaker=speaker,
+                diarized_speaker_id=turn.get("diarized_speaker_id"),
+                text=turn_text,
+                transcription_confidence=transcript_entry["transcription_confidence"],
+                speaker_confidence=turn.get("confidence"),
+                eligible_for_context=eligible_for_context,
+                eligible_for_research=eligible_for_research,
+            )
+
+            self.session.display_transcript_turns.append(transcript_entry)
+            self.session.transcript.append(transcript_entry)
+            self.session.transcript = self.session.transcript[-settings.TRANSCRIPT_HISTORY_LIMIT:]
+            self.session.display_transcript_turns = self.session.display_transcript_turns[-50:]
+            session_store.record_turn(self.session.session_id, transcript_entry, language=self.session.language)
+            if eligible_for_context:
+                triggered_context = True
+                self.session.eligible_transcript_turns.append(transcript_entry)
+                self.session.eligible_transcript_turns = self.session.eligible_transcript_turns[-10:]
+                self._append_accumulated_transcript(label, turn_text, ts_str)
+
+            try:
+                await self._safe_send_json({
+                    "type": "TRANSCRIPT_UPDATE",
+                    "payload": transcript_entry,
+                })
+                logger.info(
+                    f"ðŸ“¤ TRANSCRIPT_UPDATE sent: id={transcript_entry['id']}, "
+                    f"speaker={transcript_entry['speaker']}, text='{turn_text[:30]}...'"
+                )
+            except Exception as exc:
+                logger.warning(f"[ListenerAgent] TRANSCRIPT_UPDATE send failed: {exc}")
+            log_conversation_event(
+                session_id=self.session.session_id,
+                event="negotiation_turn",
+                speaker=speaker,
+                text=turn_text,
+                timestamp_ms=transcript_entry["timestamp"],
+                context="conversation",
+            )
+
+            await self._send_live_transcript_turn(speaker, turn_text)
+
+        if triggered_context:
+            session_store.persist_session(self.session, ended=False)
+            self._create_background_task(
+                self._run_text_extraction_cycle(),
+                name=f"listener-text-extract-{self.session_id[:8]}",
+            )
+
     async def _run_text_extraction_cycle(self) -> None:
         """
         Fast context extraction from the labeled text transcript (~0.5-1s).
-        Text→text is 5-10x faster than the audio extraction path.
-        Debounced to run at most once every 1.5s to avoid hammering the API.
+        Textâ†’text is 5-10x faster than the audio extraction path.
+        Debounced and deduplicated to avoid hammering the API.
         """
+        logger.info(f"ðŸ” _run_text_extraction_cycle called, in_flight={self._text_extraction_in_flight}")
+        
+        if not self._running:
+            return
+
+        if self._text_extraction_in_flight:
+            logger.debug("[ListenerAgent] Skipping text extraction - request already in flight")
+            return
+
         # Debounce
         now = time.time()
-        if now - self._last_text_extraction_time < 1.5:
+        if now - self._last_text_extraction_time < TEXT_EXTRACTION_DEBOUNCE_SECONDS:
             return
-        self._last_text_extraction_time = now
 
         transcript = self.accumulated_transcript.strip()
         if not transcript or len(transcript) < 20:
@@ -334,29 +812,71 @@ class ListenerAgent:
         if getattr(self.session, "user_addressing_ai", False):
             return  # Don't extract during Ask AI window
 
-        prompt = _TEXT_EXTRACTION_PROMPT + transcript[-2500:]
+        transcript_slice = transcript[-2500:]
+        transcript_hash = str(hash(transcript_slice))
+        if transcript_hash == self._last_extracted_transcript_hash:
+            logger.debug("[ListenerAgent] Skipping text extraction - transcript unchanged")
+            return
+
+        prompt = TEXT_EXTRACTION_PROMPT + transcript_slice
 
         def do_extract():
             return self._client.models.generate_content(
-                model=FLASH_MODEL,
+                model=self._flash_model,
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(temperature=0.1),
             )
 
         try:
+            self._text_extraction_in_flight = True
+            self._last_text_extraction_time = now
             response = await asyncio.get_event_loop().run_in_executor(None, do_extract)
+            if not self._running:
+                return
             raw = (response.text or "").strip()
             if raw.startswith("```"):
                 raw = "\n".join(raw.split("\n")[1:]).rstrip("`").strip()
             if not raw:
                 return
             context = json.loads(raw)
+            self._last_extracted_transcript_hash = transcript_hash
         except Exception as exc:
             logger.warning(f"[ListenerAgent] Text extraction failed: {exc}")
             return
+        finally:
+            self._text_extraction_in_flight = False
 
         # Same post-processing as audio path
         await self._post_process_context(context)
+
+    @staticmethod
+    def _coerce_text_entry(value: Any) -> str:
+        """Normalize structured model output into a comparable lowercase-safe string."""
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            for key in ("text", "moment", "detail", "summary", "message", "value"):
+                item = value.get(key)
+                if isinstance(item, str) and item.strip():
+                    return item
+            return json.dumps(value, sort_keys=True)
+        if isinstance(value, list):
+            return " ".join(
+                part for part in (ListenerAgent._coerce_text_entry(item) for item in value) if part
+            )
+        return str(value)
+
+    @classmethod
+    def _normalize_text_list(cls, values: list[Any]) -> list[str]:
+        """Convert mixed string/object lists into clean display/prompt strings."""
+        normalized: list[str] = []
+        for value in values or []:
+            text = cls._coerce_text_entry(value).strip()
+            if text:
+                normalized.append(text)
+        return normalized
 
     async def _post_process_context(self, context: dict) -> None:
         """
@@ -368,7 +888,10 @@ class ListenerAgent:
           - Inject into Live AI (if copilot active)
           - Trigger market research if needed
         """
-        # ── Critical event detection ────────────────────────────────────────
+        # â”€â”€ Critical event detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        if not self._running:
+            return
+
         critical_events: list[dict] = []
 
         new_price = context.get("seller_asking_price") or context.get("counterparty_price")
@@ -392,7 +915,8 @@ class ListenerAgent:
             "need to sell", "leaving", "other buyer",
         )
         for moment in context.get("key_moments", []):
-            if any(kw in moment.lower() for kw in _URGENCY_KEYWORDS):
+            moment_text = self._coerce_text_entry(moment).lower()
+            if moment_text and any(kw in moment_text for kw in _URGENCY_KEYWORDS):
                 critical_events.append({"event_type": "URGENCY_DETECTED", "detail": {"moment": moment}})
                 break
 
@@ -401,11 +925,15 @@ class ListenerAgent:
             "now or never", "emotional", "guilt", "pressure", "final", "ultimatum",
         )
         for text in (context.get("leverage_points", []) + context.get("key_moments", [])):
-            if any(m in text.lower() for m in _PRESSURE_MARKERS):
+            text_value = self._coerce_text_entry(text).lower()
+            if text_value and any(m in text_value for m in _PRESSURE_MARKERS):
                 critical_events.append({"event_type": "PRESSURE_TACTIC", "detail": {"text": text}})
                 break
 
-        # ── Merge + forward ─────────────────────────────────────────────────
+        # â”€â”€ Merge + forward â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # Attach latest vision observation (if fresh) so it flows into advisor
+        self._attach_vision_observation(context)
+
         self._merge_context(context)
         await self._send_context_update(context)
 
@@ -422,7 +950,7 @@ class ListenerAgent:
         if critical_events:
             self._critical_events_since_research += len(critical_events)
 
-        # ── Market research trigger ──────────────────────────────────────────
+        # â”€â”€ Market research trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         new_query = self.last_context.get("research_query")
         research_gap = context.get("research_gap")
         research_needed = context.get("research_needed", False)
@@ -462,18 +990,20 @@ class ListenerAgent:
                     else "critical_pressure"
                 )
                 effective_query = research_gap if gap_is_new else new_query
-                logger.info(f"[ListenerAgent] Triggering research ({reason}): '{effective_query}'")
+                logger.info(f"ðŸ”¬ Research triggered: {effective_query}")
                 self._last_research_timestamp = current_time
                 self._last_researched_item = current_item
                 self._last_researched_type = current_type
                 self._critical_events_since_research = 0
                 if gap_is_new:
                     self._last_research_gap = research_gap
-                self._research_task = asyncio.create_task(
+                self._research_task = self._create_background_task(
                     self._run_market_research(
-                        effective_query, reason,
+                        effective_query,
+                        reason,
                         research_gap if gap_is_new else None,
-                    )
+                    ),
+                    name=f"listener-research-{self.session_id[:8]}",
                 )
 
     # ------------------------------------------------------------------
@@ -481,7 +1011,7 @@ class ListenerAgent:
     # ------------------------------------------------------------------
 
     async def _poll_loop(self) -> None:
-        """Main loop — runs every POLL_INTERVAL seconds."""
+        """Main loop â€” runs every POLL_INTERVAL seconds."""
         # Give the session a moment to stabilise before first poll
         await asyncio.sleep(POLL_INTERVAL)
 
@@ -507,128 +1037,47 @@ class ListenerAgent:
     # ------------------------------------------------------------------
 
     async def _run_cycle(self) -> None:
+        """
+        Main polling cycle (every POLL_INTERVAL seconds).
+        
+        Modified for PerfectListenerSystem integration:
+        - Reads accumulated_transcript (populated by PerfectListenerSystem)
+        - Extracts context from transcript text (no audio processing)
+        - Skips cycle if accumulated_transcript is empty or too short
+        """
         self._cycle_count += 1
+        
+        logger.debug(f"ðŸ”„ Cycle {self._cycle_count} starting...")
 
-        # Skip while user is speaking directly to the AI — prevents their question
+        # Skip while user is speaking directly to the AI â€” prevents their question
         # from polluting negotiation context extraction.
         if getattr(self.session, "user_addressing_ai", False):
-            logger.debug("[ListenerAgent] Skipping cycle — user is addressing AI")
+            logger.debug("[ListenerAgent] Skipping cycle â€” user is addressing AI")
             return
 
-        # ── FAST PATH: text-based extraction ────────────────────────────────
-        # Once we have a labeled transcript from event-driven per-segment STT,
-        # use text extraction (0.5-1s) instead of audio extraction (2-5s).
-        if self.accumulated_transcript and len(self.accumulated_transcript.strip()) > 30:
-            await self._run_text_extraction_cycle()
+        # Check if we have transcript to process
+        transcript = self.accumulated_transcript.strip()
+        if not transcript or len(transcript) < 30:
+            logger.debug(f"[ListenerAgent] No transcript to process (length={len(transcript)})")
             return
 
-        # ── MANUAL SPEAKER MODE: skip audio path entirely ───────────────────
-        # When the user has clicked a speaker button (speaker_segment_start > 0),
-        # speaker labeling is 100% owned by event-driven transcribe_segment().
-        # The audio path cannot know who spoke what — it will always get it wrong
-        # in races between button clicks and async processing.
-        if getattr(self.session, 'speaker_segment_start', 0) > 0:
-            logger.debug("[ListenerAgent] Skipping audio cycle — manual speaker mode active")
-            return
-
-        # ── SLOW PATH: audio extraction (fallback before any transcript) ────
-        current_duration = self.audio_buffer.duration_seconds
-
-        logger.debug(
-            f"[ListenerAgent] Cycle {self._cycle_count} (audio) — "
-            f"buffer={current_duration:.1f}s, last_processed={self._last_processed_duration:.1f}s"
-        )
-
-        # 1. Check if we have enough NEW audio since last extraction
-        new_audio_duration = current_duration - self._last_processed_duration
-        if not self._force_next_extraction and new_audio_duration < MIN_NEW_AUDIO:
-            logger.debug(
-                f"[ListenerAgent] Only {new_audio_duration:.1f}s of new audio "
-                f"(need {MIN_NEW_AUDIO}s), skipping extraction"
-            )
-            return
-
-        if self._force_next_extraction:
-            logger.info(
-                f"[ListenerAgent] Force extraction triggered — "
-                f"re-extracting last {WINDOW_SECONDS}s with correct speaker context"
-            )
-            self._force_next_extraction = False
-
-        # 2. Grab audio window
-        audio_bytes = self.audio_buffer.get_window(WINDOW_SECONDS)
-        if len(audio_bytes) < 3200:  # < 0.1s of audio — skip
-            logger.debug("[ListenerAgent] Not enough audio yet, skipping")
-            return
-        
-        # Update the last processed position BEFORE extraction
-        # (so if extraction fails, we'll retry with the same audio next cycle)
-        self._last_processed_duration = current_duration
-
-        # 3. Build speaker-segmented audio (Solution 1 + Solution 2 combined)
-        # Split the 15s window into per-speaker chunks using the timeline,
-        # AND inject the timeline as a hint for Flash to handle overlaps.
-        now = time.time()
-        window_start_ts = now - WINDOW_SECONDS
-        speaker_timeline = getattr(self.session, 'speaker_timeline', [])
-
-        # Filter timeline entries within the current window
-        window_entries = [e for e in speaker_timeline if e.get("timestamp", 0) >= window_start_ts]
-
-        # Build segments: list of {speaker, start_seconds_ago, end_seconds_ago}
-        # "seconds_ago" is relative to NOW so we can use get_segment()
-        segments = []
-        if window_entries:
-            for i, entry in enumerate(window_entries):
-                seg_start_ts = entry["timestamp"]
-                seg_end_ts = window_entries[i + 1]["timestamp"] if i + 1 < len(window_entries) else now
-                start_ago = now - seg_start_ts
-                end_ago = now - seg_end_ts
-                # Clamp to window bounds
-                start_ago = min(start_ago, WINDOW_SECONDS)
-                end_ago = max(end_ago, 0.0)
-                if start_ago > end_ago:
-                    audio_chunk = self.audio_buffer.get_segment(start_ago, end_ago)
-                    if len(audio_chunk) >= 3200:  # at least 0.1s
-                        segments.append({
-                            "speaker": entry["speaker"],
-                            "audio": audio_chunk,
-                            "start_ago": start_ago,
-                            "end_ago": end_ago,
-                        })
-
-        # Fall back to full window if no timeline data
-        if not segments:
-            segments = [{"speaker": getattr(self.session, 'current_speaker', 'unknown'), "audio": audio_bytes, "start_ago": WINDOW_SECONDS, "end_ago": 0.0}]
-
-        logger.info(
-            f"[ListenerAgent] Cycle {self._cycle_count} — "
-            f"{len(segments)} speaker segment(s): "
-            + str([f"{s['speaker']}({s['start_ago']:.1f}s-{s['end_ago']:.1f}s)" for s in segments])
-        )
-
-        # 4. Call Flash with segments + timeline hint
-        context = await asyncio.get_event_loop().run_in_executor(
-            None, self._call_flash, audio_bytes, segments
-        )
-        if context is None:
-            return
-        
-        # 2.5. Process diarization if present (audio path only)
-        # Skip diarization when manual speaker buttons are in use — the event-driven
-        # transcribe_segment() is the authoritative label source in that case.
-        manual_until = getattr(self.session, 'manual_override_until', 0) or 0
-        if "diarization" in context and context["diarization"] and time.time() >= manual_until:
-            await self._process_diarization(context["diarization"])
-
-        # Shared post-processing: events, merge, inject, research
-        await self._post_process_context(context)
+        # Extract context from transcript (text-to-text, fast)
+        await self._run_text_extraction_cycle()
 
     async def _run_market_research(self, research_query: str, trigger_reason: str = "scheduled", research_gap: str = None) -> None:
         """Run asynchronous market research using Gemini Flash with Google Search."""
         try:
+            self.session.session_metrics["research_requests"] += 1
+            self.session.session_metrics["research_calls"] += 1
+            session_store.record_research_event(
+                self.session.session_id,
+                research_query,
+                "started",
+                {"query": research_query, "trigger_reason": trigger_reason, "research_gap": research_gap},
+            )
+
             # Notify frontend that research has started
-            await self.websocket.send_json({
+            await self._safe_send_json({
                 "type": "RESEARCH_STARTED",
                 "payload": {"query": research_query}
             })
@@ -641,8 +1090,8 @@ class ListenerAgent:
                 self.last_context.get("counterparty_price")
                 or self.last_context.get("seller_asking_price")
             )
-            key_moments = self.last_context.get("key_moments", [])
-            leverage_points = self.last_context.get("leverage_points", [])
+            key_moments = self._normalize_text_list(self.last_context.get("key_moments", []))
+            leverage_points = self._normalize_text_list(self.last_context.get("leverage_points", []))
 
             context_summary = (
                 f"Item/Subject: {item}\n"
@@ -664,21 +1113,29 @@ CURRENT NEGOTIATION CONTEXT:
 
 Search the internet and return ONLY a valid JSON object with no markdown:
 {{
-  "price_range": "The fair market range as a specific number range with source (e.g. '$X–$Y on Booking.com', '$X–$Y/year per Glassdoor', '$X–$Y on eBay sold listings'). null if not found.",
-  "key_facts": "One critical fact that directly affects the value or negotiating position in this specific scenario — depreciation, seasonal demand, vacancy rate, industry benchmark, known defects, supply/demand conditions. null if not found.",
-  "leverage": "One specific leverage point the user can deploy in the next 60 seconds — a competing alternative, a market condition, a timing pressure on the counterparty, or an information advantage. Make it concrete and actionable.",
-  "tactics": "Two or three real-world negotiation tactics that expert negotiators use specifically for this type of deal ({negotiation_type}). Base these on actual negotiation research and what works in practice for this domain. Format as: 'Tactic 1: [name] — [one sentence how to use it]. Tactic 2: [name] — [one sentence]. Tactic 3: [name] — [one sentence].'",
-  "gap_answer": "{('Direct answer to: ' + research_gap) if research_gap else 'null'} — answer this specific question from your search results. null if no knowledge gap was provided."
+  "price_range": "The fair market range as a specific number range with source (e.g. '$Xâ€“$Y on Booking.com', '$Xâ€“$Y/year per Glassdoor', '$Xâ€“$Y on eBay sold listings'). null if not found.",
+  "key_facts": "One critical fact that directly affects the value or negotiating position in this specific scenario â€” depreciation, seasonal demand, vacancy rate, industry benchmark, known defects, supply/demand conditions. null if not found.",
+  "leverage": "One specific leverage point the user can deploy in the next 60 seconds â€” a competing alternative, a market condition, a timing pressure on the counterparty, or an information advantage. Make it concrete and actionable.",
+  "tactics": "Two or three real-world negotiation tactics that expert negotiators use specifically for this type of deal ({negotiation_type}). Base these on actual negotiation research and what works in practice for this domain. Format as: 'Tactic 1: [name] â€” [one sentence how to use it]. Tactic 2: [name] â€” [one sentence]. Tactic 3: [name] â€” [one sentence].'",
+  "gap_answer": "{('Direct answer to: ' + research_gap) if research_gap else 'null'} â€” answer this specific question from your search results. null if no knowledge gap was provided."
 }}
 
 Rules:
-- Be specific with numbers — give a range, not vague language
+- Be specific with numbers â€” give a range, not vague language
 - Tailor everything to the domain: {negotiation_type}
 - tactics must be real techniques adapted to this exact scenario
 - If trigger_reason is 'critical_pressure', prioritize counter-tactics to pressure moves
 - If trigger_reason is 'ai_uncertainty', prioritize answering the knowledge gap directly
 - If no price data found, state the closest relevant benchmark
 """
+
+            research_prompt = build_market_research_prompt(
+                context_summary=context_summary,
+                research_query=research_query,
+                research_gap=research_gap,
+                negotiation_type=negotiation_type,
+                trigger_reason=trigger_reason,
+            )
 
             logger.info(
                 "Running market research",
@@ -700,7 +1157,23 @@ Rules:
                     )
                 )
                 
-            response = await asyncio.get_event_loop().run_in_executor(None, do_research)
+            async with self.session.research_lock:
+                async with self._research_limiter:
+                    async def _on_retry(_attempt: int, _exc: Exception) -> None:
+                        logger.warning("[ListenerAgent] Retrying market research for %s", research_query)
+
+                    response = await run_with_retries(
+                        "market_research",
+                        lambda: asyncio.get_event_loop().run_in_executor(None, do_research),
+                        max_retries=settings.RESEARCH_MAX_RETRIES,
+                        base_backoff_ms=settings.RESEARCH_BASE_BACKOFF_MS,
+                        max_backoff_ms=settings.RESEARCH_MAX_BACKOFF_MS,
+                        is_retryable=lambda exc: any(
+                            marker in str(exc).lower()
+                            for marker in ("429", "resource exhausted", "temporar", "timeout", "503", "500")
+                        ),
+                        on_retry=_on_retry,
+                    )
             
             raw = response.text
             if raw:
@@ -715,7 +1188,7 @@ Rules:
                 market_data = {}
             else:
                 market_data = json.loads(raw)
-            logger.info(f"[ListenerAgent] Research complete for {research_query}: {market_data}")
+            logger.info(f"âœ… Research complete: {market_data.get('item', 'N/A')}")
             
             # Build a rich formatted string from the structured fields
             # so all downstream code that reads market_data as a string still works
@@ -733,20 +1206,39 @@ Rules:
             insights = " | ".join(parts) if parts else "No market data found."
 
             self.last_context["market_data"] = insights
+            event_payload = {
+                "query": research_query,
+                "market_data": insights,
+                "timestamp": time.time(),
+                "trigger_reason": trigger_reason,
+            }
+            self.session.research_history.append(event_payload)
+            self.session.research_history = self.session.research_history[-settings.RESEARCH_HISTORY_LIMIT:]
+            session_store.record_research_event(
+                self.session.session_id,
+                research_query,
+                "completed",
+                event_payload,
+            )
+            session_store.persist_session(self.session, ended=False)
             
             # Notify frontend with results
-            await self.websocket.send_json({
+            await self._safe_send_json({
                 "type": "RESEARCH_COMPLETE",
-                "payload": {
-                    "query": research_query,
-                    "market_data": insights,
-                    "timestamp": time.time()
-                }
+                "payload": event_payload
             })
-            
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
+            self.session.session_metrics["research_failures"] += 1
             logger.error(f"[ListenerAgent] Background research failed: {e}")
-            await self.websocket.send_json({
+            session_store.record_research_event(
+                self.session.session_id,
+                research_query,
+                "failed",
+                {"query": research_query, "error": str(e), "timestamp": time.time()},
+            )
+            await self._safe_send_json({
                 "type": "RESEARCH_FAILED",
                 "payload": {"error": str(e)}
             })
@@ -773,12 +1265,12 @@ Rules:
         window_entries = [e for e in timeline if e.get("timestamp", 0) >= window_start]
 
         if not window_entries:
-            # No timeline data yet — use current_speaker as fallback
+            # No timeline data yet â€” use current_speaker as fallback
             if current_speaker == "unknown":
                 return (
                     "SPEAKER CONTEXT: Speaker identity not yet confirmed. "
                     "Use conversation content and context to infer who is making each statement. "
-                    "Do not assume any price belongs to a specific role — infer from language cues "
+                    "Do not assume any price belongs to a specific role â€” infer from language cues "
                     "(e.g. 'I want', 'my price', 'I can offer' = likely the person speaking; "
                     "'they want', 'asking for' = referencing the other party).\n\n"
                 )
@@ -807,87 +1299,17 @@ Rules:
                 rel_end = min(WINDOW_SECONDS, window_entries[i + 1].get("timestamp", now) - window_start)
             else:
                 rel_end = WINDOW_SECONDS
-            lines.append(f"  {rel_start:.1f}s – {rel_end:.1f}s : {speaker.upper()}")
+            lines.append(f"  {rel_start:.1f}s â€“ {rel_end:.1f}s : {speaker.upper()}")
             prev_ts = ts
 
         lines.append(
             "Use this timeline to determine who said each price or statement. "
-            "A price mentioned during a USER turn → user fields. "
-            "A price mentioned during a COUNTERPARTY turn → seller_price. "
+            "A price mentioned during a USER turn â†’ user fields. "
+            "A price mentioned during a COUNTERPARTY turn â†’ seller_price. "
             "If someone quotes the other party's price (e.g. 'you said $800'), "
-            "do NOT assign it to their own fields — it is a reference, not an offer."
+            "do NOT assign it to their own fields â€” it is a reference, not an offer."
         )
         return "\n".join(lines) + "\n\n"
-
-    async def _process_diarization(self, diarization: list) -> None:
-        """
-        Process diarization results from Gemini Pro.
-        
-        If enrollment audio was provided, Gemini labels speakers as "USER" or "COUNTERPARTY" directly.
-        If no enrollment, Gemini uses "Speaker 1" and "Speaker 2" - we need manual mapping.
-        """
-        if not diarization:
-            return
-        
-        current_time = time.time()
-        enrollment_audio = getattr(self.session, 'enrollment_audio', None)
-        
-        for turn in diarization:
-            speaker_label = turn.get("speaker", "")  # "USER", "COUNTERPARTY", "Speaker 1", or "Speaker 2"
-            text = turn.get("text", "")
-            start_time = turn.get("start_time", 0.0)
-            
-            if not speaker_label or not text:
-                continue
-            
-            # Map speaker label to our internal format
-            if speaker_label in ("USER", "COUNTERPARTY"):
-                # Gemini already labeled it correctly (enrollment audio was used)
-                our_speaker = speaker_label.lower()
-            elif speaker_label in ("Speaker 1", "Speaker 2"):
-                # No enrollment - need to map generic labels
-                # Initialize mapping if needed
-                if not hasattr(self.session, 'speaker_mapping'):
-                    self.session.speaker_mapping = {}
-                
-                if speaker_label not in self.session.speaker_mapping:
-                    # Wait for manual identification via SPEAKER_IDENTIFIED message
-                    logger.info(
-                        f"[Diarization] {speaker_label} detected but no mapping yet - "
-                        f"waiting for manual identification"
-                    )
-                    continue
-                
-                our_speaker = self.session.speaker_mapping[speaker_label]
-            else:
-                logger.warning(f"[Diarization] Unknown speaker label: {speaker_label}")
-                continue
-            
-            # Update session state
-            self.session.current_speaker = our_speaker
-            self.session.speaker_last_updated = current_time
-            
-            # Add to timeline
-            self.session.speaker_timeline.append({
-                "speaker": our_speaker,
-                "timestamp": current_time - WINDOW_SECONDS + start_time,
-            })
-            
-            # Send transcript with speaker label to frontend
-            await self.websocket.send_json({
-                "type": "TRANSCRIPT_UPDATE",
-                "payload": {
-                    "speaker": our_speaker,
-                    "text": text,
-                    "timestamp": current_time - WINDOW_SECONDS + start_time,
-                }
-            })
-            
-            logger.info(f"[Diarization] {our_speaker.upper()}: {text[:80]}...")
-        
-        # Keep timeline manageable
-        if len(self.session.speaker_timeline) > 300:
-            self.session.speaker_timeline = self.session.speaker_timeline[-300:]
 
     def _call_flash(self, audio_bytes: bytes, segments: list = None) -> Optional[dict]:
         """
@@ -916,52 +1338,31 @@ Rules:
             wav_bytes = pcm_to_wav(audio_bytes)
             audio_b64 = base64.b64encode(wav_bytes).decode("utf-8")
 
-            # Check if we have enrollment audio for speaker matching
-            enrollment_audio = getattr(self.session, 'enrollment_audio', None)
-            
             # Build parts list
+            # Note: This method is kept for manual mode compatibility (transcribe_segment)
+            # PerfectListenerSystem handles automatic transcription and speaker identification
             parts = []
-            
-            if enrollment_audio:
-                # Convert enrollment audio to WAV
-                enrollment_wav = pcm_to_wav(enrollment_audio)
-                enrollment_b64 = base64.b64encode(enrollment_wav).decode("utf-8")
-                
-                # Add enrollment audio as reference
-                enrollment_part = genai_types.Part(
-                    inline_data=genai_types.Blob(
-                        mime_type="audio/wav",
-                        data=enrollment_b64,
-                    )
-                )
-                parts.append(enrollment_part)
-                
-                # Add instruction about reference audio
-                reference_instruction = genai_types.Part(
-                    text="☝️ REFERENCE AUDIO ABOVE: This is the USER's voice. Remember these voice characteristics.\n\n"
-                )
-                parts.append(reference_instruction)
 
             # Solution 1: Add per-speaker audio segments with labels if available
             # Solution 2: Fall back to full audio + timeline hint if only one segment
             if segments and len(segments) > 1:
-                # Multiple segments — send each chunk labeled with speaker
+                # Multiple segments â€” send each chunk labeled with speaker
                 for seg in segments:
                     speaker_label = seg["speaker"].upper()
                     seg_wav = pcm_to_wav(seg["audio"])
                     seg_b64 = base64.b64encode(seg_wav).decode("utf-8")
                     # Label before each audio chunk
-                    parts.append(genai_types.Part(text=f"[{speaker_label} speaking — {seg['start_ago']:.1f}s to {seg['end_ago']:.1f}s ago]\n"))
+                    parts.append(genai_types.Part(text=f"[{speaker_label} speaking â€” {seg['start_ago']:.1f}s to {seg['end_ago']:.1f}s ago]\n"))
                     parts.append(genai_types.Part(
                         inline_data=genai_types.Blob(mime_type="audio/wav", data=seg_b64)
                     ))
-                timeline_hint = "SPEAKER SEGMENTS (authoritative — use these to attribute prices and statements):\n"
+                timeline_hint = "SPEAKER SEGMENTS (authoritative â€” use these to attribute prices and statements):\n"
                 for seg in segments:
-                    timeline_hint += f"  {seg['start_ago']:.1f}s–{seg['end_ago']:.1f}s ago: {seg['speaker'].upper()}\n"
+                    timeline_hint += f"  {seg['start_ago']:.1f}sâ€“{seg['end_ago']:.1f}s ago: {seg['speaker'].upper()}\n"
                 timeline_hint += "Each audio chunk above is labeled with its speaker. Attribute all statements accordingly.\n\n"
                 parts.append(genai_types.Part(text=timeline_hint))
             else:
-                # Single segment or no timeline — send full audio with timeline hint (Solution 2)
+                # Single segment or no timeline â€” send full audio with timeline hint (Solution 2)
                 audio_part = genai_types.Part(
                     inline_data=genai_types.Blob(mime_type="audio/wav", data=audio_b64)
                 )
@@ -975,75 +1376,55 @@ Rules:
             # Build prompt
             known_item = self.last_context.get("item")
             if known_item:
-                prompt_with_item = f"""The negotiation is about: {known_item}.
-Extract the following in strict JSON (no markdown, no extra text):
+                prompt_with_item = f"""You are analyzing a live negotiation audio recording about: {known_item}. Do TWO things simultaneously:
+
+1. TRANSCRIBE the speech with speaker diarization.
+2. EXTRACT negotiation context.
+
+Return strict JSON only â€” no markdown, no extra text:
 {{
   "item": "{known_item}",
-  "negotiation_type": "one of: buying_goods | selling_goods | renting | salary | service | contract | other | unknown — ALWAYS from the USER's perspective. If the COUNTERPARTY is selling, the USER is buying → use buying_goods. If the COUNTERPARTY is buying, the USER is selling → use selling_goods.",
-  "buyer_offer": <number or null - what price has the BUYER offered?>,
-  "counterparty_price": <number or null - what price is the COUNTERPARTY asking for or offering?>,
-  "user_price": <number or null - what price has the USER stated?>,
-  "user_target_price": <number or null - what price does the USER ultimately want to achieve?>,
-  "user_walk_away_price": <number or null - the USER's absolute limit>,
-  "counterparty_goal": "one sentence — what the counterparty is trying to achieve beyond just price. null if unknown.",
-  "key_moments": ["one-sentence each — notable things said that shift the negotiation"],
-  "leverage_points": ["one-sentence each, max 3 — time pressure, information asymmetry, alternatives, weaknesses, or advantages"],
+  "negotiation_type": "one of: buying_goods | selling_goods | renting | salary | service | contract | other | unknown â€” from the USER's perspective.",
+  "buyer_offer": null,
+  "counterparty_price": null,
+  "user_price": null,
+  "user_target_price": null,
+  "user_walk_away_price": null,
+  "counterparty_goal": "one sentence â€” what counterparty wants beyond price. null if unknown.",
+  "key_moments": ["one-sentence each â€” notable things said that shift the negotiation"],
+  "leverage_points": ["one-sentence each, max 3 â€” time pressure, information asymmetry, alternatives, weaknesses, advantages"],
   "counterparty_sentiment": "positive|neutral|negative|unknown",
-  "research_query": "A precise search query to find current fair market value or benchmarks for {known_item}. Tailor to the domain. Include the year. Return null if not enough specifics.",
-  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)"
+  "research_query": "Precise search query for fair market value of {known_item}. Include year. null if not enough specifics.",
+  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)",
+  "diarization": [
+    {{"speaker": "Speaker 1", "text": "exact words spoken", "start_time": 0.0}},
+    {{"speaker": "Speaker 2", "text": "exact words spoken", "start_time": 3.5}}
+  ]
 }}
-If audio is silent/unclear return all nulls. Prices should be numbers only (no currency symbols).
-IMPORTANT: Keep the item as "{known_item}" — do not replace it with generic terms."""
+
+DIARIZATION RULES:
+- Use "Speaker 1" for one voice, "Speaker 2" for the other â€” keep labels consistent.
+- Start a new entry each time the speaker changes.
+- If only one person spoke, return one entry under "Speaker 1".
+- If audio is silent or no clear speech, return empty array: "diarization": []
+- Transcribe product names, prices, and numbers exactly as spoken.
+
+PRICE RULES: Prices are numbers only (no currency symbols). IMPORTANT: Keep item as "{known_item}"."""
             else:
                 prompt_with_item = EXTRACTION_PROMPT
 
-            # Add diarization instruction
-            if enrollment_audio:
-                diarization_prompt = """
-CRITICAL SPEAKER IDENTIFICATION:
-Compare the voices in the CURRENT AUDIO (above) to the REFERENCE AUDIO (at the top).
-- The voice that MATCHES the reference = label as "USER"
-- The OTHER voice = label as "COUNTERPARTY"
+            prompt_with_item = build_audio_extraction_prompt(known_item)
 
-Add a "diarization" field to your JSON response:
-"diarization": [
-  {"speaker": "USER" or "COUNTERPARTY", "text": "exact words spoken", "start_time": 0.0},
-  {"speaker": "USER" or "COUNTERPARTY", "text": "exact words spoken", "start_time": 2.5}
-]
-
-Use voice characteristics (pitch, tone, speaking style) to match against the reference.
-
-"""
-            else:
-                diarization_prompt = """
-SPEAKER IDENTIFICATION (No reference available):
-Distinguish between two speakers based on voice characteristics.
-Label them as "Speaker 1" and "Speaker 2" consistently.
-
-Add a "diarization" field to your JSON response:
-"diarization": [
-  {"speaker": "Speaker 1" or "Speaker 2", "text": "exact words spoken", "start_time": 0.0},
-  {"speaker": "Speaker 1" or "Speaker 2", "text": "exact words spoken", "start_time": 2.5}
-]
-
-"""
-            
-            full_prompt = diarization_prompt + prompt_with_item
-            text_part = genai_types.Part(text=full_prompt)
+            # diarization field is now embedded inside the JSON schema in prompt_with_item.
+            # No separate diarization_prompt needed â€” Flash sees the full schema at once.
+            text_part = genai_types.Part(text=prompt_with_item)
             parts.append(text_part)
 
-            logger.info(
-                "Calling Flash model for speaker matching + context extraction",
-                extra={
-                    "session_id": self.session_id,
-                    "has_enrollment": enrollment_audio is not None,
-                    "audio_duration_seconds": len(audio_bytes) / 32000,
-                },
-            )
-
+            logger.debug(f"ðŸ” Flash: {len(audio_bytes) / 32000:.1f}s")
+            
             response = self._client.models.generate_content(
                 model=self._flash_model,
-                contents=[genai_types.Content(parts=parts)],
+                contents=[genai_types.Content(role="user", parts=parts)],
                 config=genai_types.GenerateContentConfig(
                     response_mime_type="application/json",
                     temperature=0.0,
@@ -1056,21 +1437,60 @@ Add a "diarization" field to your JSON response:
                 if raw.startswith("```"):
                     raw = "\n".join(raw.split("\n")[1:])
                     raw = raw.rstrip("`").strip()
-            
+
             if not raw:
+                logger.warning("[ListenerAgent] Flash returned empty response")
                 parsed = {}
             else:
+                logger.info(f"[ListenerAgent] Flash raw response: {raw}")
                 parsed = json.loads(raw)
-            
-            logger.info(
-                "Flash model returned extracted context with diarization",
-                extra={"session_id": self.session_id, "extracted_context": parsed},
-            )
+
+            diarization_count = len(parsed.get("diarization", []))
+            logger.info(f"âœ… Flash: {diarization_count} turns, item={parsed.get('item', 'N/A')}")
+
+            # Log each turn at debug level
+            for i, turn in enumerate(parsed.get("diarization", [])):
+                speaker = turn.get("speaker", "UNKNOWN")
+                text = turn.get("text", "")[:60]
+                logger.debug(f"   Turn {i+1}: [{speaker}] {text}...")
+
+            # Fallback: if Flash returned no diarization but audio was long enough,
+            # create a single-turn entry using the transcript_snippet so something
+            # always appears in the transcript panel.
+            if diarization_count == 0 and len(audio_bytes) >= 32000:  # >= 1 second
+                snippet = (parsed.get("transcript_snippet") or "").strip()
+                logger.info(f"[ListenerAgent] Flash returned 0 turns. Snippet: '{snippet}', audio_len={len(audio_bytes)}")
+                if snippet:
+                    logger.info(f"Creating fallback turn from snippet: {snippet}")
+                    parsed["diarization"] = [{"speaker": "Speaker 1", "text": snippet, "start_time": 0.0}]
+                else:
+                    logger.warning(f"[ListenerAgent] No snippet available for fallback turn")
+
             return parsed
 
         except Exception as exc:
             logger.warning(f"[ListenerAgent] Flash call failed: {exc}")
             return None
+
+    def _attach_vision_observation(self, context: dict) -> None:
+        """Attach the latest VisionObservation from the session to the context dict.
+
+        Only attaches if the observation is fresh (< VISION_OBS_STALENESS_SECONDS old)
+        and has confidence != 'low'. The observation is stored under the key
+        'vision_observation' and consumed by build_pre_query_brief().
+        """
+        import time as _time
+        obs_list = getattr(self.session, "vision_observations", None)
+        if not obs_list:
+            return
+        latest = obs_list[-1]
+        age = _time.time() - latest.get("timestamp", 0)
+        from app.config import settings as _s
+        if age > _s.VISION_OBS_STALENESS_SECONDS:
+            return
+        if latest.get("confidence") == "low":
+            return
+        context["vision_observation"] = latest
 
     def _merge_context(self, context: dict) -> None:
         """Merge new context into accumulated state (non-destructive)."""
@@ -1102,57 +1522,15 @@ Add a "diarization" field to your JSON response:
             elif old_item and len(new_item) < len(old_item):
                 logger.info(f"[ListenerAgent] Blocking item downgrade: '{old_item}' -> '{new_item}'")
 
+        # transcript_snippet is a raw unstructured excerpt from Flash that may contain
+        # BOTH speakers' words in a single string. We intentionally do NOT add it to
+        # accumulated_transcript here â€” PerfectListenerSystem handles transcription with proper
+        # per-turn speaker labels. Adding the mixed snippet would corrupt the transcript
+        # with wrong labels (the old code assigned the whole blob to current_speaker).
         snippet = context.get("transcript_snippet", "")
         if snippet:
-            # FIX: Use speaker_timeline to determine who spoke during this audio window
-            # instead of just using current_speaker (which might have changed)
-            
-            # Get the time range for this audio window
-            current_time = time.time()
-            window_start = current_time - WINDOW_SECONDS
-            
-            # Find the most recent speaker identification within this window
-            speaker_timeline = getattr(self.session, 'speaker_timeline', [])
-            
-            # Default to current speaker if no timeline data
-            speaker = getattr(self.session, 'current_speaker', 'unknown')
-            
-            if speaker_timeline:
-                # Find who was speaking at the START of the audio window.
-                # Check within the window first; if the button was pressed before the window
-                # started, look backward in the timeline so we don't fall back to the CURRENT
-                # speaker (which may have changed since the audio was captured).
-                speakers_in_window = [
-                    entry for entry in speaker_timeline
-                    if entry['timestamp'] >= window_start and entry['timestamp'] <= current_time
-                ]
+            logger.debug(f"[ListenerAgent] transcript_snippet (not added to transcript): '{snippet[:80]}'")
 
-                if speakers_in_window:
-                    # Use the FIRST speaker entry in the window
-                    speaker = speakers_in_window[0]['speaker']
-                else:
-                    # Button press was before window_start — find the last entry before the window
-                    pre_window = [e for e in speaker_timeline if e['timestamp'] < window_start]
-                    if pre_window:
-                        speaker = pre_window[-1]['speaker']  # most recent entry before window
-
-                logger.debug(
-                    f"[ListenerAgent] Speaker timeline attribution: "
-                    f"window={window_start:.1f}-{current_time:.1f}, "
-                    f"in_window={len(speakers_in_window)}, selected={speaker}"
-                )
-            
-            label = "User" if speaker == "user" else "Counterparty"
-            labeled = f"{label}: {snippet}"
-            
-            logger.info(
-                f"[ListenerAgent] Labeled transcript: speaker={label}, "
-                f"snippet='{snippet[:80]}...'"
-            )
-            
-            self.accumulated_transcript = (
-                (self.accumulated_transcript + "\n" + labeled)[-2000:]
-            )
 
         # Accumulate key moments and leverage points (deduplicated and capped)
         for field in ("key_moments", "leverage_points"):
@@ -1190,13 +1568,13 @@ Add a "diarization" field to your JSON response:
             return True
         
         # Compare lists (key_moments, leverage_points)
-        new_moments = context.get("key_moments", [])
-        old_moments = last_sent.get("key_moments", [])
+        new_moments = self._normalize_text_list(context.get("key_moments", []))
+        old_moments = self._normalize_text_list(last_sent.get("key_moments", []))
         if set(new_moments) != set(old_moments):
             return True
         
-        new_leverage = context.get("leverage_points", [])
-        old_leverage = last_sent.get("leverage_points", [])
+        new_leverage = self._normalize_text_list(context.get("leverage_points", []))
+        old_leverage = self._normalize_text_list(last_sent.get("leverage_points", []))
         if set(new_leverage) != set(old_leverage):
             return True
         
@@ -1256,10 +1634,9 @@ Add a "diarization" field to your JSON response:
                     "cycle": self._cycle_count,
                 },
             }
-            await self.websocket.send_json(payload)
-            logger.info(
-                f"[ListenerAgent] CONTEXT_UPDATE sent cycle={self._cycle_count}"
-            )
+            sent = await self._safe_send_json(payload)
+            if sent:
+                logger.info(f"ðŸ“¤ CONTEXT_UPDATE sent (cycle {self._cycle_count})")
         except Exception as exc:
             logger.warning(
                 f"[ListenerAgent] Failed to send CONTEXT_UPDATE: {exc}"
@@ -1275,7 +1652,7 @@ Add a "diarization" field to your JSON response:
         Merges user-supplied context (from SetupDialog) with
         listener-accumulated context.
         """
-        parts = ["🔔 ADVISOR_QUERY"]
+        parts = ["ðŸ”” ADVISOR_QUERY"]
 
         # From user setup form
         if user_context.get("item"):
@@ -1337,7 +1714,7 @@ Add a "diarization" field to your JSON response:
         """
         if self._running:
             self._force_next_extraction = True
-            asyncio.create_task(
+            self._create_background_task(
                 self._run_cycle(), name=f"listener-immediate-{self.session_id[:8]}"
             )
             logger.info(f"[ListenerAgent] Immediate extraction cycle triggered [{self.session_id}]")

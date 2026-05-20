@@ -5,6 +5,12 @@ Ensures the AI follows the negotiation commander rules
 import logging
 import re
 
+from app.ai_assets import (
+    RESPONSE_VALIDATOR_ALLOWED_FIRST_WORDS,
+    RESPONSE_VALIDATOR_FORBIDDEN_FIRST_WORDS,
+    build_response_correction_prompt,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -12,16 +18,21 @@ class ResponseValidator:
     """Validates AI responses against negotiation commander rules"""
     
     # Allowed first words for responses
-    ALLOWED_FIRST_WORDS = [
-        "Ask", "Say", "Tell", "Counter", "Offer", "Walk", "Stay", "Push", "$"
-    ]
+    ALLOWED_FIRST_WORDS = RESPONSE_VALIDATOR_ALLOWED_FIRST_WORDS
     
     # Forbidden first words
-    FORBIDDEN_FIRST_WORDS = [
-        "Given", "You", "The", "It", "Well", "Since", "Maybe", "If", 
-        "I think", "I would", "I suggest", "Are", "Do you", "What", 
-        "Should", "Would", "Could", "Can you"
-    ]
+    FORBIDDEN_FIRST_WORDS = RESPONSE_VALIDATOR_FORBIDDEN_FIRST_WORDS
+
+    @staticmethod
+    def _strip_quoted_content(text: str) -> str:
+        """
+        Remove quoted payload text so command wrappers like:
+        Ask: "Could we move equity?"
+        are validated on the command frame, not the quoted sentence.
+        """
+        if not text:
+            return ""
+        return re.sub(r"(['\"])(?:(?=(\\?))\2.)*?\1", '""', text)
     
     @staticmethod
     def validate_response(text: str) -> dict:
@@ -42,9 +53,10 @@ class ResponseValidator:
         
         text = text.strip()
         violations = []
+        unquoted_text = ResponseValidator._strip_quoted_content(text)
         
         # Rule 1: Check if ends with question mark
-        if text.endswith('?'):
+        if unquoted_text.rstrip().endswith('?'):
             violations.append("ENDS_WITH_QUESTION")
         
         # Rule 2: Check for forbidden first words
@@ -79,12 +91,12 @@ class ResponseValidator:
             r'\ba few options\b'
         ]
         for pattern in vague_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
+            if re.search(pattern, unquoted_text, re.IGNORECASE):
                 violations.append("VAGUE_LANGUAGE")
                 break
         
         # Rule 5: Check for multiple questions in text
-        question_count = text.count('?')
+        question_count = unquoted_text.count('?')
         if question_count > 0:
             violations.append(f"CONTAINS_QUESTIONS:{question_count}")
         
@@ -118,30 +130,12 @@ class ResponseValidator:
             elif violation.startswith("CONTAINS_QUESTIONS:"):
                 violation_messages.append("You asked questions")
         
-        correction = (
-            f"STOP. Rule violations: {', '.join(violation_messages)}. "
-            f"Respond again following ALL rules. "
-            f"Start with an action word. End with a command, not a question."
-        )
-        
-        return correction
+        return build_response_correction_prompt(violation_messages)
     
     @staticmethod
     def should_send_correction(violations: list) -> bool:
         """
-        Determine if we should send a correction to the AI.
-        Some violations are critical, others are minor.
+        For command mode, any validation failure should trigger a correction.
+        Silent drops create hung turns where the client waits forever.
         """
-        critical_violations = [
-            "ENDS_WITH_QUESTION",
-            "CONTAINS_QUESTIONS",
-        ]
-        
-        # Check if any critical violation exists
-        for violation in violations:
-            if violation in critical_violations:
-                return True
-            if violation.startswith("FORBIDDEN_START:"):
-                return True
-        
-        return False
+        return bool(violations)

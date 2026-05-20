@@ -1,0 +1,421 @@
+{
+  "scenario_id": "services_retainer_scope_001",
+  "title": "Marketing services retainer with scope creep risk",
+  "family": "services_contract",
+  "session_id": "88671357-5edc-47df-8b3e-70f1260643ff",
+  "created_at": "2026-05-18T17:12:04+05:30",
+  "summary": {
+    "score": 0.793,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.846,
+    "judge_average": 0.75
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They offered twenty seven if deliverables are capped. Should I accept the scope cap or keep pushing price?",
+      "expected_direction": "Do not accept vague scope reduction; define deliverables and push toward 25 or 24 with reporting.",
+      "response": "Reject the  scope  cap  and keep  pushing  price.  Your target  price  is $24,000,  and their  current  offer  is $27,000.  You have  a $3,000  gap  to close.  Protect  the price  point  and trade  the scope  term.",
+      "timestamp_ms": 1779104483620,
+      "deterministic_score": {
+        "score": 0.775,
+        "checks": {
+          "number_grounding": 0.6666666666666666,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "27000",
+          "24000",
+          "25000"
+        ],
+        "relevant_terms": [
+          "scope",
+          "reporting"
+        ],
+        "number_hits": [
+          "27000",
+          "24000"
+        ],
+        "term_hits": [
+          "scope"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 3,
+          "commercial_quality": 3,
+          "non_genericness": 3,
+          "constraint_obedience": 2,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 3.875,
+        "passed": false,
+        "rationale": "The response correctly identifies the current offer and target price, and advises against a vague scope cap. However, it fails to provide specific guidance on *how* to address the scope, such as defining deliverables or incorporating performance reporting, which were key elements in the user's target and the expected direction. It also misses tracking the term 'reporting'.",
+        "best_fix": "Reject the vague scope cap. Instead of just capping deliverables, define them clearly and push for your target of $24,000 or $25,000, ensuring the agreement includes clear performance reporting. You need to protect your price point by trading for a well-defined scope and robust reporting."
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to close at twenty five while protecting reporting and performance review.",
+      "expected_direction": "Offer 25 only with reporting, performance review, and clear scope.",
+      "response": "Offer to  accept  the $25,000  retainer  provided  we finalize  the agreement  with  monthly  reporting  and a  90-day  performance  review.",
+      "timestamp_ms": 1779104487264,
+      "deterministic_score": {
+        "score": 0.917,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.6666666666666666,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "25000"
+        ],
+        "relevant_terms": [
+          "scope",
+          "reporting",
+          "performance review"
+        ],
+        "number_hits": [
+          "25000"
+        ],
+        "term_hits": [
+          "reporting",
+          "performance review"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 2,
+          "speaker_attribution": 1,
+          "actionability": 2,
+          "commercial_quality": 4,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 3.625,
+        "passed": false,
+        "rationale": "The response correctly identifies the price point and two key conditions (reporting, performance review) and adheres to the 'one sentence' constraint. However, it critically misses the 'clear scope' element from the scenario and expected direction, which is vital given the 'scope creep risk.' Additionally, it provides an instruction *to* the user ('Offer to accept...') rather than the direct sentence *for* the user to say, impacting speaker attribution and direct actionability.",
+        "best_fix": "We're ready to move forward with a $25,000 monthly retainer, contingent on a clearly defined scope, monthly reporting, and a 90-day performance review."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "88671357-5edc-47df-8b3e-70f1260643ff",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779104472.5890863
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779104472.599276
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "88671357-5edc-47df-8b3e-70f1260643ff",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "88671357-5edc-47df-8b3e-70f1260643ff"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "The thirty thousand per month retainer is above what we planned, especially with the scope still broad.",
+        "timestamp": 1779104479458,
+        "start_time": 1779104479.458,
+        "end_time": 1779104479.458,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The thirty thousand includes strategy, content, paid media management, and weekly reporting.",
+        "timestamp": 1779104480258,
+        "start_time": 1779104480.258,
+        "end_time": 1779104480.258,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "I need either a lower number or much clearer scope control.",
+        "timestamp": 1779104481058,
+        "start_time": 1779104481.058,
+        "end_time": 1779104481.058,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We could move to twenty seven thousand if the number of content deliverables is capped.",
+        "timestamp": 1779104481858,
+        "start_time": 1779104481.858,
+        "end_time": 1779104481.858,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Reject the  scope  cap  and keep  pushing  price.  Your target  price  is $24,000,  and their  current  offer  is $27,000.  You have  a $3,000  gap  to close.  Protect  the price  point  and trade  the scope  term.",
+        "timestamp": 1779104483620,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is twenty four thousand, with monthly reporting and a ninety day performance review.",
+        "timestamp": 1779104482658,
+        "start_time": 1779104482.658,
+        "end_time": 1779104482.658,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Twenty four is tight, but twenty five may be possible if termination rights are standard.",
+        "timestamp": 1779104483458,
+        "start_time": 1779104483.458,
+        "end_time": 1779104483.458,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "services_retainer_scope_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "services_retainer_scope_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Offer to  accept  the $25,000  retainer  provided  we finalize  the agreement  with  monthly  reporting  and a  90-day  performance  review.",
+        "timestamp": 1779104487264,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779104487.887445
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779104488.5458813
+      }
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Negotiation Companion</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="shell" class="shell compact">
+      <section class="compact-panel">
+        <div class="compact-top">
+          <div class="orb-anchor">
+            <button id="assistant-orb" class="assistant-orb" type="button" title="Hold to talk privately to AI">AI</button>
+            <div id="mini-meeting-menu" class="picker-menu hidden"></div>
+          </div>
+          <div class="compact-meta">
+            <div id="mini-status" class="mini-status">Choose your meeting window</div>
+            <div id="mini-target" class="mini-target">No meeting attached yet</div>
+          </div>
+        </div>
+
+        <div id="mini-thread" class="mini-thread">
+          <div class="mini-empty">Private AI questions and replies will appear here.</div>
+        </div>
+      </section>
+
+      <section class="expanded-panel glass">
+        <div class="expanded-header">
+          <div>
+            <div class="eyebrow">Negotiation Companion</div>
+            <h1>Live Meeting Assistant</h1>
+          </div>
+          <div class="header-actions">
+            <button id="collapse-expanded" class="ghost-button" type="button">Minimize</button>
+            <button id="end-session" class="danger-button" type="button">End</button>
+          </div>
+        </div>
+
+        <div class="status-strip">
+          <div class="status-card">
+            <span class="status-label">Connection</span>
+            <strong id="backend-status">Disconnected</strong>
+          </div>
+          <div class="status-card">
+            <span class="status-label">Session</span>
+            <strong id="session-status">Idle</strong>
+          </div>
+          <div class="status-card">
+            <span class="status-label">Privacy</span>
+            <strong id="privacy-status">Need VB-CABLE route</strong>
+          </div>
+        </div>
+
+        <section class="setup-card">
+          <div class="setup-row">
+            <span>Meeting window</span>
+            <div class="picker inline-picker">
+              <button id="full-meeting-button" class="picker-button" type="button">Choose meeting window</button>
+              <div id="full-meeting-menu" class="picker-menu hidden"></div>
+            </div>
+          </div>
+          <div class="setup-row">
+            <span>AI reply output</span>
+            <div class="picker inline-picker">
+              <button id="audio-output-button" class="picker-button" type="button">Auto-selecting speaker</button>
+              <div id="audio-output-menu" class="picker-menu hidden"></div>
+            </div>
+          </div>
+          <div class="setup-row">
+            <span>Meeting mic route</span>
+            <div class="picker inline-picker">
+              <button id="virtual-output-button" class="picker-button" type="button">Auto-selecting VB-CABLE</button>
+              <div id="virtual-output-menu" class="picker-menu hidden"></div>
+            </div>
+          </div>
+          <div class="setup-note">
+            Keep your meeting app microphone set to the VB-CABLE microphone. The companion will use your normal mic and forward it there automatically.
+          </div>
+        </section>
+
+        <section class="preview-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Preview</div>
+              <h2 id="selected-target-label">No meeting attached yet</h2>
+            </div>
+            <button id="rebind-preview" class="ghost-button" type="button">Re-attach</button>
+          </div>
+          <video id="meeting-video" autoplay playsinline muted></video>
+        </section>
+
+        <section class="transcript-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Meeting Transcript</div>
+              <h2>Full conversation</h2>
+            </div>
+          </div>
+          <div id="transcript-list" class="transcript-list">
+            <div class="empty-state">The meeting transcript will appear here after attachment.</div>
+          </div>
+        </section>
+
+        <section class="private-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Private AI Thread</div>
+              <h2>Your asks and AI replies</h2>
+            </div>
+          </div>
+          <div id="private-thread" class="private-thread">
+            <div class="empty-state">Hold the orb or hold F8 to ask AI privately.</div>
+          </div>
+        </section>
+
+        <details class="advanced-panel">
+          <summary>Advanced</summary>
+          <div class="advanced-actions">
+            <button id="refresh-targets" class="ghost-button" type="button">Refresh windows</button>
+            <button id="refresh-devices" class="ghost-button" type="button">Refresh devices</button>
+            <button id="force-start" class="ghost-button" type="button">Start now</button>
+          </div>
+          <pre id="health-json" class="json-box"></pre>
+          <div id="runtime-log" class="runtime-log"></div>
+        </details>
+      </section>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

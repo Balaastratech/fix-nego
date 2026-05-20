@@ -1,0 +1,1497 @@
+{
+  "version": 1,
+  "manifest_id": "audio_eval_manifest_pyttsx3_v1",
+  "sample_rate": 16000,
+  "tts_backend": "pyttsx3",
+  "voice_profiles": {
+    "david_base": {
+      "sapi_name": "David",
+      "rate_delta": 0
+    },
+    "david_slow": {
+      "sapi_name": "David",
+      "rate_delta": -30
+    },
+    "david_fast": {
+      "sapi_name": "David",
+      "rate_delta": 30
+    },
+    "zira_base": {
+      "sapi_name": "Zira",
+      "rate_delta": 0
+    },
+    "zira_slow": {
+      "sapi_name": "Zira",
+      "rate_delta": -20
+    }
+  },
+  "voice_pairs": [
+    {
+      "id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base"
+    },
+    {
+      "id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base"
+    },
+    {
+      "id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow"
+    },
+    {
+      "id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base"
+    }
+  ],
+  "conditions": {
+    "clean": {
+      "tags": [
+        "clean"
+      ],
+      "tempo": 1.0,
+      "noise": 0.0,
+      "reverb": false
+    },
+    "noisy": {
+      "tags": [
+        "noisy",
+        "light_room_noise"
+      ],
+      "tempo": 1.0,
+      "noise": 0.014,
+      "reverb": false
+    },
+    "reverb": {
+      "tags": [
+        "reverb"
+      ],
+      "tempo": 1.0,
+      "noise": 0.0,
+      "reverb": true
+    },
+    "fast": {
+      "tags": [
+        "fast_speech"
+      ],
+      "tempo": 1.08,
+      "noise": 0.0,
+      "reverb": false
+    }
+  },
+  "scenario_templates": [
+    {
+      "id": "pricing_numbers",
+      "group": "number_heavy",
+      "default_condition": "clean"
+    },
+    {
+      "id": "salary_package",
+      "group": "compensation",
+      "default_condition": "clean"
+    },
+    {
+      "id": "rapid_switch",
+      "group": "rapid_switch",
+      "default_condition": "fast"
+    },
+    {
+      "id": "short_turns",
+      "group": "short_turns",
+      "default_condition": "clean"
+    },
+    {
+      "id": "payment_terms",
+      "group": "payment_terms",
+      "default_condition": "noisy"
+    },
+    {
+      "id": "lease_reverb",
+      "group": "reverb_numbers",
+      "default_condition": "reverb"
+    }
+  ],
+  "scenario_count": 24,
+  "utterance_count": 104,
+  "scenarios": [
+    {
+      "id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "number_heavy",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "pricing_numbers__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "I can do 82 only with net 60 and no auto renewal.",
+          "audio_path": "wav/pair_01/clean/pricing_numbers__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "At 84 we can keep delivery and warranty included.",
+          "audio_path": "wav/pair_01/clean/pricing_numbers__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "84 is still high for 50 units.",
+          "audio_path": "wav/pair_01/clean/pricing_numbers__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Then I can review 61 if replacement terms stay standard.",
+          "audio_path": "wav/pair_01/clean/pricing_numbers__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        }
+      ]
+    },
+    {
+      "id": "salary_package__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "compensation",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "salary_package__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "If base cannot reach 195, I need stronger sign on and equity.",
+          "audio_path": "wav/pair_01/clean/salary_package__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+          "audio_path": "wav/pair_01/clean/salary_package__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need 35 sign on and 80 equity to make that work.",
+          "audio_path": "wav/pair_01/clean/salary_package__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can review that package if the base stays fixed.",
+          "audio_path": "wav/pair_01/clean/salary_package__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        }
+      ]
+    },
+    {
+      "id": "rapid_switch__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "rapid_switch",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "Can you do 82?",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "83 with delivery?",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Maybe.",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_5",
+          "speaker": "user",
+          "text": "Then confirm net 60.",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_5.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_01__clean__turn_6",
+          "speaker": "counterparty",
+          "text": "Net 45 only.",
+          "audio_path": "wav/pair_01/clean/rapid_switch__turn_6.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        }
+      ]
+    },
+    {
+      "id": "short_turns__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "short_turns",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "short_turns__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "Yes.",
+          "audio_path": "wav/pair_01/clean/short_turns__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_01/clean/short_turns__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "82 only.",
+          "audio_path": "wav/pair_01/clean/short_turns__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Net 60, no.",
+          "audio_path": "wav/pair_01/clean/short_turns__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        }
+      ]
+    },
+    {
+      "id": "payment_terms__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "payment_terms",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "payment_terms__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "I can accept 61 only if warranty delivery and replacement are clear.",
+          "audio_path": "wav/pair_01/clean/payment_terms__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "61 works, but premium replacement coverage would move separately.",
+          "audio_path": "wav/pair_01/clean/payment_terms__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "Then spell out the standard replacement window in writing today.",
+          "audio_path": "wav/pair_01/clean/payment_terms__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can send standard replacement and delivery terms this afternoon.",
+          "audio_path": "wav/pair_01/clean/payment_terms__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        }
+      ]
+    },
+    {
+      "id": "lease_reverb__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "reverb_numbers",
+      "enrollment_audio_path": "wav/pair_01/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "lease_reverb__pair_01__clean__turn_1",
+          "speaker": "user",
+          "text": "160 with 3 months rent free is my target.",
+          "audio_path": "wav/pair_01/clean/lease_reverb__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_01__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "170 with 2 months rent free is the closest path today.",
+          "audio_path": "wav/pair_01/clean/lease_reverb__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_01__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need fit out support if 160 is off the table.",
+          "audio_path": "wav/pair_01/clean/lease_reverb__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_01__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Fit out support is possible, but the lock in stays at 3 years.",
+          "audio_path": "wav/pair_01/clean/lease_reverb__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        }
+      ]
+    },
+    {
+      "id": "pricing_numbers__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "number_heavy",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "pricing_numbers__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "I can do 82 only with net 60 and no auto renewal.",
+          "audio_path": "wav/pair_02/clean/pricing_numbers__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "At 84 we can keep delivery and warranty included.",
+          "audio_path": "wav/pair_02/clean/pricing_numbers__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "84 is still high for 50 units.",
+          "audio_path": "wav/pair_02/clean/pricing_numbers__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Then I can review 61 if replacement terms stay standard.",
+          "audio_path": "wav/pair_02/clean/pricing_numbers__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        }
+      ]
+    },
+    {
+      "id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "compensation",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "salary_package__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "If base cannot reach 195, I need stronger sign on and equity.",
+          "audio_path": "wav/pair_02/clean/salary_package__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+          "audio_path": "wav/pair_02/clean/salary_package__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need 35 sign on and 80 equity to make that work.",
+          "audio_path": "wav/pair_02/clean/salary_package__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can review that package if the base stays fixed.",
+          "audio_path": "wav/pair_02/clean/salary_package__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        }
+      ]
+    },
+    {
+      "id": "rapid_switch__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "rapid_switch",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "Can you do 82?",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "83 with delivery?",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Maybe.",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_5",
+          "speaker": "user",
+          "text": "Then confirm net 60.",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_5.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_02__clean__turn_6",
+          "speaker": "counterparty",
+          "text": "Net 45 only.",
+          "audio_path": "wav/pair_02/clean/rapid_switch__turn_6.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        }
+      ]
+    },
+    {
+      "id": "short_turns__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "short_turns",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "short_turns__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "Yes.",
+          "audio_path": "wav/pair_02/clean/short_turns__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_02/clean/short_turns__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "82 only.",
+          "audio_path": "wav/pair_02/clean/short_turns__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Net 60, no.",
+          "audio_path": "wav/pair_02/clean/short_turns__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        }
+      ]
+    },
+    {
+      "id": "payment_terms__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "payment_terms",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "payment_terms__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "I can accept 61 only if warranty delivery and replacement are clear.",
+          "audio_path": "wav/pair_02/clean/payment_terms__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "61 works, but premium replacement coverage would move separately.",
+          "audio_path": "wav/pair_02/clean/payment_terms__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "Then spell out the standard replacement window in writing today.",
+          "audio_path": "wav/pair_02/clean/payment_terms__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can send standard replacement and delivery terms this afternoon.",
+          "audio_path": "wav/pair_02/clean/payment_terms__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        }
+      ]
+    },
+    {
+      "id": "lease_reverb__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "user_profile": "david_slow",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "reverb_numbers",
+      "enrollment_audio_path": "wav/pair_02/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "lease_reverb__pair_02__clean__turn_1",
+          "speaker": "user",
+          "text": "160 with 3 months rent free is my target.",
+          "audio_path": "wav/pair_02/clean/lease_reverb__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_02__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "170 with 2 months rent free is the closest path today.",
+          "audio_path": "wav/pair_02/clean/lease_reverb__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_02__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need fit out support if 160 is off the table.",
+          "audio_path": "wav/pair_02/clean/lease_reverb__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_02__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Fit out support is possible, but the lock in stays at 3 years.",
+          "audio_path": "wav/pair_02/clean/lease_reverb__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        }
+      ]
+    },
+    {
+      "id": "pricing_numbers__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "number_heavy",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "pricing_numbers__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "I can do 82 only with net 60 and no auto renewal.",
+          "audio_path": "wav/pair_03/clean/pricing_numbers__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "At 84 we can keep delivery and warranty included.",
+          "audio_path": "wav/pair_03/clean/pricing_numbers__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "84 is still high for 50 units.",
+          "audio_path": "wav/pair_03/clean/pricing_numbers__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Then I can review 61 if replacement terms stay standard.",
+          "audio_path": "wav/pair_03/clean/pricing_numbers__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        }
+      ]
+    },
+    {
+      "id": "salary_package__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "compensation",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "salary_package__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "If base cannot reach 195, I need stronger sign on and equity.",
+          "audio_path": "wav/pair_03/clean/salary_package__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+          "audio_path": "wav/pair_03/clean/salary_package__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need 35 sign on and 80 equity to make that work.",
+          "audio_path": "wav/pair_03/clean/salary_package__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can review that package if the base stays fixed.",
+          "audio_path": "wav/pair_03/clean/salary_package__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        }
+      ]
+    },
+    {
+      "id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "rapid_switch",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "Can you do 82?",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "83 with delivery?",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Maybe.",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_5",
+          "speaker": "user",
+          "text": "Then confirm net 60.",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_5.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_03__clean__turn_6",
+          "speaker": "counterparty",
+          "text": "Net 45 only.",
+          "audio_path": "wav/pair_03/clean/rapid_switch__turn_6.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        }
+      ]
+    },
+    {
+      "id": "short_turns__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "short_turns",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "short_turns__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "Yes.",
+          "audio_path": "wav/pair_03/clean/short_turns__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_03/clean/short_turns__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "82 only.",
+          "audio_path": "wav/pair_03/clean/short_turns__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Net 60, no.",
+          "audio_path": "wav/pair_03/clean/short_turns__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        }
+      ]
+    },
+    {
+      "id": "payment_terms__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "payment_terms",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "payment_terms__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "I can accept 61 only if warranty delivery and replacement are clear.",
+          "audio_path": "wav/pair_03/clean/payment_terms__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "61 works, but premium replacement coverage would move separately.",
+          "audio_path": "wav/pair_03/clean/payment_terms__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "Then spell out the standard replacement window in writing today.",
+          "audio_path": "wav/pair_03/clean/payment_terms__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can send standard replacement and delivery terms this afternoon.",
+          "audio_path": "wav/pair_03/clean/payment_terms__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        }
+      ]
+    },
+    {
+      "id": "lease_reverb__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "user_profile": "david_base",
+      "counterparty_profile": "zira_slow",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "reverb_numbers",
+      "enrollment_audio_path": "wav/pair_03/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "lease_reverb__pair_03__clean__turn_1",
+          "speaker": "user",
+          "text": "160 with 3 months rent free is my target.",
+          "audio_path": "wav/pair_03/clean/lease_reverb__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_03__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "170 with 2 months rent free is the closest path today.",
+          "audio_path": "wav/pair_03/clean/lease_reverb__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_03__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need fit out support if 160 is off the table.",
+          "audio_path": "wav/pair_03/clean/lease_reverb__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_03__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Fit out support is possible, but the lock in stays at 3 years.",
+          "audio_path": "wav/pair_03/clean/lease_reverb__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        }
+      ]
+    },
+    {
+      "id": "pricing_numbers__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "number_heavy",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "pricing_numbers__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "I can do 82 only with net 60 and no auto renewal.",
+          "audio_path": "wav/pair_04/clean/pricing_numbers__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "At 84 we can keep delivery and warranty included.",
+          "audio_path": "wav/pair_04/clean/pricing_numbers__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "84 is still high for 50 units.",
+          "audio_path": "wav/pair_04/clean/pricing_numbers__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        },
+        {
+          "fixture_id": "pricing_numbers__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Then I can review 61 if replacement terms stay standard.",
+          "audio_path": "wav/pair_04/clean/pricing_numbers__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "number_heavy"
+        }
+      ]
+    },
+    {
+      "id": "salary_package__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "compensation",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "salary_package__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "If base cannot reach 195, I need stronger sign on and equity.",
+          "audio_path": "wav/pair_04/clean/salary_package__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+          "audio_path": "wav/pair_04/clean/salary_package__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need 35 sign on and 80 equity to make that work.",
+          "audio_path": "wav/pair_04/clean/salary_package__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        },
+        {
+          "fixture_id": "salary_package__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can review that package if the base stays fixed.",
+          "audio_path": "wav/pair_04/clean/salary_package__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "compensation"
+        }
+      ]
+    },
+    {
+      "id": "rapid_switch__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "rapid_switch",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "Can you do 82?",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "83 with delivery?",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Maybe.",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_5",
+          "speaker": "user",
+          "text": "Then confirm net 60.",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_5.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        },
+        {
+          "fixture_id": "rapid_switch__pair_04__clean__turn_6",
+          "speaker": "counterparty",
+          "text": "Net 45 only.",
+          "audio_path": "wav/pair_04/clean/rapid_switch__turn_6.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "rapid_switch"
+        }
+      ]
+    },
+    {
+      "id": "short_turns__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "short_turns",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "short_turns__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "Yes.",
+          "audio_path": "wav/pair_04/clean/short_turns__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "No.",
+          "audio_path": "wav/pair_04/clean/short_turns__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "82 only.",
+          "audio_path": "wav/pair_04/clean/short_turns__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        },
+        {
+          "fixture_id": "short_turns__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Net 60, no.",
+          "audio_path": "wav/pair_04/clean/short_turns__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "short_turns"
+        }
+      ]
+    },
+    {
+      "id": "payment_terms__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "payment_terms",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "payment_terms__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "I can accept 61 only if warranty delivery and replacement are clear.",
+          "audio_path": "wav/pair_04/clean/payment_terms__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "61 works, but premium replacement coverage would move separately.",
+          "audio_path": "wav/pair_04/clean/payment_terms__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "Then spell out the standard replacement window in writing today.",
+          "audio_path": "wav/pair_04/clean/payment_terms__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        },
+        {
+          "fixture_id": "payment_terms__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "I can send standard replacement and delivery terms this afternoon.",
+          "audio_path": "wav/pair_04/clean/payment_terms__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "payment_terms"
+        }
+      ]
+    },
+    {
+      "id": "lease_reverb__pair_04__clean",
+      "voice_pair_id": "pair_04",
+      "user_profile": "david_fast",
+      "counterparty_profile": "zira_base",
+      "condition": "clean",
+      "condition_tags": [
+        "clean"
+      ],
+      "group": "reverb_numbers",
+      "enrollment_audio_path": "wav/pair_04/enrollment.wav",
+      "turns": [
+        {
+          "fixture_id": "lease_reverb__pair_04__clean__turn_1",
+          "speaker": "user",
+          "text": "160 with 3 months rent free is my target.",
+          "audio_path": "wav/pair_04/clean/lease_reverb__turn_1.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_04__clean__turn_2",
+          "speaker": "counterparty",
+          "text": "170 with 2 months rent free is the closest path today.",
+          "audio_path": "wav/pair_04/clean/lease_reverb__turn_2.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_04__clean__turn_3",
+          "speaker": "user",
+          "text": "Then I need fit out support if 160 is off the table.",
+          "audio_path": "wav/pair_04/clean/lease_reverb__turn_3.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        },
+        {
+          "fixture_id": "lease_reverb__pair_04__clean__turn_4",
+          "speaker": "counterparty",
+          "text": "Fit out support is possible, but the lock in stays at 3 years.",
+          "audio_path": "wav/pair_04/clean/lease_reverb__turn_4.wav",
+          "condition_tags": [
+            "clean"
+          ],
+          "group": "reverb_numbers"
+        }
+      ]
+    }
+  ]
+}

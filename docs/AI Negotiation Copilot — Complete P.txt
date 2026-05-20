@@ -1,0 +1,149 @@
+AI Negotiation Copilot — Complete Product Description
+1. Product Definition
+AI Negotiation Copilot is a multimodal real-time negotiation assistant designed to help users obtain better prices, terms, or agreements during real-world negotiations. Built specifically for the Live Agent category, the system acts as an intelligent copilot that analyzes negotiation context, researches alternatives, and provides strategic guidance while the user conducts the negotiation.
+
+The system integrates vision, voice, and text interaction in a single continuous workflow powered by the Gemini Live API and hosted entirely on Google Cloud. It observes the negotiation environment through visual input, listens to the conversation through voice input, and generates structured negotiation intelligence through text and spoken guidance.
+
+The assistant does not autonomously negotiate on behalf of the user. Instead, it provides live strategic support during negotiations, allowing the user to remain the primary participant while benefiting from real-time analysis and recommendations.
+
+The product is intended to support negotiations in everyday situations such as:
+
+Purchasing products
+
+Negotiating hotel prices
+
+Bargaining in marketplaces
+
+Negotiating service fees
+
+Freelance contract discussions
+
+Salary negotiations
+
+Real estate discussions
+
+Business procurement
+
+The objective of the system is to transform real-world negotiation contexts into actionable intelligence that helps the user reach better outcomes.
+
+2. Core Operating Principle
+Negotiation success depends on three factors:
+
+Information about the deal
+
+Knowledge of alternatives
+
+Strategic response timing
+
+AI Negotiation Copilot continuously gathers information from the environment, evaluates negotiation leverage, and guides the user through the negotiation process in real-time. The system functions as an intelligence layer between the user and the negotiation environment, analyzing information that would normally require extensive manual research or expertise.
+
+3. Multimodal Interaction Model
+The system operates through three integrated modalities, leveraging Gemini's native multimodal capabilities:
+
+Vision: Captures contextual information from the user's environment (e.g., pointing a camera at a price tag or sharing a screen of a digital contract).
+
+Voice: Enables natural conversation with the assistant and monitors the live negotiation dialogue, handling natural interruptions and conversational barge-ins gracefully.
+
+Text: Provides structured negotiation insights, recommendations, and summaries on the user's display.
+
+These modalities operate simultaneously so the system can seamlessly understand both the physical/digital environment and the active conversation.
+
+4. Negotiation Workflow
+The product operates through a sequence of stages that form a complete negotiation cycle.
+
+Stage 1 — Negotiation Activation & Privacy Consent
+The user initiates negotiation assistance. Crucially, to ensure strict legal compliance and protect participant privacy, the user must explicitly toggle consent to monitor the audio stream (or activate a "Roleplay/Demo Mode" for practice). Once active, the assistant enters negotiation mode and begins monitoring contextual information.
+
+Stage 2 — Environmental Context Understanding
+The system observes the negotiation environment using visual input from the device camera or screen. It extracts information such as:
+
+Product names and specifications
+
+Pricing details and promotional information
+
+Service descriptions
+
+Contract terms and listing details
+
+This process converts visual information from the real world into structured data that can be analyzed.
+
+Stage 3 — Market Context Analysis
+Processing via Google Cloud, the system evaluates the broader market context of the extracted offer. The assistant analyzes available information to determine:
+
+Typical market prices and competitor offerings
+
+Comparable alternatives and pricing trends
+
+Negotiation leverage
+
+The system then calculates a recommended negotiation range, including an ideal target price, an acceptable compromise price, and a walk-away threshold.
+
+Stage 4 — Strategy Generation
+Once the context and market conditions are understood, the assistant generates a dynamic negotiation strategy. This includes:
+
+A recommended opening approach and key arguments
+
+Potential counteroffers
+
+Logical justifications for requesting a better deal
+
+Timing guidance for when to make concessions
+
+Stage 5 — Live Conversation Monitoring
+During the negotiation, the assistant listens to the conversation between the user and the counterparty via the Gemini Live API. It analyzes statements made by the seller, pricing responses, negotiation positions, and acceptance or resistance signals.
+
+When the seller proposes a price or condition, the assistant immediately evaluates it against the strategy and market data, generating recommended responses in real-time.
+
+Stage 6 — Adaptive Strategy Adjustment
+Negotiations are dynamic. As the conversation evolves, the assistant continuously updates the strategy.
+
+If the seller lowers the price, the assistant recalculates the remaining negotiation space.
+
+If the seller refuses concessions, it recommends alternative arguments.
+
+If the negotiation approaches the walk-away threshold, the assistant alerts the user.
+
+Stage 7 — Deal Closure
+When the negotiation reaches an agreement, the assistant records the final outcome. It calculates the result relative to the original offer and market value, presenting a summary of the outcome including original price, final agreed price, total savings, and negotiation effectiveness metrics.
+
+5. User Interface Structure
+The interface is designed to support real-time negotiation without distracting the user. The main dashboard includes:
+
+Privacy & Audio Control: Clear visual indicators showing that microphone monitoring is active, ensuring legal compliance.
+
+Visual Capture Area: Displays the camera or shared screen view used to analyze the context.
+
+Negotiation Dashboard: Displays strategy information such as target price, counteroffers, and negotiation arguments.
+
+Conversation Transcript: Shows key statements from the live conversation for quick reference.
+
+Recommendation Panel: Displays the assistant’s suggested responses or real-time tactical moves.
+
+Outcome Summary: Displays the final deal analysis after the negotiation concludes.
+
+6. Intelligence Capabilities
+The assistant performs several analytical tasks simultaneously on the backend:
+
+Context extraction from visual data
+
+Market price analysis & offer comparison
+
+Negotiation leverage calculation
+
+Dynamic strategy & counteroffer generation
+
+Conversation analysis
+
+Outcome evaluation
+
+7. Role of Vision in the System
+Vision enables the assistant to interpret negotiation situations that originate in the real world. Examples include reading physical price boards, identifying products, scanning printed quotations, interpreting digital listings, and analyzing contract documents. This capability removes the need for manual data entry, allowing immediate analysis.
+
+8. Role of Voice Interaction
+Voice enables low-latency, natural interaction. The user can ask questions like "What should I offer?" or "Is this reasonable?" while the assistant simultaneously monitors the negotiation to understand how it is evolving.
+
+9. Role of Text Output
+Text is used to present structured negotiation intelligence on the UI. This allows the assistant to communicate complex reasoning (price comparisons, strategy shifts, deal analysis) clearly and silently while the user is actively speaking with the counterparty.
+
+10. Product Outcome
+The final product functions as an enterprise-grade AI negotiation intelligence system that assists users in real-world deal-making. By combining environmental awareness, market analysis, and real-time conversation reasoning, the system helps users negotiate with greater confidence and better information. The result is a highly practical, next-generation agent that transforms raw situations into structured insights, securing better deals and saving money in everyday situations.

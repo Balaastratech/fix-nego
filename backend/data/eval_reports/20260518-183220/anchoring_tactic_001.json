@@ -1,0 +1,597 @@
+{
+  "scenario_id": "anchoring_tactic_001",
+  "title": "Counterparty opens with an extreme anchor 3x above market",
+  "family": "tactic_detection",
+  "session_id": "2f0ba408-3e06-429a-a7d2-36162106f95f",
+  "created_at": "2026-05-18T18:45:52+05:30",
+  "summary": {
+    "score": 0.944,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.938,
+    "judge_average": 0.95
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They opened at fourteen thousand. How do I refuse the anchor without sounding hostile?",
+      "expected_direction": "Reject the anchor by citing the 4500-6000 market range; do not counter inside the anchored frame; reset to market data.",
+      "response": "The counterparty's $14,000 price is an extreme anchor, far from the $4,500-$6,000 market range you've identified. To refuse it without hostility, you must ignore their number and re-anchor the conversation to the market facts. Their claim of \"better maintenance\" is their justification, which you need to test.\n\nProtect your target price of $5,500 and the 90-day warranty. Do not make a counteroffer yet. First, make them justify their price against the market data you've provided. This forces them to either prove the value or abandon their anchor.",
+      "timestamp_ms": 1779110080374,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "14000",
+          "4500",
+          "6000"
+        ],
+        "relevant_terms": [
+          "anchor",
+          "market range"
+        ],
+        "number_hits": [
+          "14000",
+          "4500",
+          "6000"
+        ],
+        "term_hits": [
+          "anchor",
+          "market range"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 4.5,
+        "passed": false,
+        "rationale": "The response hallucinates a key piece of information, inventing the seller's justification of \"better maintenance,\" which was not present in the scenario. This is a critical failure for a copilot as it introduces false information into the user's decision-making process.",
+        "best_fix": "Remove the hallucinated sentence: \"Their claim of 'better maintenance' is their justification, which you need to test.\""
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to push back on ten thousand and re-anchor to fifty five hundred with warranty.",
+      "expected_direction": "Counter explicitly at 5500 with 90 day warranty and cite market comparables to justify.",
+      "response": "Say: 'Ten thousand is not a realistic starting point; my offer is fifty-five hundred with a ninety-day warranty included.'",
+      "timestamp_ms": 1779110098511,
+      "deterministic_score": {
+        "score": 0.875,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "5500",
+          "90"
+        ],
+        "relevant_terms": [
+          "warranty",
+          "anchor"
+        ],
+        "number_hits": [
+          "5500",
+          "90"
+        ],
+        "term_hits": [
+          "warranty"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response is excellent. It provides a direct, actionable, single-sentence counteroffer that dismisses the high anchor, re-anchors at the user's target price, and includes the required warranty term, perfectly fulfilling the user's request.",
+        "best_fix": "N/A. The response is ideal and requires no improvement."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "2f0ba408-3e06-429a-a7d2-36162106f95f",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110058.7574098
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110058.7689428
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "2f0ba408-3e06-429a-a7d2-36162106f95f",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "2f0ba408-3e06-429a-a7d2-36162106f95f"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The machine has been serviced and I am asking fourteen thousand for it.",
+        "timestamp": 1779110068793,
+        "start_time": 1779110068.793,
+        "end_time": 1779110068.793,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Fourteen thousand is well above what these sell for. Comparable units are between forty five hundred and six thousand.",
+        "timestamp": 1779110069593,
+        "start_time": 1779110069.593,
+        "end_time": 1779110069.593,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Mine has been better maintained than most comparable listings.",
+        "timestamp": 1779110070393,
+        "start_time": 1779110070.393,
+        "end_time": 1779110070.393,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Maintenance history matters but not three times the market price.",
+        "timestamp": 1779110071193,
+        "start_time": 1779110071.193,
+        "end_time": 1779110071.193,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110080374",
+        "speaker": "ai",
+        "text": "The counterparty's $14,000 price is an extreme anchor, far from the $4,500-$6,000 market range you've identified. To refuse it without hostility, you must ignore their number and re-anchor the conversation to the market facts. Their claim of \"better maintenance\" is their justification, which you need to test.\n\nProtect your target price of $5,500 and the 90-day warranty. Do not make a counteroffer yet. First, make them justify their price against the market data you've provided. This forces them to either prove the value or abandon their anchor.",
+        "timestamp": 1779110080374,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "machine",
+        "negotiation_type": "buying_goods",
+        "seller_price": 14000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To sell the serviced machine for the asking price.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Counterparty makes an opening offer of $14,000."
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "counterparty",
+            "point": "The machine has been recently serviced."
+          }
+        ],
+        "transcript_snippet": "Counterparty [0:01]: The machine has been serviced and I am asking fourteen thousand for it.",
+        "market_data": null,
+        "cycle": 12
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The specific make, model, age, and condition of the machine are unknown, preventing a market value assessment."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT -  read this  verbatim,  do not  paraphrase,  do not  add  or remove  any  number  or term]: The counterparty's  $14,000  price  is an  extreme  anchor,  far  from  the $4,500-$6,000  market  range  you've identified.  To refuse  it without  hostility,  you must  ignore  their number  and  re-anchor  the conversation  to the  market  facts.  Their claim  of \"better  maintenance\"  is their  justification,  which  you need  to test.  Protect  your target  price  of $5,500  and the  90-day  warranty.  Do not  make a  counteroffer  yet.  First,  make  them justify  their price  against  the market  data",
+        "timestamp": 1779110089175,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "What did you have in mind?",
+        "timestamp": 1779110071993,
+        "start_time": 1779110071.993,
+        "end_time": 1779110071.993,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is fifty five hundred with a ninety day warranty included.",
+        "timestamp": 1779110072793,
+        "start_time": 1779110072.793,
+        "end_time": 1779110072.793,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Fifty five hundred is low for a unit in this condition. Ten thousand and no warranty is closer to fair.",
+        "timestamp": 1779110073593,
+        "start_time": 1779110073.593,
+        "end_time": 1779110073.593,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Ten thousand is still over the top of the market range I shared.",
+        "timestamp": 1779110074393,
+        "start_time": 1779110074.393,
+        "end_time": 1779110074.393,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "anchoring_tactic_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "anchoring_tactic_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110098511",
+        "speaker": "ai",
+        "text": "Say: 'Ten thousand is not a realistic starting point; my offer is fifty-five hundred with a ninety-day warranty included.'",
+        "timestamp": 1779110098511,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "RESEARCH_COMPLETE",
+      "payload": {
+        "query": "The specific make, model, age, and condition of the machine are unknown, preventing a market value assessment.",
+        "market_data": "Key Facts: For used machinery, a recent service does not guarantee future reliability or value; significant unplanned repairs can be a sign of a 'lemon' with underlying issues that may reappear. [2, 3] The cost of upcoming scheduled maintenance is a hidden cost that should be factored into the purchase price. [3] | Leverage: Immediately ask for the machine's make, model, year, serial number, and operating hours. [1] This shifts the focus from their price to the machine's specific attributes and forces the seller to justify the $14,000 anchor with verifiable facts, giving you information to assess its true market value. | Tactics: Tactic 1: Flinch and Ask Questions - Do not make a counteroffer; instead, react with surprise to the price and immediately pivot to asking detailed questions about the machine's history and condition to take control of the conversation. [6, 15] Tactic 2: Defer on Price, Focus on Facts - State that you cannot respond to the price until you have more information, such as service records and the opportunity for an inspection. [1, 7] Tactic 3: Isolate the 'Serviced' Claim - Ask specifically what was done during the service, if any parts were replaced, and if a warranty is provided for the work, as this helps quantify the actual value of the service. [3, 4] | Gap Answer: The make, model, age, and condition are unknown. You must obtain this information from the counterparty to assess value. Immediately ask: 'So I can understand the value, can you tell me the specific make, model, and year? I'll also need to know the total hours of operation and see the service records you have.' [1, 2]",
+        "timestamp": 1779110101.2768443,
+        "trigger_reason": "first_research"
+      }
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "machine",
+        "negotiation_type": "buying_goods",
+        "seller_price": 14000,
+        "user_offer": null,
+        "user_target_price": 6000,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To justify a premium price by highlighting the machine's superior maintenance history.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Counterparty makes an opening offer of $14,000."
+          },
+          {
+            "speaker": "Counterparty",
+            "action": "Opened the negotiation with an asking price of $14,000.",
+            "timestamp": "0:01"
+          },
+          {
+            "speaker": "User",
+            "action": "Immediately countered by stating the market price for comparable units is $4,500 - $6,000.",
+            "timestamp": "0:02"
+          },
+          {
+            "speaker": "Counterparty",
+            "action": "Justified the high price by claiming better maintenance.",
+            "timestamp": "0:02"
+          },
+          {
+            "speaker": "User",
+            "action": "Dismissed the justification, stating maintenance doesn't warrant a price three times the market value.",
+            "timestamp": "0:03"
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "counterparty",
+            "point": "The machine has been recently serviced."
+          },
+          "User has knowledge of the market price for comparable units, which is significantly lower than the asking price."
+        ],
+        "transcript_snippet": "Counterparty: ...I am asking fourteen thousand for it.\nUser: Fourteen thousand is well above what these sell for. Comparable units are between forty five hundred and six thousand.",
+        "market_data": "Key Facts: For used machinery, a recent service does not guarantee future reliability or value; significant unplanned repairs can be a sign of a 'lemon' with underlying issues that may reappear. [2, 3] The cost of upcoming scheduled maintenance is a hidden cost that should be factored into the purchase price. [3] | Leverage: Immediately ask for the machine's make, model, year, serial number, and operating hours. [1] This shifts the focus from their price to the machine's specific attributes and forces the seller to justify the $14,000 anchor with verifiable facts, giving you information to assess its true market value. | Tactics: Tactic 1: Flinch and Ask Questions - Do not make a counteroffer; instead, react with surprise to the price and immediately pivot to asking detailed questions about the machine's history and condition to take control of the conversation. [6, 15] Tactic 2: Defer on Price, Focus on Facts - State that you cannot respond to the price until you have more information, such as service records and the opportunity for an inspection. [1, 7] Tactic 3: Isolate the 'Serviced' Claim - Ask specifically what was done during the service, if any parts were replaced, and if a warranty is provided for the work, as this helps quantify the actual value of the service. [3, 4] | Gap Answer: The make, model, age, and condition are unknown. You must obtain this information from the counterparty to assess value. Immediately ask: 'So I can understand the value, can you tell me the specific make, model, and year? I'll also need to know the total hours of operation and see the service records you have.' [1, 2]",
+        "cycle": 14
+      }
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110107.862106
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110108.471449
+      }
+    }
+  ]
+}

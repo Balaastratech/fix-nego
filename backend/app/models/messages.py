@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # =============================================================================
@@ -15,12 +15,63 @@ class ConsentPayload(BaseModel):
 class StartNegotiationPayload(BaseModel):
     """Payload for START_NEGOTIATION message."""
     context: str  # user-provided description of negotiation situation
+    source_mode: Optional[str] = None
+    meeting_binding: Optional[dict] = None
+    capture_preset: Optional[str] = None
+    companion_quality_mode: Optional[str] = None
+    selected_output_device: Optional[dict] = None
 
 
 class VisionFramePayload(BaseModel):
     """Payload for VISION_FRAME message."""
     image: str  # base64-encoded JPEG
     timestamp: int  # Unix milliseconds
+    source_mode: Optional[str] = None
+    source: Optional[str] = None
+
+
+class SetResponseLanguagePayload(BaseModel):
+    """Payload for SET_RESPONSE_LANGUAGE message."""
+    language: str
+
+
+class MeetingBindingPayload(BaseModel):
+    """Payload for MEETING_BINDING message."""
+    target_id: Optional[str] = None
+    window_title: Optional[str] = None
+    process_name: Optional[str] = None
+    platform_hint: Optional[str] = None
+    output_device_id: Optional[str] = None
+    output_device_label: Optional[str] = None
+    is_bound: bool = False
+
+
+class CaptureHealthPayload(BaseModel):
+    """Payload for CAPTURE_HEALTH message."""
+    mic_forward_ok: bool = False
+    remote_audio_ok: bool = False
+    frame_capture_ok: bool = False
+    reply_output_ok: bool = False
+    helper_active: bool = False
+    process_loopback_ok: bool = False
+    unsafe_device_loopback: bool = False
+    degraded_reasons: list[str] = Field(default_factory=list)
+
+
+class HoldToAskStatePayload(BaseModel):
+    """Payload for HOLD_TO_ASK_STATE / USER_ADDRESSING_AI messages."""
+    active: bool = False
+    muted_to_meeting: bool = False
+
+
+class CompanionAudioPayload(BaseModel):
+    """Payload for LOCAL_MIC_PCM / REMOTE_APP_PCM messages."""
+    pcm_base64: str
+    timestamp_ms: int
+    is_final: bool = False
+    utterance_id: Optional[str] = None
+    started_at_ms: Optional[int] = None
+    rms: Optional[float] = None
 
 
 class EndNegotiationPayload(BaseModel):
@@ -73,6 +124,7 @@ class ConnectionEstablishedPayload(BaseModel):
     """Payload for CONNECTION_ESTABLISHED."""
     session_id: str
     server_time: int
+    restored: bool = False
 
 
 class ConsentAcknowledgedPayload(BaseModel):
@@ -86,6 +138,55 @@ class SessionStartedPayload(BaseModel):
     session_id: str
     model: str
     features: dict  # {"audio": bool, "vision": bool, "web_search": bool}
+
+
+class SessionRestoredPayload(BaseModel):
+    """Payload for SESSION_RESTORED."""
+    session_id: str
+    language: Optional[str] = None
+    response_language: Optional[str] = None
+    transcript: list[dict] = []
+    research: list[dict] = []
+    advisor: list[dict] = []
+    vision: list[dict] = []
+    speaker_mapping: dict = {}
+
+
+class PersistenceStatusPayload(BaseModel):
+    """Payload for PERSISTENCE_STATUS."""
+    ready: bool
+    session_id: str
+
+
+class VisionStatusPayload(BaseModel):
+    """Payload for VISION_STATUS."""
+    timestamp: int
+    event: str
+    size: Optional[int] = None
+    observation: Optional[str] = None
+
+
+class LanguageUpdatePayload(BaseModel):
+    """Payload for LANGUAGE_UPDATE."""
+    language: Optional[str] = None
+    response_language: Optional[str] = None
+
+
+class DegradedModeUpdatePayload(BaseModel):
+    """Payload for DEGRADED_MODE_UPDATE."""
+    active: bool
+    mode: Optional[str] = None
+    reasons: list[str] = Field(default_factory=list)
+
+
+class MeetingBindingUpdatePayload(BaseModel):
+    """Payload for MEETING_BINDING_UPDATE."""
+    binding: dict
+
+
+class CaptureHealthUpdatePayload(BaseModel):
+    """Payload for CAPTURE_HEALTH_UPDATE."""
+    health: dict
 
 
 class TranscriptUpdatePayload(BaseModel):

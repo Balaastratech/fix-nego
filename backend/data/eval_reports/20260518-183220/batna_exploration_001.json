@@ -1,0 +1,562 @@
+{
+  "scenario_id": "batna_exploration_001",
+  "title": "User has weak BATNA and must build it before pushing",
+  "family": "batna",
+  "session_id": "f789eca7-c268-4e3a-9f55-37bc4c057fa6",
+  "created_at": "2026-05-18T18:49:01+05:30",
+  "summary": {
+    "score": 0.943,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.887,
+    "judge_average": 0.988
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "I have no other clients lined up. How do I push for nine thousand without bluffing a fake BATNA?",
+      "expected_direction": "Recommend building real BATNA before pushing harder; reframe the negotiation around scope reduction rather than price alone; do not bluff alternatives.",
+      "response": "The gap between their $6,000 budget and your $9,000 target is significant. Since you don't have another client to use as leverage, you must anchor the negotiation on the value you provide and the expanded scope you mentioned.\n\nInstead of bluffing, focus the conversation entirely on the work itself. Quantify the \"expanded scope\" you mentioned by listing the new tasks you've taken on. This reframes the discussion from their budget problem to the value they receive, justifying a price increase, not a cut. Protect your $8,000 current rate as the absolute floor and use the scope increase as the reason to push toward $9,000.",
+      "timestamp_ms": 1779110259286,
+      "deterministic_score": {
+        "score": 0.775,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "9000"
+        ],
+        "relevant_terms": [
+          "batna",
+          "scope"
+        ],
+        "number_hits": [
+          "9000"
+        ],
+        "term_hits": [
+          "scope"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 4,
+          "timing_relevance": 5
+        },
+        "average": 4.88,
+        "passed": true,
+        "rationale": "The response provides an excellent, actionable strategy that correctly identifies the user's weak BATNA and reframes the negotiation around value and scope, which is the best move. It directly addresses the user's request to avoid bluffing. The only minor flaw is assuming the user has already mentioned an 'expanded scope', when they have not.",
+        "best_fix": "Change 'the expanded scope you mentioned' to 'an expanded scope' to frame it as a strategic suggestion rather than an incorrect assumption about the user's prior statements."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence that accepts six thousand only if half the deliverables move to project-based pricing.",
+      "expected_direction": "Accept 6000 explicitly conditional on half of deliverables moving to project-based pricing.",
+      "response": "Say: 'I can accept six thousand per month, on the condition that we formally reduce the retainer scope to half the current deliverables and move the other half to project-based pricing.'",
+      "timestamp_ms": 1779110280361,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "6000"
+        ],
+        "relevant_terms": [
+          "retainer",
+          "scope"
+        ],
+        "number_hits": [
+          "6000"
+        ],
+        "term_hits": [
+          "retainer",
+          "scope"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response perfectly translates the user's complex conditional request into a single, clear, and commercially strong sentence. It is highly actionable, follows all constraints, and demonstrates a sophisticated understanding of the negotiation tactic being employed.",
+        "best_fix": "No improvement is needed; the response is ideal."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "f789eca7-c268-4e3a-9f55-37bc4c057fa6",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110239.4376252
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110239.4490018
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "f789eca7-c268-4e3a-9f55-37bc4c057fa6",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "f789eca7-c268-4e3a-9f55-37bc4c057fa6"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Budgets are tight this quarter and we need to drop the retainer from eight thousand to six thousand.",
+        "timestamp": 1779110247581,
+        "start_time": 1779110247.581,
+        "end_time": 1779110247.581,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Six thousand is a steep cut. The scope has actually grown over the last six months.",
+        "timestamp": 1779110248381,
+        "start_time": 1779110248.381,
+        "end_time": 1779110248.381,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We understand, but six is what fits the new budget.",
+        "timestamp": 1779110249181,
+        "start_time": 1779110249.181,
+        "end_time": 1779110249.181,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Given the expanded scope, my target for the next cycle is nine thousand.",
+        "timestamp": 1779110249981,
+        "start_time": 1779110249.981,
+        "end_time": 1779110249.981,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110259286",
+        "speaker": "ai",
+        "text": "The gap between their $6,000 budget and your $9,000 target is significant. Since you don't have another client to use as leverage, you must anchor the negotiation on the value you provide and the expanded scope you mentioned.\n\nInstead of bluffing, focus the conversation entirely on the work itself. Quantify the \"expanded scope\" you mentioned by listing the new tasks you've taken on. This reframes the discussion from their budget problem to the value they receive, justifying a price increase, not a cut. Protect your $8,000 current rate as the absolute floor and use the scope increase as the reason to push toward $9,000.",
+        "timestamp": 1779110259286,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "service retainer",
+        "negotiation_type": "service",
+        "seller_price": 6000,
+        "user_offer": 6000,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "The counterparty wants to reduce their spending on the service due to quarterly budget constraints.",
+        "key_moments": [
+          "The counterparty opens the negotiation by stating a need to reduce the retainer from $8,000 to $6,000 due to a tight budget."
+        ],
+        "leverage_points": [
+          "The counterparty's stated budget tightness implies they may be willing to walk away from the service if the price is not reduced."
+        ],
+        "transcript_snippet": "Budgets are tight this quarter and we need to drop the retainer from eight thousand to six thousand.",
+        "market_data": null,
+        "cycle": 14
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "What is the market rate for the specific service provided under this retainer and what are the standard terms for retainers in this industry?"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT -  This reframes  the discussion  from  their  budget  problem  to the  value  they receive,  justifying  a price  increase,  not  a cut.  Protect  your $8,000  current  rate  as the  absolute  floor  and  use the  scope  increase  as the  reason  to push  toward  $9,000.",
+        "timestamp": 1779110268981,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Nine is not possible right now. Six is our ceiling.",
+        "timestamp": 1779110250781,
+        "start_time": 1779110250.781,
+        "end_time": 1779110250.781,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Then we need to talk about reducing scope, not just price.",
+        "timestamp": 1779110251581,
+        "start_time": 1779110251.581,
+        "end_time": 1779110251.581,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "What scope reduction would you accept at six thousand?",
+        "timestamp": 1779110252381,
+        "start_time": 1779110252.381,
+        "end_time": 1779110252.381,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "batna_exploration_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Half the deliverables stay, half move to project-based pricing. Otherwise I need to take on additional clients.",
+        "timestamp": 1779110253181,
+        "start_time": 1779110253.181,
+        "end_time": 1779110253.181,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "batna_exploration_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "batna_exploration_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110280361",
+        "speaker": "ai",
+        "text": "Say: 'I can accept six thousand per month, on the condition that we formally reduce the retainer scope to half the current deliverables and move the other half to project-based pricing.'",
+        "timestamp": 1779110280361,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "RESEARCH_COMPLETE",
+      "payload": {
+        "query": "What is the market rate for the specific service provided under this retainer and what are the standard terms for retainers in this industry?",
+        "market_data": "Price Range: The market rate for service retainers varies significantly by industry. For marketing agencies, monthly retainers typically range from $2,500 to $10,000+. [17] For general consulting, experienced consultants charge between $150-$300/hour, with monthly retainers often reflecting a 10-15% discount on the hourly rate. [9] Fractional HR retainers for companies under 50 employees often run from $3,000–$8,000/month. [9] Bookkeeping services can range from $500 to $2,500 per month based on complexity. [21] | Key Facts: 49% of agencies report their average monthly retainers are between $1,000 and $5,000, while 31% report a higher figure of $5,000 to $10,000 per month. [22] This indicates that the counterparty's proposed $6,000 is well within the typical market range, and their original $8,000 is at the higher end of average but not uncommon. | Leverage: Propose a 'Scope Reduction' to match the price reduction. Ask the counterparty, 'To get to the $6,000 price point, which of the current services would you be comfortable descaling or removing?' This shifts the conversation from a simple price cut to a discussion about the value and scope of the work, forcing them to quantify what they are willing to give up for the lower price. [11] | Tactics: Tactic 1: Re-frame to Value - Shift the conversation from cost to the ROI and value your service provides, illustrating how the service enhances their revenue or brand. [3] Tactic 2: Offer Tiered Options - Present a few packages at different price points, including the new $6,000 level but with a reduced scope, a mid-level option, and the current $8,000 service with a small added value to highlight its worth. [12] Tactic 3: Propose a Trial Period at the Lower Rate - Suggest a 3-month trial at the $6,000 rate with a reduced scope, including a clause to review performance and renegotiate terms based on the results and their budget situation at the end of the quarter. [1] | Gap Answer: The market rate for a service retainer depends heavily on the specific service. For marketing, expect $2,500-$10,000+/month. [17] For consulting, rates are often $150-$300/hour, with retainers offering a discount. [9] HR retainers can be $3,000-$8,000/month. [9] Standard terms for retainers almost always include a detailed 'Scope of Services' clause defining exactly what work is covered. [16, 12] They also include the term length (often with a 3-month minimum), payment due dates, and a policy for how out-of-scope work is handled. [12] A critical, and often negotiable, term is the policy on unused hours or deliverables; many agreements state that they expire at the end of the billing cycle. [12]",
+        "timestamp": 1779110282.147557,
+        "trigger_reason": "first_research"
+      }
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "service retainer",
+        "negotiation_type": "service",
+        "seller_price": 6000,
+        "user_offer": 9000,
+        "user_target_price": 9000,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To reduce their retainer payment from $8,000 to $6,000 to align with new budget constraints.",
+        "key_moments": [
+          "The counterparty opens the negotiation by stating a need to reduce the retainer from $8,000 to $6,000 due to a tight budget.",
+          "Counterparty proposes cutting the retainer from $8,000 to $6,000, citing a tight budget.",
+          "User pushes back, stating that the scope of work has increased over the last six months.",
+          "User counters the proposed cut by stating a new target price of $9,000 for the next cycle."
+        ],
+        "leverage_points": [
+          "The counterparty's stated budget tightness implies they may be willing to walk away from the service if the price is not reduced.",
+          "The user's scope of work has grown, justifying a price increase rather than the proposed cut."
+        ],
+        "transcript_snippet": "Counterparty: ...we need to drop the retainer from eight thousand to six thousand.\nUser: Six thousand is a steep cut. The scope has actually grown... Given the expanded scope, my target for the next cycle is nine thousand.",
+        "market_data": "Price Range: The market rate for service retainers varies significantly by industry. For marketing agencies, monthly retainers typically range from $2,500 to $10,000+. [17] For general consulting, experienced consultants charge between $150-$300/hour, with monthly retainers often reflecting a 10-15% discount on the hourly rate. [9] Fractional HR retainers for companies under 50 employees often run from $3,000–$8,000/month. [9] Bookkeeping services can range from $500 to $2,500 per month based on complexity. [21] | Key Facts: 49% of agencies report their average monthly retainers are between $1,000 and $5,000, while 31% report a higher figure of $5,000 to $10,000 per month. [22] This indicates that the counterparty's proposed $6,000 is well within the typical market range, and their original $8,000 is at the higher end of average but not uncommon. | Leverage: Propose a 'Scope Reduction' to match the price reduction. Ask the counterparty, 'To get to the $6,000 price point, which of the current services would you be comfortable descaling or removing?' This shifts the conversation from a simple price cut to a discussion about the value and scope of the work, forcing them to quantify what they are willing to give up for the lower price. [11] | Tactics: Tactic 1: Re-frame to Value - Shift the conversation from cost to the ROI and value your service provides, illustrating how the service enhances their revenue or brand. [3] Tactic 2: Offer Tiered Options - Present a few packages at different price points, including the new $6,000 level but with a reduced scope, a mid-level option, and the current $8,000 service with a small added value to highlight its worth. [12] Tactic 3: Propose a Trial Period at the Lower Rate - Suggest a 3-month trial at the $6,000 rate with a reduced scope, including a clause to review performance and renegotiate terms based on the results and their budget situation at the end of the quarter. [1] | Gap Answer: The market rate for a service retainer depends heavily on the specific service. For marketing, expect $2,500-$10,000+/month. [17] For consulting, rates are often $150-$300/hour, with retainers offering a discount. [9] HR retainers can be $3,000-$8,000/month. [9] Standard terms for retainers almost always include a detailed 'Scope of Services' clause defining exactly what work is covered. [16, 12] They also include the term length (often with a 3-month minimum), payment due dates, and a policy for how out-of-scope work is handled. [12] A critical, and often negotiable, term is the policy on unused hours or deliverables; many agreements state that they expire at the end of the billing cycle. [12]",
+        "cycle": 16
+      }
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110285.3500237
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110286.1529284
+      }
+    }
+  ]
+}

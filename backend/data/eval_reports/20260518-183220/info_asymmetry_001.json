@@ -1,0 +1,555 @@
+{
+  "scenario_id": "info_asymmetry_001",
+  "title": "Counterparty knows the user has a hard deadline",
+  "family": "leverage_management",
+  "session_id": "83b5fe44-2f12-4614-8e66-7cb096784c6a",
+  "created_at": "2026-05-18T18:59:47+05:30",
+  "summary": {
+    "score": 0.904,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.787,
+    "judge_average": 1.0
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 2,
+      "mode": "advice",
+      "query": "They know my deadline. How do I create leverage that does not depend on time?",
+      "expected_direction": "Shift focus to the three year lock-in and build-out leverage; do not let the deadline be the dominant frame.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\n\nYour leverage comes from shifting the focus from your deadline to the landlord's need to fill the space. You can create leverage by introducing non-time-based variables like the length of your tenancy, the quality of your business as a tenant, and market alternatives. The landlord wants a reliable, long-term tenant to secure their income stream; your 3-year commitment is more valuable to them than exploiting your 60-day deadline for a short-term gain. Use your \"backup options\" as a way to introduce market comparisons on price and terms, making this a negotiation about value, not just timing.",
+      "timestamp_ms": 1779110918480,
+      "deterministic_score": {
+        "score": 0.575,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 0.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "3"
+        ],
+        "relevant_terms": [
+          "lock-in",
+          "deadline",
+          "leverage",
+          "build-out"
+        ],
+        "number_hits": [
+          "3"
+        ],
+        "term_hits": [
+          "deadline",
+          "leverage"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response provides an excellent strategic reframe, perfectly aligning with the expected direction. It correctly identifies that the user's leverage comes from shifting the focus from their deadline to the value they offer as a long-term tenant. The advice is actionable, commercially sound, and directly tailored to the scenario's specific constraints.",
+        "best_fix": "No fix is needed. The answer is exemplary."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to close at sixty eight hundred with two months rent-free and three year lock-in.",
+      "expected_direction": "Close at 6800 with 2 months rent-free and 3 year lock-in explicitly in one sentence.",
+      "response": "Say: 'If you can do sixty-eight hundred with the two months rent-free and the three-year lock-in, we have a deal right now.'",
+      "timestamp_ms": 1779110938153,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "6800",
+          "2",
+          "3"
+        ],
+        "relevant_terms": [
+          "rent-free",
+          "lock-in"
+        ],
+        "number_hits": [
+          "6800",
+          "2",
+          "3"
+        ],
+        "term_hits": [
+          "rent-free",
+          "lock-in"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response perfectly adheres to the user's constraints, providing a single, actionable sentence that explicitly includes all the target deal terms ($6800, 2 months rent-free, 3-year lock-in). It is a commercially sound and effective closing statement.",
+        "best_fix": "No fix is necessary; the response is ideal."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "83b5fe44-2f12-4614-8e66-7cb096784c6a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110898.9432604
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110898.955322
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "83b5fe44-2f12-4614-8e66-7cb096784c6a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "83b5fe44-2f12-4614-8e66-7cb096784c6a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The space is eight thousand a month. You said you need to move in sixty days, so let us not drag this out.",
+        "timestamp": 1779110907278,
+        "start_time": 1779110907.278,
+        "end_time": 1779110907.278,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Sixty days is the move date but I have backup options.",
+        "timestamp": 1779110908078,
+        "start_time": 1779110908.078,
+        "end_time": 1779110908.078,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110918480",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\n\nYour leverage comes from shifting the focus from your deadline to the landlord's need to fill the space. You can create leverage by introducing non-time-based variables like the length of your tenancy, the quality of your business as a tenant, and market alternatives. The landlord wants a reliable, long-term tenant to secure their income stream; your 3-year commitment is more valuable to them than exploiting your 60-day deadline for a short-term gain. Use your \"backup options\" as a way to introduce market comparisons on price and terms, making this a negotiation about value, not just timing.",
+        "timestamp": 1779110918480,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "commercial space rental",
+        "negotiation_type": "renting",
+        "seller_price": 8000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To rent the space quickly by leveraging the user's move-in deadline.",
+        "key_moments": [
+          "Counterparty opens with the monthly price and immediately applies time pressure, referencing the user's 60-day move-in deadline."
+        ],
+        "leverage_points": [
+          "Counterparty is using the user's 60-day move-in deadline as leverage to accelerate the negotiation and potentially limit the user's ability to negotiate."
+        ],
+        "transcript_snippet": "The space is eight thousand a month. You said you need to move in sixty days, so let us not drag this out.",
+        "market_data": null,
+        "cycle": 14
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "User needs to research the current market rate for comparable commercial spaces in the area to validate the $8000/month asking price."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  MODE",
+        "timestamp": 1779110926930,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Most of the comparable spaces in this submarket are at or above my number.",
+        "timestamp": 1779110908878,
+        "start_time": 1779110908.878,
+        "end_time": 1779110908.878,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is sixty eight hundred with two months rent-free and a three year lock-in.",
+        "timestamp": 1779110909678,
+        "start_time": 1779110909.678,
+        "end_time": 1779110909.678,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two months rent-free is generous. We could maybe do one month.",
+        "timestamp": 1779110910478,
+        "start_time": 1779110910.478,
+        "end_time": 1779110910.478,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Two months is needed for build-out. The three year lock-in is the trade for that.",
+        "timestamp": 1779110911278,
+        "start_time": 1779110911.278,
+        "end_time": 1779110911.278,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "If you are locked in for three years, I can offer seventy two hundred with the two months.",
+        "timestamp": 1779110912078,
+        "start_time": 1779110912.078,
+        "end_time": 1779110912.078,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "info_asymmetry_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Closer. The number needs to be sixty eight hundred. The three year lock-in protects you on the back end.",
+        "timestamp": 1779110912878,
+        "start_time": 1779110912.878,
+        "end_time": 1779110912.878,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "info_asymmetry_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "info_asymmetry_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110938153",
+        "speaker": "ai",
+        "text": "Say: 'If you can do sixty-eight hundred with the two months rent-free and the three-year lock-in, we have a deal right now.'",
+        "timestamp": 1779110938153,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "commercial space rental",
+        "negotiation_type": "renting",
+        "seller_price": 8000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "The counterparty wants to finalize the rental agreement quickly.",
+        "key_moments": [
+          "Counterparty opens with the monthly price and immediately applies time pressure, referencing the user's 60-day move-in deadline.",
+          "Counterparty opens with price and uses the user's 60-day move-in timeline to create urgency.",
+          "User counters the time pressure by stating they have backup options, reducing the counterparty's leverage."
+        ],
+        "leverage_points": [
+          "Counterparty is using the user's 60-day move-in deadline as leverage to accelerate the negotiation and potentially limit the user's ability to negotiate.",
+          "User has 'backup options', which gives them the ability to walk away and weakens the counterparty's time-based pressure tactic."
+        ],
+        "transcript_snippet": "Counterparty: The space is eight thousand a month. You said you need to move in sixty days, so let us not drag this out.\nUser: Sixty days is the move date but I have backup options.",
+        "market_data": null,
+        "cycle": 16
+      }
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110941.8101315
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110942.390002
+      }
+    }
+  ]
+}

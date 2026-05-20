@@ -1,0 +1,445 @@
+{
+  "scenario_id": "salary_equity_001",
+  "title": "Salary offer with base, sign-on, and equity tradeoff",
+  "family": "salary",
+  "session_id": "5fa92059-7fa9-4cc6-9aea-a28fff35648a",
+  "created_at": "2026-05-18T16:39:55+05:30",
+  "summary": {
+    "score": 0.732,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.787,
+    "judge_average": 0.688
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 6,
+      "mode": "advice",
+      "query": "They may move base to one ninety five but want the rest unchanged. What should I push next?",
+      "expected_direction": "Push total compensation, not base alone; use equity and sign-on as trade levers.",
+      "response": "Based on  the counterparty's  latest  offer  of $195k  base,  you should  push  for a  concession  on the  sign-on  bonus  to close  the gap  to your  target. 1.  **Accept the Price Concession:** Accept the move to $195k  base  while  protecting  the active  non-price  terms  (sign-on  bonus",
+      "timestamp_ms": 1779102544258,
+      "deterministic_score": {
+        "score": 0.875,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "195000"
+        ],
+        "relevant_terms": [
+          "sign-on",
+          "equity"
+        ],
+        "number_hits": [
+          "195000"
+        ],
+        "term_hits": [
+          "sign-on"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 3,
+          "speaker_attribution": 5,
+          "actionability": 4,
+          "commercial_quality": 2,
+          "non_genericness": 5,
+          "constraint_obedience": 1,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 3.75,
+        "passed": false,
+        "rationale": "The AI failed to return strict JSON as requested, which is a critical constraint violation. Commercially, its advice was incomplete; it correctly identified the potential base salary move and suggested pushing for a sign-on bonus increase, but entirely neglected equity as a negotiation lever, despite it being part of the user's target and the expected direction. The phrasing 'protecting the active non-price terms' was also confusing given the goal is to increase them.",
+        "best_fix": "The response must be wrapped in strict JSON. Commercially, the AI should advise the user to push for increases in *both* sign-on bonus and equity, explicitly using both as levers to achieve the desired total compensation, aligning with the user's target of '$195k base with stronger sign-on and equity'."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence that asks for equity and sign-on without sounding inflexible.",
+      "expected_direction": "Ask for a concrete package around 195 base, 35 sign-on, and 80 equity or equivalent total value.",
+      "response": "Ask: \"Given  the flexibility  on equity  you mentioned,  could  we explore  increasing  the annual  equity  grant  and raising  the sign-on  bonus  to twenty-five  thousand",
+      "timestamp_ms": 1779102548259,
+      "deterministic_score": {
+        "score": 0.7,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "195000",
+          "35000",
+          "80000"
+        ],
+        "relevant_terms": [
+          "sign-on",
+          "equity"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "sign-on",
+          "equity"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 1,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 1,
+          "non_genericness": 2,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 3.125,
+        "passed": false,
+        "rationale": "The response fails to propose a package that aligns with the user's target values. It lowballs the sign-on bonus (25k vs target 35k), makes the equity request vague ('explore increasing' vs target 80k), and completely omits the base salary component (target 195k). It also includes an ungrounded assumption about 'flexibility on equity you mentioned'. While it is one sentence and actionable, its commercial quality and grounding in the user's specific targets are very poor.",
+        "best_fix": "Given my strong interest in this role, could we explore a revised offer of a $195,000 base salary, a $35,000 sign-on bonus, and an annual equity grant of $80,000?"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "5fa92059-7fa9-4cc6-9aea-a28fff35648a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779102525.9476879
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779102525.9710126
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "5fa92059-7fa9-4cc6-9aea-a28fff35648a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "5fa92059-7fa9-4cc6-9aea-a28fff35648a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "I appreciate the offer. I want to make the package work, but the base salary is below where I expected for this scope.",
+        "timestamp": 1779102536525,
+        "start_time": 1779102536.525,
+        "end_time": 1779102536.525,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The current offer is one hundred eighty five thousand base, twenty thousand sign-on, and sixty thousand annual equity.",
+        "timestamp": 1779102537325,
+        "start_time": 1779102537.325,
+        "end_time": 1779102537.325,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "For this role and scope, my target is two hundred five thousand base.",
+        "timestamp": 1779102538125,
+        "start_time": 1779102538.125,
+        "end_time": 1779102538.125,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two hundred five is above the band midpoint for this level, so that will be difficult.",
+        "timestamp": 1779102538925,
+        "start_time": 1779102538.925,
+        "end_time": 1779102538.925,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "If the base cannot reach two hundred five, I need the total package to close the gap.",
+        "timestamp": 1779102539725,
+        "start_time": 1779102539.725,
+        "end_time": 1779102539.725,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We might be able to discuss one hundred ninety five base if the rest of the package remains unchanged.",
+        "timestamp": 1779102540525,
+        "start_time": 1779102540.525,
+        "end_time": 1779102540.525,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Based on  the counterparty's  latest  offer  of $195k  base,  you should  push  for a  concession  on the  sign-on  bonus  to close  the gap  to your  target. 1.  **Accept the Price Concession:** Accept the move to $195k  base  while  protecting  the active  non-price  terms  (sign-on  bonus",
+        "timestamp": 1779102544258,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_7",
+        "speaker": "user",
+        "language": null,
+        "text": "One ninety five helps, but I would need thirty five thousand sign-on and eighty thousand annual equity to make that work.",
+        "timestamp": 1779102541325,
+        "start_time": 1779102541.325,
+        "end_time": 1779102541.325,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_7",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_8",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Equity has more flexibility than base, but sign-on above twenty five will require approval.",
+        "timestamp": 1779102542125,
+        "start_time": 1779102542.125,
+        "end_time": 1779102542.125,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_8",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Ask: \"Given  the flexibility  on equity  you mentioned,  could  we explore  increasing  the annual  equity  grant  and raising  the sign-on  bonus  to twenty-five  thousand",
+        "timestamp": 1779102548259,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779102548.8652177
+      }
+    }
+  ]
+}

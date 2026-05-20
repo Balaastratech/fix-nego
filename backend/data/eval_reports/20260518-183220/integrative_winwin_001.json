@@ -1,0 +1,522 @@
+{
+  "scenario_id": "integrative_winwin_001",
+  "title": "Joint venture across cash, IP rights, and market exclusivity",
+  "family": "integrative",
+  "session_id": "da668b9c-305e-4b93-a126-a4300eca772a",
+  "created_at": "2026-05-18T19:01:29+05:30",
+  "summary": {
+    "score": 0.85,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.85,
+    "judge_average": 0.85
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "We are aligning on IP. Should I push hardest on cash, exclusivity, or equity next?",
+      "expected_direction": "Find Pareto improvement: trade flexibility on exclusivity duration for cash/equity terms; do not split-the-difference on all three at once.",
+      "response": "Push hardest on equity next.\n\nThe gap between your 30% target and their 40% ask is a significant valuation difference. Securing your equity position is critical as it compounds over the long term, unlike the one-time cash investment. Exclusivity is a time-bound term that can be negotiated later, but equity dilution is much harder to reverse. Protect your ownership first.",
+      "timestamp_ms": 1779111011638,
+      "deterministic_score": {
+        "score": 0.7,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "3"
+        ],
+        "relevant_terms": [
+          "cash investment"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "cash investment"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 4,
+          "commercial_quality": 2,
+          "non_genericness": 3,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 4
+        },
+        "average": 4.125,
+        "passed": true,
+        "rationale": "The AI gives a clear, actionable, and grounded answer, correctly identifying equity as a critical long-term issue. However, it lacks commercial sophistication by recommending a simple \"push\" on one dimension (equity) rather than exploring integrative trade-offs. It misses the opportunity to suggest using flexibility on a less critical issue, like exclusivity, to gain ground on the more critical cash/equity terms, which is the hallmark of a win-win negotiation.",
+        "best_fix": "Instead of just pushing on equity, suggest linking the issues. For example: \"Consider trading on exclusivity. You could offer them closer to their 5-year term in exchange for them accepting your position on equity and cash. This links the issues to find a win-win.\""
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to close at three million for thirty percent, founder IP retained, three year exclusivity with renewal option.",
+      "expected_direction": "Close all four dimensions explicitly in one sentence: 3M cash, 30 percent equity, founder IP, 3 year exclusivity with renewal.",
+      "response": "Say: 'It sounds like we are very close: let's agree to three million for thirty percent, with founder retaining IP in exchange for a perpetual royalty-free license, and a three-year exclusivity with a renewal option.'",
+      "timestamp_ms": 1779111025664,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "3",
+          "30"
+        ],
+        "relevant_terms": [
+          "renewal option"
+        ],
+        "number_hits": [
+          "3",
+          "30"
+        ],
+        "term_hits": [
+          "renewal option"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 4,
+          "non_genericness": 5,
+          "constraint_obedience": 3,
+          "hallucination_avoidance": 3,
+          "timing_relevance": 5
+        },
+        "average": 4.375,
+        "passed": false,
+        "rationale": "The AI introduced a new, significant commercial term ('perpetual royalty-free license') that was not part of the user's query or the scenario context. While this is a commercially intelligent suggestion for how to structure such a deal, it violates the user's explicit request to close on their specific target terms and therefore fails on constraint obedience and hallucination avoidance.",
+        "best_fix": "Say: 'It sounds like we are very close: let's agree to three million for thirty percent, with the founder retaining IP rights, and a three-year exclusivity with a renewal option.'"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "da668b9c-305e-4b93-a126-a4300eca772a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110989.6582804
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110989.669807
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "da668b9c-305e-4b93-a126-a4300eca772a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "da668b9c-305e-4b93-a126-a4300eca772a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Our offer is two million for forty percent, joint IP ownership, and five year exclusivity in our verticals.",
+        "timestamp": 1779110999014,
+        "start_time": 1779110999.014,
+        "end_time": 1779110999.014,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Three dimensions to discuss. Let me start with IP. Founder needs to retain IP.",
+        "timestamp": 1779110999814,
+        "start_time": 1779110999.814,
+        "end_time": 1779110999.814,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We are funding the development. Joint IP is the cleanest structure for us.",
+        "timestamp": 1779111000614,
+        "start_time": 1779111000.614,
+        "end_time": 1779111000.614,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "What if you get a perpetual royalty-free license, but founder retains ownership?",
+        "timestamp": 1779111001414,
+        "start_time": 1779111001.414,
+        "end_time": 1779111001.414,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779111011638",
+        "speaker": "ai",
+        "text": "Push hardest on equity next.\n\nThe gap between your 30% target and their 40% ask is a significant valuation difference. Securing your equity position is critical as it compounds over the long term, unlike the one-time cash investment. Exclusivity is a time-bound term that can be negotiated later, but equity dilution is much harder to reverse. Protect your ownership first.",
+        "timestamp": 1779111011638,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Push hardest  on equity  next.  The gap  between  your 30%  target  and their  40%  ask  is a  significant  valuation  difference.  Securing  your equity  position  is  critical  as it  compounds  over  the long  term,  unlike  the one-time  cash  investment.  Exclusivity  is a  time-bound  term  that can  be negotiated  later,  but  equity  dilution  is much  harder  to reverse.",
+        "timestamp": 1779111017234,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Perpetual royalty-free could work. What about cash and equity?",
+        "timestamp": 1779111002214,
+        "start_time": 1779111002.214,
+        "end_time": 1779111002.214,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Three million for thirty percent equity, given founder retains IP.",
+        "timestamp": 1779111003014,
+        "start_time": 1779111003.014,
+        "end_time": 1779111003.014,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Three for thirty is reasonable if exclusivity stays at five years.",
+        "timestamp": 1779111003814,
+        "start_time": 1779111003.814,
+        "end_time": 1779111003.814,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "integrative_winwin_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Three years with a renewal option works better. Five locks us out of adjacent markets.",
+        "timestamp": 1779111004614,
+        "start_time": 1779111004.614,
+        "end_time": 1779111004.614,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "integrative_winwin_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "integrative_winwin_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Venture Capital Investment",
+        "negotiation_type": "selling_goods",
+        "seller_price": 2000000,
+        "user_offer": 2000000,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To secure a 40% stake, joint IP ownership, and five-year market exclusivity for a $2 million investment.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Counterparty opens with a multi-faceted offer: $2 million for 40% equity, joint IP ownership, and a five-year exclusivity agreement."
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "user",
+            "point": "The counterparty's demand for joint IP ownership and a five-year exclusivity clause are significant non-monetary asks that can be negotiated separately from the valuation."
+          }
+        ],
+        "transcript_snippet": "Counterparty [0:01]: Our offer is two million for forty percent, joint IP ownership, and five year exclusivity in our verticals.",
+        "market_data": null,
+        "cycle": 16
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to research standard market valuations for companies at their stage, and also the typical cost/value associated with granting joint IP and long-term exclusivity rights in their industry."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779111025664",
+        "speaker": "ai",
+        "text": "Say: 'It sounds like we are very close: let's agree to three million for thirty percent, with founder retaining IP in exchange for a perpetual royalty-free license, and a three-year exclusivity with a renewal option.'",
+        "timestamp": 1779111025664,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'It  sounds  like we  are very  close:  let's  agree  to three  million  for thirty  percent,  with founder  retaining  IP  in exchange  for a  perpetual  royalty-free  license,  and a  three-year  exclusivity  with a  renewal  option.'",
+        "timestamp": 1779111029223,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779111029.7930534
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779111030.429253
+      }
+    }
+  ]
+}

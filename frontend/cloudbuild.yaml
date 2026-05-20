@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_WS_URL=wss://negotiation-backend-219079068693.us-central1.run.app/ws'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/ai-negotiation-copilot/negotiation-app/frontend:latest'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/ai-negotiation-copilot/negotiation-app/frontend:latest'
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY

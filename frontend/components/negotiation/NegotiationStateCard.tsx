@@ -247,13 +247,13 @@ export function NegotiationStateCard({ state, isDualModelActive = false, liveTra
               <span className="ml-auto w-2 h-2 rounded-full animate-pulse" style={{ background: '#4ade80' }} />
             </div>
             <div className="space-y-1 max-h-36 overflow-y-auto">
-              {liveTranscript.slice(-6).map((entry) => {
+              {liveTranscript.slice(-6).map((entry, index) => {
                 const isUser = entry.speaker === 'user';
                 const isAI = entry.speaker === 'ai';
                 const bg = isAI ? 'rgba(96,165,250,0.07)' : isUser ? 'rgba(167,139,250,0.07)' : 'rgba(245,197,24,0.07)';
                 const color = isAI ? '#93c5fd' : isUser ? '#c4b5fd' : GL;
                 return (
-                  <div key={entry.id} className="text-xs px-2 py-1 rounded-lg leading-relaxed"
+                  <div key={`${entry.timestamp}-${index}`} className="text-xs px-2 py-1 rounded-lg leading-relaxed"
                     style={{ background: bg, border: `1px solid ${color}25`, color: TB }}>
                     <span className="font-bold mr-1" style={{ color }}>{isAI ? 'AI:' : isUser ? 'You:' : 'Counterparty:'}</span>
                     {entry.text}

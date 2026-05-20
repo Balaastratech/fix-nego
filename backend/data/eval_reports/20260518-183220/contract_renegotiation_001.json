@@ -1,0 +1,561 @@
+{
+  "scenario_id": "contract_renegotiation_001",
+  "title": "Renegotiating an existing two-year vendor relationship under price-increase request",
+  "family": "renegotiation",
+  "session_id": "6f2c17fc-1e5c-4405-93de-16266829821f",
+  "created_at": "2026-05-18T18:53:43+05:30",
+  "summary": {
+    "score": 0.948,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.9,
+    "judge_average": 0.988
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They claim scope creep. How do I push back without damaging the relationship?",
+      "expected_direction": "Reset scope formally rather than absorb price jump; leverage two years of relationship without ratifying the claimed scope creep.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\nThe vendor is trying to justify a 33% price increase by bundling inflation with unconfirmed \"scope creep.\" Your goal is to separate these two issues. You can push back on the scope claim by framing it as a collaborative effort to define the work, which protects the relationship.\n\nFirst, agree to review the scope but insist on data. This shifts the burden of proof to them. Protect your position that the price should not change until the scope change is quantified and agreed upon. Do not accept their $6,000 figure or the concept of \"scope creep\" as a given. Ask them to provide a specific list of the \"additional endpoints\" they mentioned so you can validate the claim together.",
+      "timestamp_ms": 1779110549451,
+      "deterministic_score": {
+        "score": 0.9,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "2"
+        ],
+        "relevant_terms": [
+          "scope creep"
+        ],
+        "number_hits": [
+          "2"
+        ],
+        "term_hits": [
+          "scope creep"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 4,
+          "timing_relevance": 5
+        },
+        "average": 4.88,
+        "passed": true,
+        "rationale": "The response is excellent, providing commercially savvy, actionable advice that directly addresses the user's question. It correctly identifies the vendor's tactic and provides a clear strategy to counter it while preserving the relationship. The only minor flaw is a benign hallucination of a specific detail ('additional endpoints') which was not in the prompt, but was used as a plausible example.",
+        "best_fix": "To be perfect, the response could have generalized the example instead of stating it as a fact. For instance, changing \"Ask them to provide a specific list of the 'additional endpoints' they mentioned\" to \"Ask them to provide a specific list of the alleged scope creep, such as additional endpoints or users.\""
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to accept five thousand only if response SLA improves to two hours.",
+      "expected_direction": "Accept 5000 explicitly contingent on 2 hour response SLA replacing the 4 hour SLA.",
+      "response": "Say: 'To be clear, we can accept five thousand, but only if we get the two-hour response SLA in the agreement.'",
+      "timestamp_ms": 1779110571048,
+      "deterministic_score": {
+        "score": 0.9,
+        "checks": {
+          "number_grounding": 0.6666666666666666,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "5000",
+          "4",
+          "2"
+        ],
+        "relevant_terms": [
+          "response sla"
+        ],
+        "number_hits": [
+          "5000",
+          "2"
+        ],
+        "term_hits": [
+          "response sla"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response is a perfect execution of the user's request. It provides a single, clear, commercially sound sentence that makes the acceptance of the new price explicitly contingent on the improved SLA, exactly as specified.",
+        "best_fix": null
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "6f2c17fc-1e5c-4405-93de-16266829821f",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110522.6800048
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110522.7031674
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "6f2c17fc-1e5c-4405-93de-16266829821f",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "6f2c17fc-1e5c-4405-93de-16266829821f"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "After two years of strong service, we need to raise the monthly rate from forty five hundred to six thousand.",
+        "timestamp": 1779110533719,
+        "start_time": 1779110533.719,
+        "end_time": 1779110533.719,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Thirty three percent jump is steep. What is driving it?",
+        "timestamp": 1779110534519,
+        "start_time": 1779110534.519,
+        "end_time": 1779110534.519,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Inflation and the additional endpoints you have added over the relationship.",
+        "timestamp": 1779110535319,
+        "start_time": 1779110535.319,
+        "end_time": 1779110535.319,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "We have not formally expanded scope. If endpoints crept up, we should reset scope, not the price.",
+        "timestamp": 1779110536119,
+        "start_time": 1779110536.119,
+        "end_time": 1779110536.119,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110549451",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\nThe vendor is trying to justify a 33% price increase by bundling inflation with unconfirmed \"scope creep.\" Your goal is to separate these two issues. You can push back on the scope claim by framing it as a collaborative effort to define the work, which protects the relationship.\n\nFirst, agree to review the scope but insist on data. This shifts the burden of proof to them. Protect your position that the price should not change until the scope change is quantified and agreed upon. Do not accept their $6,000 figure or the concept of \"scope creep\" as a given. Ask them to provide a specific list of the \"additional endpoints\" they mentioned so you can validate the claim together.",
+        "timestamp": 1779110549451,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "monthly service rate",
+        "negotiation_type": "service",
+        "seller_price": 6000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To increase the monthly fee for their service from $4500 to $6000.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Price Increase",
+            "description": "Counterparty announces a rate increase from $4500 to $6000, citing two years of strong service."
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "counterparty",
+            "leverage": "The established two-year relationship and 'strong service' provided.",
+            "description": "The counterparty is leveraging the existing relationship and the quality of past service to justify the price increase."
+          }
+        ],
+        "transcript_snippet": "Counterparty [0:01]: After two years of strong service, we need to raise the monthly rate from forty five hundred to six thousand.",
+        "market_data": null,
+        "cycle": 17
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The specific type of service being provided is not mentioned, making it impossible to research comparable market rates."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  MODE  ACTIVE]  The vendor  is trying  to justify  a 33%  price  increase  by bundling  inflation  with  unconfirmed  \"scope  creep.\"  Your goal  is to  separate  these  two issues.  You can  push  back  on the  scope  claim  by framing  it as  a collaborative  effort  to define  the work,  which  protects  the relationship.  First,  agree  to review  the scope  but  insist  on data.  This  shifts  the burden  of proof  to them.  Protect  your position  that the  price  should  not  change  until  the scope  change  is quantified  and agreed  upon.  Do not  accept  their $6,000  figure  or  the concept  of \"scope",
+        "timestamp": 1779110557915,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Let us call current usage the new baseline. Five thousand is our compromise.",
+        "timestamp": 1779110536919,
+        "start_time": 1779110536.919,
+        "end_time": 1779110536.919,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Five thousand only works if response SLA improves from four hours to two hours.",
+        "timestamp": 1779110537719,
+        "start_time": 1779110537.719,
+        "end_time": 1779110537.719,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two hour SLA changes our staffing model. That is harder to absorb.",
+        "timestamp": 1779110538519,
+        "start_time": 1779110538.519,
+        "end_time": 1779110538.519,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "If the SLA does not improve, the price stays at forty five hundred.",
+        "timestamp": 1779110539319,
+        "start_time": 1779110539.319,
+        "end_time": 1779110539.319,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "contract_renegotiation_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "contract_renegotiation_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110571048",
+        "speaker": "ai",
+        "text": "Say: 'To be clear, we can accept five thousand, but only if we get the two-hour response SLA in the agreement.'",
+        "timestamp": 1779110571048,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "monthly service rate",
+        "negotiation_type": "service",
+        "seller_price": 6000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To increase the monthly rate to cover inflation and perceived scope creep from additional endpoints.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "Price Increase",
+            "description": "Counterparty announces a rate increase from $4500 to $6000, citing two years of strong service."
+          },
+          "Counterparty proposes a 33% rate increase from $4500 to $6000, citing inflation and scope creep.",
+          "User challenges the price increase by suggesting a scope reset instead of a price change."
+        ],
+        "leverage_points": [
+          {
+            "party": "counterparty",
+            "leverage": "The established two-year relationship and 'strong service' provided.",
+            "description": "The counterparty is leveraging the existing relationship and the quality of past service to justify the price increase."
+          },
+          "User is a long-term customer with a two-year history.",
+          "User points out that the scope of work was never formally expanded, shifting the discussion from price to scope management."
+        ],
+        "transcript_snippet": "Counterparty: Inflation and the additional endpoints you have added over the relationship.\nUser: We have not formally expanded scope. If endpoints crept up, we should reset scope, not the price.",
+        "market_data": null,
+        "cycle": 19
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'To  be clear,  we  can  accept  five  thousand,  but  only  if we  get the  two-hour  response  SLA  in the  agreement.'",
+        "timestamp": 1779110573548,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110574.1573277
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110574.8901603
+      }
+    }
+  ]
+}

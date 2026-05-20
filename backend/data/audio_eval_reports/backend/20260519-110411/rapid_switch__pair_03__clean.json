@@ -1,0 +1,800 @@
+{
+  "suite": "audio_backend_eval",
+  "run_id": "20260519-110411",
+  "manifest_id": "audio_eval_manifest_pyttsx3_v1",
+  "created_at_ms": 1779169761152,
+  "scenario_count": 1,
+  "summary": {
+    "suite": "audio_backend_eval",
+    "run_id": "pending",
+    "turn_count": 6,
+    "speaker_accuracy": 0.3333,
+    "false_user_count": 0,
+    "false_counterparty_count": 0,
+    "wrong_label_count": 4,
+    "missing_transcript_count": 0,
+    "timeout_count": 0,
+    "failure_kind_counts": {
+      "none": 6
+    },
+    "wer_mean": 0.275,
+    "leading_word_drop_count": 1,
+    "trailing_word_drop_count": 2,
+    "latency_ms_mean": 3341.155,
+    "latency_ms_p95": 7631.94,
+    "confusion_matrix": {
+      "user": {
+        "unknown": 2,
+        "user": 1
+      },
+      "counterparty": {
+        "unknown": 2,
+        "counterparty": 1
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "turn_count": 6,
+        "speaker_accuracy": 0.3333,
+        "false_user_count": 0,
+        "false_counterparty_count": 0,
+        "missing_transcript_count": 0,
+        "wer_mean": 0.275,
+        "p95_latency_ms": 7631.94,
+        "leading_word_drop_count": 1,
+        "trailing_word_drop_count": 2
+      }
+    },
+    "pass": false,
+    "session_id": "9c79929d-fbca-4ba2-ab33-98d23fbfcc9b"
+  },
+  "scenarios": [
+    {
+      "id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean"
+    }
+  ],
+  "turns": [
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_1",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "unknown",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Can you do eighty two?",
+      "observed_text": "Can you do 82?",
+      "wer": 0.4,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "82"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": true,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 1,
+      "transcript_count": 1,
+      "latency_ms": 7631.94,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1544,
+        "audio_dbfs": -22.304,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "unknown"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_1_0",
+            "speaker": "unknown",
+            "language": null,
+            "text": "Can you do 82?",
+            "timestamp": 1779169725253,
+            "start_time": 1779169725.2532933,
+            "end_time": 1779169726.7972932,
+            "diarized_speaker_id": "unknown",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_2",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "unknown",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "No.",
+      "observed_text": "No.",
+      "wer": 0.0,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2308.92,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1004,
+        "audio_dbfs": -25.651,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "unknown"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_2_0",
+            "speaker": "unknown",
+            "language": null,
+            "text": "No.",
+            "timestamp": 1779169727147,
+            "start_time": 1779169727.1472933,
+            "end_time": 1779169728.1512933,
+            "diarized_speaker_id": "unknown",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_3",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "unknown",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Eighty three with delivery?",
+      "observed_text": "83 with delivery",
+      "wer": 0.5,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "83"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": false,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2465.14,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1754,
+        "audio_dbfs": -22.684,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "unknown"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_3_0",
+            "speaker": "unknown",
+            "language": null,
+            "text": "83 with delivery",
+            "timestamp": 1779169728501,
+            "start_time": 1779169728.5012932,
+            "end_time": 1779169730.2552931,
+            "diarized_speaker_id": "unknown",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_4",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "unknown",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Maybe.",
+      "observed_text": "Maybe.",
+      "wer": 0.0,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2420.63,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1139,
+        "audio_dbfs": -23.259,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "unknown"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_4_0",
+            "speaker": "unknown",
+            "language": null,
+            "text": "Maybe.",
+            "timestamp": 1779169730605,
+            "start_time": 1779169730.6052933,
+            "end_time": 1779169731.7442932,
+            "diarized_speaker_id": "unknown",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_5",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "user",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Then confirm net sixty.",
+      "observed_text": "Then confirm net 60.",
+      "wer": 0.25,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "60"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": true,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 1,
+      "transcript_count": 1,
+      "latency_ms": 2720.97,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1769,
+        "audio_dbfs": -22.126,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "user"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_5_0",
+            "speaker": "user",
+            "language": null,
+            "text": "Then confirm net 60.",
+            "timestamp": 1779169732094,
+            "start_time": 1779169732.0942934,
+            "end_time": 1779169733.8632934,
+            "diarized_speaker_id": "user",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "rapid_switch__pair_03__clean__turn_6",
+      "scenario_id": "rapid_switch__pair_03__clean",
+      "voice_pair_id": "pair_03",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "counterparty",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Net forty five only.",
+      "observed_text": "net 45 only",
+      "wer": 0.5,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "45"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2499.33,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 1869,
+        "audio_dbfs": -20.643,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "rapid_switch",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "rapid_switch__pair_03__clean__turn_6_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "net 45 only",
+            "timestamp": 1779169734213,
+            "start_time": 1779169734.2132933,
+            "end_time": 1779169736.0822933,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    }
+  ],
+  "session_id": "9c79929d-fbca-4ba2-ab33-98d23fbfcc9b",
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "9c79929d-fbca-4ba2-ab33-98d23fbfcc9b",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779169707.2062745
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "ENROLLMENT_STARTED",
+      "payload": {
+        "duration_seconds": null,
+        "sample_rate": 16000,
+        "message": "Keep speaking until the system confirms your voice sample is ready.",
+        "script": "Hello, I am preparing for an important negotiation today. I want to speak clearly, stay calm under pressure, and explain my position with confidence. My goal is to reach a fair deal, protect my budget, and respond thoughtfully to every offer while keeping the conversation respectful and productive.",
+        "progress": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "LOW_VOLUME",
+        "feedback_message": "Move closer to the microphone and speak a little louder.",
+        "db_level": -61.83919906616211,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -21.074941158294678,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -19.830821752548218,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.34651279449463,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.401182174682617,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.752718448638916,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.549743175506592,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_COMPLETE",
+      "payload": {
+        "success": true,
+        "message": "Voice sample ready.",
+        "speaker_mode": "auto",
+        "speechbrain_profile_state": "ready",
+        "progress": null,
+        "feedback": "READY",
+        "feedback_message": "SpeechBrain confirmed a stable voice sample.",
+        "db_level": -20.56215763092041,
+        "effective_speech_duration": 6.06,
+        "stability": 0.9524839520454407
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779169725.1823504
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "9c79929d-fbca-4ba2-ab33-98d23fbfcc9b",
+        "model": "disabled",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": false,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false,
+          "audio_eval_only": true
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "9c79929d-fbca-4ba2-ab33-98d23fbfcc9b"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_1_0",
+        "speaker": "unknown",
+        "language": null,
+        "text": "Can you do 82?",
+        "timestamp": 1779169725253,
+        "start_time": 1779169725.2532933,
+        "end_time": 1779169726.7972932,
+        "diarized_speaker_id": "unknown",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_2_0",
+        "speaker": "unknown",
+        "language": null,
+        "text": "No.",
+        "timestamp": 1779169727147,
+        "start_time": 1779169727.1472933,
+        "end_time": 1779169728.1512933,
+        "diarized_speaker_id": "unknown",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_3_0",
+        "speaker": "unknown",
+        "language": null,
+        "text": "83 with delivery",
+        "timestamp": 1779169728501,
+        "start_time": 1779169728.5012932,
+        "end_time": 1779169730.2552931,
+        "diarized_speaker_id": "unknown",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_4_0",
+        "speaker": "unknown",
+        "language": null,
+        "text": "Maybe.",
+        "timestamp": 1779169730605,
+        "start_time": 1779169730.6052933,
+        "end_time": 1779169731.7442932,
+        "diarized_speaker_id": "unknown",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": null,
+        "negotiation_type": "unknown",
+        "seller_price": null,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": null,
+        "key_moments": [],
+        "leverage_points": [],
+        "transcript_snippet": "Unknown [0:00]: Can you do 82?",
+        "market_data": null,
+        "cycle": 17
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The item being negotiated and the context for the price '82' are unknown."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_5_0",
+        "speaker": "user",
+        "language": null,
+        "text": "Then confirm net 60.",
+        "timestamp": 1779169732094,
+        "start_time": 1779169732.0942934,
+        "end_time": 1779169733.8632934,
+        "diarized_speaker_id": "user",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "rapid_switch__pair_03__clean__turn_6_0",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "net 45 only",
+        "timestamp": 1779169734213,
+        "start_time": 1779169734.2132933,
+        "end_time": 1779169736.0822933,
+        "diarized_speaker_id": "counterparty",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779169760.6941035
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779169761.1505592
+      }
+    }
+  ]
+}

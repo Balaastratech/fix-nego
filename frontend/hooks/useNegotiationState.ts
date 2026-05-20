@@ -26,6 +26,7 @@ export interface NegotiationState {
  * Transcript entry with speaker label and timestamp.
  */
 export interface TranscriptEntry {
+  id: string;
   speaker: 'USER' | 'COUNTERPARTY';
   text: string;
   timestamp: number;
@@ -107,6 +108,7 @@ export function useNegotiationState() {
   ) => {
     setState(prev => {
       const newEntry: TranscriptEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         speaker,
         text,
         timestamp: Date.now()
@@ -217,13 +219,15 @@ export function useNegotiationState() {
         newState.counterparty_goal = updates.counterparty_goal;
       }
 
-      if (updates.key_moments !== undefined && updates.key_moments.length > 0) {
-        const merged = Array.from(new Set([...newState.key_moments, ...updates.key_moments]));
+      const normalizedMoments = normalizeListEntries((updates as any).key_moments);
+      if (normalizedMoments.length > 0) {
+        const merged = Array.from(new Set([...newState.key_moments, ...normalizedMoments]));
         newState.key_moments = merged.slice(-5);
       }
 
-      if (updates.leverage_points !== undefined && updates.leverage_points.length > 0) {
-        const merged = Array.from(new Set([...newState.leverage_points, ...updates.leverage_points]));
+      const normalizedLeverage = normalizeListEntries((updates as any).leverage_points);
+      if (normalizedLeverage.length > 0) {
+        const merged = Array.from(new Set([...newState.leverage_points, ...normalizedLeverage]));
         newState.leverage_points = merged.slice(-5);
       }
 
@@ -314,4 +318,24 @@ function extractPriceFromText(text: string): number | null {
   }
 
   return null;
+}
+
+function normalizeListEntries(values: unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) return [];
+
+  return values
+    .map((value) => {
+      if (typeof value === 'string') return value.trim();
+      if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        for (const key of ['moment', 'text', 'detail', 'summary', 'message', 'value']) {
+          const candidate = record[key];
+          if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+          }
+        }
+      }
+      return '';
+    })
+    .filter(Boolean);
 }

@@ -1,0 +1,526 @@
+{
+  "scenario_id": "hostile_tone_001",
+  "title": "Counterparty uses hostile pressure language",
+  "family": "de_escalation",
+  "session_id": "e2a23cfc-5a40-4410-bfba-4a6c5b2fd522",
+  "created_at": "2026-05-18T18:58:16+05:30",
+  "summary": {
+    "score": 0.784,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.55,
+    "judge_average": 0.975
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 2,
+      "mode": "advice",
+      "query": "They are aggressive. How do I stay calm and get the numbers back on the table?",
+      "expected_direction": "De-escalate without conceding; pivot back to market data and the user's target; do not match their tone.",
+      "response": "Their \"take it or leave it\" stance is a common pressure tactic, not a final position. You've correctly deflected the aggression by pivoting to market data instead of reacting to their price.\n\nTo get the numbers back on the table calmly, you need to re-anchor the conversation to a credible, external standard. The market research shows a fair price is between $17,500 and $19,500, which gives you a strong foundation.\n\nYour next move is to present this market data as a neutral fact, not an attack on their price. This shifts the focus from a battle of wills to a collaborative effort to find a fair price based on objective reality. Protect your target of $18,500 and the 30-day guarantee; don't offer concessions yet.",
+      "timestamp_ms": 1779110825391,
+      "deterministic_score": {
+        "score": 0.65,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.0,
+          "actionable": 1.0,
+          "concise": 0.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "18500",
+          "17500",
+          "19500",
+          "30"
+        ],
+        "relevant_terms": [
+          "de-escalate"
+        ],
+        "number_hits": [
+          "18500",
+          "17500",
+          "19500",
+          "30"
+        ],
+        "term_hits": []
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 3,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 4.75,
+        "passed": true,
+        "rationale": "The response is strong but has a minor grounding error. It incorrectly states the user has already performed an action (\"You've correctly deflected...\") that they are currently asking for advice on how to do. The rest of the advice is excellent, actionable, and well-grounded in the scenario's details.",
+        "best_fix": "Change the second sentence from \"You've correctly deflected the aggression by pivoting to market data...\" to \"The best way to deflect the aggression is to pivot to market data...\" to make it forward-looking advice."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence that holds firm at eighteen five with the guarantee.",
+      "expected_direction": "Hold at 18500 with the 30 day mechanical guarantee, explicit, in one sentence; do not escalate or capitulate.",
+      "response": "Say: 'My offer is eighteen five with the guarantee included, and that's where I need to be to get this done today.'",
+      "timestamp_ms": 1779110845587,
+      "deterministic_score": {
+        "score": 0.45,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 0.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "18500",
+          "30"
+        ],
+        "relevant_terms": [
+          "mechanical guarantee"
+        ],
+        "number_hits": [],
+        "term_hits": []
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response perfectly adheres to all constraints. It provides a single, actionable sentence that is commercially effective, firm without being escalatory, and directly addresses the user's request to hold their position on both price and the guarantee.",
+        "best_fix": "N/A"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "e2a23cfc-5a40-4410-bfba-4a6c5b2fd522",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110807.0694175
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110807.078483
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "e2a23cfc-5a40-4410-bfba-4a6c5b2fd522",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "e2a23cfc-5a40-4410-bfba-4a6c5b2fd522"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The price is twenty two thousand. Take it or leave it.",
+        "timestamp": 1779110815341,
+        "start_time": 1779110815.341,
+        "end_time": 1779110815.341,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "I understand you have your number. Let me share where the market is.",
+        "timestamp": 1779110816141,
+        "start_time": 1779110816.141,
+        "end_time": 1779110816.141,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110825391",
+        "speaker": "ai",
+        "text": "Their \"take it or leave it\" stance is a common pressure tactic, not a final position. You've correctly deflected the aggression by pivoting to market data instead of reacting to their price.\n\nTo get the numbers back on the table calmly, you need to re-anchor the conversation to a credible, external standard. The market research shows a fair price is between $17,500 and $19,500, which gives you a strong foundation.\n\nYour next move is to present this market data as a neutral fact, not an attack on their price. This shifts the focus from a battle of wills to a collaborative effort to find a fair price based on objective reality. Protect your target of $18,500 and the 30-day guarantee; don't offer concessions yet.",
+        "timestamp": 1779110825391,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Their \"take  \"take  it or  leave  it\" stance  is a  common  pressure  tactic,  not  a final  position.  You've  correctly  deflected  the aggression  by pivoting  to market  data  instead  of reacting  to their  price.  To get  the numbers  back  on the  table  calmly,  you need  to re-anchor  the conversation  to a  credible,  external  standard.  The market  research  shows  a fair  price  is between  $17,500  and  $19,500,  which  gives  you a strong  foundation.  Your next  move  is to  present  this  market  data  as  a neutral  fact,  not  an attack  on their  price.  This  shifts  the focus  from  a battle  of wills  to a  collaborative",
+        "timestamp": 1779110833869,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I do not care about your market data. Twenty two or walk.",
+        "timestamp": 1779110816941,
+        "start_time": 1779110816.941,
+        "end_time": 1779110816.941,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Comparable units are between seventeen five and nineteen five. My target is eighteen five with a thirty day mechanical guarantee.",
+        "timestamp": 1779110817741,
+        "start_time": 1779110817.741,
+        "end_time": 1779110817.741,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "A guarantee will cost you another thousand.",
+        "timestamp": 1779110818541,
+        "start_time": 1779110818.541,
+        "end_time": 1779110818.541,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "A guarantee that costs the buyer is not a guarantee. It needs to be included.",
+        "timestamp": 1779110819341,
+        "start_time": 1779110819.341,
+        "end_time": 1779110819.341,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Twenty thousand and no guarantee.",
+        "timestamp": 1779110820141,
+        "start_time": 1779110820.141,
+        "end_time": 1779110820.141,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hostile_tone_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Eighteen five with the guarantee. Otherwise I have two other vehicles I am looking at.",
+        "timestamp": 1779110820941,
+        "start_time": 1779110820.941,
+        "end_time": 1779110820.941,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hostile_tone_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "hostile_tone_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": null,
+        "negotiation_type": "unknown",
+        "seller_price": 22000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "negative",
+        "counterparty_goal": "To complete the transaction quickly at their stated price without any negotiation.",
+        "key_moments": [
+          {
+            "type": "Ultimatum",
+            "actor": "Counterparty",
+            "description": "Counterparty opens with a firm 'take it or leave it' offer, attempting to shut down negotiation.",
+            "timestamp": "0:01"
+          }
+        ],
+        "leverage_points": [
+          {
+            "type": "Ultimatum",
+            "actor": "Counterparty",
+            "description": "Counterparty uses a 'take it or leave it' tactic, indicating they may have a strong alternative or are simply unwilling to negotiate."
+          }
+        ],
+        "transcript_snippet": "Counterparty [0:01]: The price is twenty two thousand. Take it or leave it.",
+        "market_data": null,
+        "cycle": 18
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The specific item being negotiated and its fair market value are unknown."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110845587",
+        "speaker": "ai",
+        "text": "Say: 'My offer is eighteen five with the guarantee included, and that's where I need to be to get this done today.'",
+        "timestamp": 1779110845587,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'My  offer  is eighteen  five  with the  guarantee  included,  and that's  where I  need  to be  to get  this done  today.'",
+        "timestamp": 1779110847890,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110848.4985898
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110849.14548
+      }
+    }
+  ]
+}

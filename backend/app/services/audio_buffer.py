@@ -44,13 +44,20 @@ class AudioBuffer:
     # ------------------------------------------------------------------
 
     def push(self, chunk: bytes) -> None:
-        """Append raw PCM bytes; trim oldest data if over capacity."""
+        """
+        Append raw PCM bytes; trim oldest data if over capacity.
+        
+        15.1: Implements rolling buffer for audio_buffer (Requirement 13.1)
+        - Maintains 90-second rolling window
+        - Evicts old audio when buffer exceeds 90s
+        """
         if not chunk:
             return
         with self._lock:
             self._buf.append(chunk)
             self._total_bytes += len(chunk)
             # Trim from the front until we're within capacity
+            # 15.1: Evict old audio when buffer exceeds 90s
             while self._total_bytes > self._max_bytes and self._buf:
                 oldest = self._buf.popleft()
                 self._total_bytes -= len(oldest)

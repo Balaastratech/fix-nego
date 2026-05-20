@@ -11,16 +11,29 @@ from google import genai
 from google.genai import types
 from fastapi import WebSocket
 
+from app.ai_assets import (
+    LIVE_CONTEXT_WINDOW_TRIGGER_TOKENS,
+    LIVE_GENERATION_CANDIDATE_COUNT,
+    LIVE_GENERATION_MAX_OUTPUT_TOKENS,
+    LIVE_GENERATION_TEMPERATURE,
+    LIVE_GENERATION_TOP_K,
+    LIVE_GENERATION_TOP_P,
+    LIVE_RESPONSE_MODALITIES,
+    LIVE_VOICE_NAME,
+    VISION_EXTRACTION_PROMPT,
+    build_live_system_instruction,
+)
 from app.models.negotiation import NegotiationSession, NegotiationState
 from app.config import settings
-from app.services.master_prompt import  ADVISOR_SYSTEM_PROMPT
 from app.services.response_validator import ResponseValidator
+from app.services.session_store import session_store
+from app.utils.conversation_audit import log_conversation_event
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL_PRIMARY = settings.GEMINI_MODEL
-GEMINI_MODEL_FALLBACK = settings.GEMINI_MODEL_FALLBACK
-GEMINI_MODEL_TEXT_ONLY = "gemini-2.0-flash"
+GEMINI_MODEL_PRIMARY = settings.effective_model
+GEMINI_MODEL_FALLBACK = settings.effective_fallback_model
+GEMINI_MODEL_TEXT_ONLY = settings.effective_flash_model
 
 SESSION_HARD_LIMIT_SECONDS = 600
 SESSION_HANDOFF_TRIGGER = 540
@@ -28,6 +41,30 @@ SESSION_HANDOFF_TRIGGER = 540
 class GeminiUnavailableError(Exception):
     """Raised when all Gemini Live API models are unavailable."""
     pass
+
+
+def _accumulate_live_usage(session: NegotiationSession | None, response: object) -> None:
+    if session is None:
+        return
+    usage = getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
+    if usage is None:
+        return
+
+    prompt_tokens = (
+        getattr(usage, "prompt_token_count", None)
+        or getattr(usage, "input_token_count", None)
+        or 0
+    )
+    candidate_tokens = (
+        getattr(usage, "candidates_token_count", None)
+        or getattr(usage, "output_token_count", None)
+        or 0
+    )
+    try:
+        session.session_metrics["gemini_live_input_tokens"] += int(prompt_tokens or 0)
+        session.session_metrics["gemini_live_output_tokens"] += int(candidate_tokens or 0)
+    except Exception:
+        logger.debug("Skipping token usage accumulation due to unexpected usage metadata shape")
 
 
 def _build_context_summary(session: NegotiationSession) -> str:
@@ -50,6 +87,66 @@ def _build_context_summary(session: NegotiationSession) -> str:
             summary += f"{speaker}: {text}\n"
             
     return summary
+
+
+def _extract_recent_line(transcript_text: str, speaker: str) -> str:
+    prefix = f"{speaker.lower()}:"
+    for raw_line in reversed((transcript_text or "").splitlines()):
+        line = raw_line.strip()
+        if line.lower().startswith(prefix):
+            return line.split(":", 1)[1].strip()
+    return "unknown"
+
+
+def _extract_live_terms(transcript_text: str) -> list[str]:
+    haystack = (transcript_text or "").lower()
+    terms = [
+        "price lock",
+        "onboarding",
+        "service credits",
+        "net 60",
+        "net sixty",
+        "no auto-renewal",
+        "no auto renewal",
+        "auto-renewal",
+        "standard payment timing",
+        "standard payment terms",
+        "base salary",
+        "sign-on",
+        "equity",
+        "warranty",
+        "delivery",
+        "replacement",
+        "payment terms",
+        "scope",
+        "termination",
+        "rent-free",
+        "break option",
+        "lock-in",
+        "MOQ",
+        "quality holdback",
+    ]
+    found = []
+    for term in terms:
+        if term.lower() in haystack and term not in found:
+            found.append(term)
+    return found
+
+
+def _build_live_deal_brief(transcript_text: str, user_query: str) -> str:
+    if not transcript_text:
+        return ""
+    terms = _extract_live_terms(transcript_text)
+    terms_text = ", ".join(terms) if terms else "none clearly named"
+    return (
+        "LIVE DEAL-STATE BRIEF:\n"
+        f"  Latest user position: {_extract_recent_line(transcript_text, 'User')}\n"
+        f"  Latest counterparty position: {_extract_recent_line(transcript_text, 'Counterparty')}\n"
+        f"  Active named terms/protections: {terms_text}\n"
+        f"  User's exact ask now: {user_query}\n"
+        "  If the ask is about trading terms, rank the named terms explicitly. "
+        "Do not collapse a multi-term package into one term.\n"
+    )
 
 
 def build_advisor_query(state: dict, transcript: list = None, user_query: str = "Command.") -> str:
@@ -79,6 +176,7 @@ def build_advisor_query(state: dict, transcript: list = None, user_query: str = 
     walk_away         = state.get("max_price") or state.get("user_walk_away_price")
     sentiment         = state.get("counterparty_sentiment") or "unknown"
     cp_goal           = state.get("counterparty_goal") or "unknown"
+    response_language = state.get("response_language") or state.get("language") or "en-US"
     key_moments       = state.get("key_moments", [])
     leverage_points   = state.get("leverage_points", [])
     market_data       = state.get("market_data")
@@ -110,6 +208,22 @@ def build_advisor_query(state: dict, transcript: list = None, user_query: str = 
         transcript_text = "\n".join(lines)
 
     # ── Assemble the query ────────────────────────────────────────────────────
+    def _normalize_text_list(values):
+        normalized = []
+        for value in values or []:
+            if isinstance(value, str) and value.strip():
+                normalized.append(value.strip())
+            elif isinstance(value, dict):
+                for key in ("moment", "text", "detail", "summary", "message", "value"):
+                    candidate = value.get(key)
+                    if isinstance(candidate, str) and candidate.strip():
+                        normalized.append(candidate.strip())
+                        break
+        return normalized
+
+    key_moments = _normalize_text_list(key_moments)
+    leverage_points = _normalize_text_list(leverage_points)
+
     snapshot = (
         f"NEGOTIATION SNAPSHOT:\n"
         f"  Item: {item}\n"
@@ -129,14 +243,352 @@ def build_advisor_query(state: dict, transcript: list = None, user_query: str = 
         f"\nRECENT CONVERSATION (labeled by speaker):\n{transcript_text}"
         if transcript_text else ""
     )
+    live_deal_brief = _build_live_deal_brief(transcript_text, user_query)
 
     return (
         f"[TACTICAL REQUEST]\n"
+        f"RESPOND IN LANGUAGE: {response_language}\n"
+        "ANSWER QUALITY RULES:\n"
+        "  - Ground the answer in the latest offer, the user's target/cap, and the active non-price terms.\n"
+        "  - Separate price concessions from term concessions.\n"
+        "  - State exactly what to protect, trade, ask, accept, or reject next.\n"
+        "  - Do not invent facts and do not give generic negotiation advice.\n"
         f"{snapshot}"
+        f"\n{live_deal_brief}"
         f"{convo}\n\n"
         f"MY REQUEST: {user_query}\n"
         f"[/TACTICAL REQUEST]"
     )
+
+
+async def analyze_vision_frames(
+    session: "NegotiationSession",
+    frames: list[bytes],
+    transcript_hint: str = "",
+    session_context: str = "",
+) -> dict | None:
+    """Send 2–4 JPEG frames to gemini-2.5-pro for structured scene analysis.
+
+    Returns a VisionObservation dict on success, or None on failure.
+    The dict shape matches VISION_EXTRACTION_PROMPT's JSON schema.
+    """
+    if not frames:
+        return None
+    if not settings.VISION_PRO_ENABLED:
+        return None
+
+    model_name = settings.effective_vision_model  # gemini-2.5-flash by default (fast)
+
+    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+        client = genai.Client(
+            vertexai=True,
+            project=settings.GOOGLE_CLOUD_PROJECT,
+            location=settings.GOOGLE_CLOUD_LOCATION,
+        )
+    else:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+    # Build multimodal content: text prompt + inline JPEG images
+    prompt_text = VISION_EXTRACTION_PROMPT.format(
+        n_frames=len(frames),
+        session_context=session_context or "negotiation in progress",
+        transcript_hint=transcript_hint or "no transcript available",
+    )
+
+    parts: list = [types.Part(text=prompt_text)]
+    for frame_bytes in frames:
+        parts.append(types.Part(
+            inline_data=types.Blob(data=frame_bytes, mime_type="image/jpeg")
+        ))
+
+    # Flash doesn't need a thinking_budget — it's fast by design.
+    # Keep config minimal for lowest latency.
+    config_kwargs: dict = {
+        "temperature": 0.1,          # low temp for deterministic extraction
+        "max_output_tokens": 1024,   # structured JSON is short
+    }
+
+    try:
+        response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: client.models.generate_content(
+                model=model_name,
+                contents=[types.Content(role="user", parts=parts)],
+                config=types.GenerateContentConfig(**config_kwargs),
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "[Vision] Pro analyze_vision_frames failed model=%s session=%s error=%s",
+            model_name,
+            session.session_id,
+            exc,
+        )
+        return None
+
+    raw_text = (getattr(response, "text", None) or "").strip()
+    if not raw_text:
+        return None
+
+    # Parse the JSON response
+    try:
+        # Strip markdown fences if Pro wrapped it anyway
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip(), flags=re.DOTALL).strip()
+        obs = json.loads(cleaned)
+    except Exception as exc:
+        logger.warning(
+            "[Vision] Failed to parse Pro vision JSON session=%s error=%s raw=%r",
+            session.session_id,
+            exc,
+            raw_text[:300],
+        )
+        return None
+
+    obs["timestamp"] = time.time()
+    obs["frame_count"] = len(frames)
+
+    logger.info(
+        "[Vision] Pro analysis ok session=%s scene=%s confidence=%s hint=%r",
+        session.session_id,
+        obs.get("scene_type"),
+        obs.get("confidence"),
+        (obs.get("advice_hint") or "")[:120],
+    )
+    session.vision_pro_call_count += 1
+    return obs
+
+
+async def generate_tactical_advice(
+    session: NegotiationSession,
+    user_query: str,
+    response_mode: str = "command",
+) -> str | None:
+    """
+    Pre-compute the exact tactical answer using gemini-2.5-pro BEFORE the live
+    audio model speaks. The returned text is injected into the live session as
+    an [ADVISOR_OUTPUT] block so the Flash live audio model reads it verbatim
+    instead of generating its own (weaker) reasoning.
+
+    Pattern: Pro thinks, Flash speaks.
+
+    Returns the generated advice text, or None if generation failed.
+    """
+    if not settings.ADVICE_GENERATION_ENABLED:
+        return None
+
+    from app.ai_assets import (
+        build_mode_activation_instruction,
+        build_pre_query_brief,
+    )
+
+    # Build the listener-intel + market brief block exactly as the live session would see it.
+    listener_ctx: dict = {}
+    if session.listener_agent and getattr(session.listener_agent, "last_context", None):
+        listener_ctx = dict(session.listener_agent.last_context)
+    user_ctx = session.user_context or {}
+
+    state_for_query = {
+        **listener_ctx,
+        "item":              listener_ctx.get("item") or user_ctx.get("item", ""),
+        "target_price":      user_ctx.get("target_price") or listener_ctx.get("user_target_price"),
+        "max_price":         user_ctx.get("max_price") or listener_ctx.get("user_walk_away_price"),
+        "language":          session.language,
+        "response_language": session.response_language or session.language or "en-US",
+    }
+
+    transcript_text = ""
+    if session.listener_agent and getattr(session.listener_agent, "accumulated_transcript", None):
+        transcript_text = session.listener_agent.accumulated_transcript
+
+    market_info = "Not yet researched"
+    market_data = listener_ctx.get("market_data")
+    if isinstance(market_data, str):
+        market_info = market_data
+    elif isinstance(market_data, dict):
+        pr       = market_data.get("price_range") or {}
+        facts    = market_data.get("key_facts", "")
+        leverage = market_data.get("leverage", "")
+        market_info = f"Fair range: {pr.get('min')} - {pr.get('max')} (avg {pr.get('average')})"
+        if facts:    market_info += f" | Facts: {facts}"
+        if leverage: market_info += f" | Leverage: {leverage}"
+
+    # Attach latest vision observation if fresh
+    latest_vision = (
+        session.vision_observations[-1]
+        if getattr(session, "vision_observations", None)
+        else None
+    )
+
+    intel = build_pre_query_brief(
+        context=listener_ctx,
+        market_info=market_info,
+        transcript_text=transcript_text[-2000:] if transcript_text else "",
+        vision_observation=latest_vision,
+    )
+
+    mode_block = build_mode_activation_instruction(response_mode)
+    advisor_query = build_advisor_query(
+        state=state_for_query,
+        transcript=transcript_text,
+        user_query=user_query,
+    )
+
+    system_instruction = build_live_system_instruction(session.context or "")
+
+    prompt = (
+        f"{intel}\n\n"
+        f"{mode_block}\n\n"
+        f"[USER'S EXACT QUESTION]: {user_query}\n\n"
+        f"{advisor_query}"
+    )
+
+    # Build a Pro-tier text-generation client. Reuses Vertex AI / API-key setup
+    # from the running listener_agent's client choice.
+    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+        client = genai.Client(
+            vertexai=True,
+            project=settings.GOOGLE_CLOUD_PROJECT,
+            location=settings.GOOGLE_CLOUD_LOCATION,
+        )
+    else:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+    model_name = settings.effective_advice_model
+
+    # CRITICAL: Gemini 2.5 Pro uses "thinking" tokens that count toward max_output_tokens.
+    # gemini-2.5-pro REQUIRES a minimum thinking_budget (cannot be set to 0 - Vertex AI
+    # rejects with 400 INVALID_ARGUMENT). gemini-2.5-flash CAN set thinking_budget=0.
+    # Empirically: with max_output_tokens=512 and default thinking, Pro's actual visible
+    # response gets truncated mid-sentence because thinking consumes most of the budget.
+    # Fix: set a small thinking budget (just enough to reason about rules) and a large
+    # max_output_tokens so the visible answer has plenty of headroom.
+    thinking_config = None
+    if "gemini-2.5-pro" in model_name.lower():
+        try:
+            # Small thinking budget — system prompt rules already structure the reasoning,
+            # so we don't need extended chain-of-thought. Pro min budget is around 128.
+            thinking_config = types.ThinkingConfig(thinking_budget=128)
+        except Exception:
+            thinking_config = None
+    else:
+        # Flash / other models — disabling thinking is fine and saves latency.
+        try:
+            thinking_config = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            thinking_config = None
+
+    config_kwargs = {
+        "system_instruction": system_instruction,
+        "temperature": settings.ADVICE_GENERATION_TEMPERATURE,
+        # Total budget = thinking budget + visible answer. With thinking_budget=128
+        # and max_output_tokens=4096, the visible answer can use ~3900 tokens.
+        "max_output_tokens": max(settings.ADVICE_GENERATION_MAX_TOKENS, 4096),
+    }
+    if thinking_config is not None:
+        config_kwargs["thinking_config"] = thinking_config
+
+    try:
+        # Use the async generate_content endpoint (Pro is text/multimodal, not Live)
+        response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: client.models.generate_content(
+                model=model_name,
+                contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+                config=types.GenerateContentConfig(**config_kwargs),
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "[Pro advice generation] failed model=%s session=%s error=%s",
+            model_name,
+            session.session_id,
+            exc,
+        )
+        return None
+
+    # Accumulate token usage so the session cost is observable in metrics.
+    try:
+        _accumulate_live_usage(session, response)
+    except Exception:
+        pass
+
+    text = (getattr(response, "text", None) or "").strip()
+
+    # Post-processing safety net: strip leaked system/control markers from the start.
+    # Even with Rule 11 in the system prompt forbidding these, occasionally Pro
+    # echoes "[SYSTEM: ADVICE MODE ACTIVE]" or similar at the top of its response.
+    # That tanks deterministic scoring (number_grounding) because the actual answer
+    # gets pushed past the first-sentence checks.
+    if text:
+        # Drop any leading [SYSTEM: ...], [USER'S EXACT QUESTION], [ADVISOR_OUTPUT,
+        # [TACTICAL REQUEST, or similar bracketed control marker. Repeat in case
+        # multiple stacked.
+        for _ in range(6):
+            stripped = text.lstrip()
+            if not stripped.startswith("["):
+                break
+            close_idx = stripped.find("]")
+            if close_idx < 0:
+                break
+            marker = stripped[: close_idx + 1].upper()
+            if any(tok in marker for tok in ("[SYSTEM", "[USER", "[ADVISOR", "[TACTICAL", "[CONVERSATION", "[LISTENER")):
+                text = stripped[close_idx + 1 :].lstrip()
+                # Also drop a leading newline that often follows the marker
+                text = text.lstrip("\n").lstrip()
+            else:
+                break
+
+    # Inspect finish_reason / usage to catch truncation before it reaches the user.
+    finish_reason = None
+    candidates_token_count = None
+    thoughts_token_count = None
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if candidates:
+            finish_reason = str(getattr(candidates[0], "finish_reason", None) or "")
+        usage = getattr(response, "usage_metadata", None)
+        if usage is not None:
+            candidates_token_count = getattr(usage, "candidates_token_count", None)
+            thoughts_token_count = getattr(usage, "thoughts_token_count", None)
+    except Exception:
+        pass
+
+    if finish_reason and "MAX_TOKENS" in finish_reason.upper():
+        logger.error(
+            "[Pro advice generation] TRUNCATED at max_output_tokens=%d "
+            "(thoughts=%s, candidates=%s, finish=%s) model=%s session=%s. "
+            "Bump ADVICE_GENERATION_MAX_TOKENS or verify thinking is disabled.",
+            settings.ADVICE_GENERATION_MAX_TOKENS,
+            thoughts_token_count,
+            candidates_token_count,
+            finish_reason,
+            model_name,
+            session.session_id,
+        )
+
+    if not text:
+        logger.warning(
+            "[Pro advice generation] empty response model=%s session=%s finish=%s thoughts_tokens=%s",
+            model_name,
+            session.session_id,
+            finish_reason,
+            thoughts_token_count,
+        )
+        return None
+
+    logger.info(
+        "[Pro advice generation] ok model=%s session=%s response_mode=%s "
+        "finish=%s len=%d candidates_tokens=%s thoughts_tokens=%s preview=%r",
+        model_name,
+        session.session_id,
+        response_mode,
+        finish_reason,
+        len(text),
+        candidates_token_count,
+        thoughts_token_count,
+        text[:200],
+    )
+    return text
 
 
 async def trigger_advice_response(live_session, state: dict, transcript: list = None) -> None:
@@ -248,6 +700,34 @@ async def handle_function_call(
 
 # Global dictionary to accumulate text per session for the current turn
 _session_text_accumulators = {}
+
+
+def _append_ai_response_text(session: NegotiationSession | None, text: str) -> None:
+    cleaned = (text or "").strip()
+    if session is None or not cleaned:
+        return
+    if not hasattr(session, "current_ai_response") or session.current_ai_response is None:
+        session.current_ai_response = ""
+    session.current_ai_response = (
+        f"{session.current_ai_response} {cleaned}".strip()
+        if session.current_ai_response
+        else cleaned
+    )
+
+
+def _consume_completed_ai_response(session: NegotiationSession | None, session_id: str) -> str:
+    text_parts = _session_text_accumulators.pop(session_id, "").strip()
+    response_text = ""
+    if session is not None and hasattr(session, "current_ai_response") and session.current_ai_response:
+        response_text = (session.current_ai_response or "").strip()
+        session.current_ai_response = ""
+    if response_text and text_parts:
+        if text_parts in response_text:
+            return response_text
+        if response_text in text_parts:
+            return text_parts
+        return f"{response_text} {text_parts}".strip()
+    return response_text or text_parts
 
 async def handle_gemini_text(websocket: WebSocket, session_id: str, text: str) -> None:
     """Handle text responses from Gemini, extracting strategy/state updates and accumulating coaching text."""
@@ -415,8 +895,7 @@ class GeminiClient:
                 http_options=types.HttpOptions(api_version='v1alpha'),
             )
         
-        # Combine the base system prompt with the user-provided context
-        full_system_instruction = f"{ADVISOR_SYSTEM_PROMPT}\n\nNEGOTIATION CONTEXT:\n{context}"
+        full_system_instruction = build_live_system_instruction(context)
 
         logger.info(
             "Opening Gemini Live session with system instruction",
@@ -436,24 +915,24 @@ class GeminiClient:
             ),
 
             # Audio-only responses (no text mode)
-            response_modalities=["AUDIO"],
+            response_modalities=LIVE_RESPONSE_MODALITIES,
 
             # Speech configuration — preemptible = barge-in supported
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Aoede"
+                        voice_name=LIVE_VOICE_NAME
                     )
                 )
             ),
 
             # Generation config — optimized for constraint following
             generation_config=types.GenerationConfig(
-                temperature=0.3,
-                max_output_tokens=1024,
-                candidate_count=1,
-                top_p=0.8,
-                top_k=20,
+                temperature=LIVE_GENERATION_TEMPERATURE,
+                max_output_tokens=LIVE_GENERATION_MAX_OUTPUT_TOKENS,
+                candidate_count=LIVE_GENERATION_CANDIDATE_COUNT,
+                top_p=LIVE_GENERATION_TOP_P,
+                top_k=LIVE_GENERATION_TOP_K,
             ),
 
             # Transcriptions
@@ -471,7 +950,7 @@ class GeminiClient:
             # Sliding window triggers at 100K tokens, silently compresses older context.
             context_window_compression=types.ContextWindowCompressionConfig(
                 sliding_window=types.SlidingWindow(),
-                trigger_tokens=100_000,
+                trigger_tokens=LIVE_CONTEXT_WINDOW_TRIGGER_TOKENS,
             ),
         )
         
@@ -575,6 +1054,7 @@ class GeminiClient:
                 async for response in live_session.receive():
                     total_responses += 1
                     turn_response_count += 1
+                    _accumulate_live_usage(session, response)
                     
                     # Log every response for debugging
                     logger.info(
@@ -593,11 +1073,11 @@ class GeminiClient:
                     sc = response.server_content
                     
                     # Log what fields are present in server_content
-                    has_model_turn = hasattr(sc, 'model_turn') and sc.model_turn
-                    has_interrupted = hasattr(sc, 'interrupted') and sc.interrupted
-                    has_turn_complete = hasattr(sc, 'turn_complete') and sc.turn_complete
-                    has_input_transcript = hasattr(sc, 'input_transcription') and sc.input_transcription
-                    has_output_transcript = (hasattr(sc, 'output_transcription') and sc.output_transcription) or (hasattr(sc, 'output_audio_transcription') and sc.output_audio_transcription)
+                    has_model_turn = bool(hasattr(sc, 'model_turn') and sc.model_turn)
+                    has_interrupted = bool(hasattr(sc, 'interrupted') and sc.interrupted)
+                    has_turn_complete = bool(hasattr(sc, 'turn_complete') and sc.turn_complete)
+                    has_input_transcript = bool(hasattr(sc, 'input_transcription') and sc.input_transcription)
+                    has_output_transcript = bool((hasattr(sc, 'output_transcription') and sc.output_transcription) or (hasattr(sc, 'output_audio_transcription') and sc.output_audio_transcription))
                     
                     logger.info(f"DBG: GeminiClient Response #{total_responses}: model_turn={has_model_turn}, interrupted={has_interrupted}, turn_complete={has_turn_complete}, input_transcript={has_input_transcript}, output_transcript={has_output_transcript} [{session_id}]")
 
@@ -634,6 +1114,10 @@ class GeminiClient:
                                 await websocket.send_bytes(pcm_bytes)
                             elif part.text:
                                 await handle_gemini_text(websocket, session_id, part.text)
+                                _append_ai_response_text(session, part.text)
+                                if session and not getattr(session, 'ai_is_speaking', False):
+                                    session.ai_is_speaking = True
+                                    await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
                             elif hasattr(part, 'function_call') and part.function_call:
                                 # Handle function call from Gemini
                                 function_name = part.function_call.name
@@ -667,8 +1151,13 @@ class GeminiClient:
                                     })
 
                     if sc.input_transcription and sc.input_transcription.text:
-                        # Get speaker label from session (voice fingerprinting) or default to "user"
-                        speaker = session.current_speaker if session and hasattr(session, 'current_speaker') else "user"
+                        # Add 20ms grace period for speaker classification to complete (optimized)
+                        await asyncio.sleep(0.02)
+                        
+                        # Single active path: manual current speaker for direct-to-AI turns.
+                        speaker = "user"
+                        if session and hasattr(session, 'current_speaker') and session.current_speaker:
+                            speaker = session.current_speaker
                         
                         # Create transcript payload
                         transcript_payload = {
@@ -742,8 +1231,9 @@ class GeminiClient:
                         # Skip validation if response_mode is "advice"
                         response_mode = getattr(session, 'response_mode', 'command')
                         
-                        if session and hasattr(session, 'current_ai_response') and session.current_ai_response:
-                            full_response = session.current_ai_response.strip()
+                        full_response = _consume_completed_ai_response(session, session_id)
+                        if full_response:
+                            response_context = "ask_ai" if getattr(session, "direct_query_in_flight", False) else "advisor"
                             
                             # Only validate in "command" mode, skip for "advice" mode
                             if response_mode == "command":
@@ -777,28 +1267,59 @@ class GeminiClient:
                                 else:
                                     logger.info(f"✅ AI response validated successfully [{session_id}]")
                                     # Send the validated response to the frontend
-                                    await websocket.send_json({
-                                        "type": "TRANSCRIPT_UPDATE",
-                                        "payload": {
-                                            "speaker": "ai",
-                                            "text": full_response,
-                                            "timestamp": int(time.time() * 1000)
-                                        }
-                                    })
-                            else: # This is advice mode
-                                logger.info(f"Advice mode - skipping validation, sending transcript [{session_id}]")
-                                await websocket.send_json({
-                                    "type": "TRANSCRIPT_UPDATE",
-                                    "payload": {
+                                    ai_event = {
                                         "speaker": "ai",
                                         "text": full_response,
-                                        "timestamp": int(time.time() * 1000)
+                                        "timestamp": int(time.time() * 1000),
+                                        "response_mode": response_mode,
+                                        "context": response_context,
                                     }
+                                    log_conversation_event(
+                                        session_id=session.session_id,
+                                        event="ai_response",
+                                        speaker="ai",
+                                        text=full_response,
+                                        timestamp_ms=ai_event["timestamp"],
+                                        context=response_context,
+                                        response_mode=response_mode,
+                                    )
+                                    await websocket.send_json({
+                                        "type": "TRANSCRIPT_UPDATE",
+                                        "payload": ai_event
+                                    })
+                                    if session:
+                                        session.advisor_history.append(ai_event)
+                                        session.advisor_history = session.advisor_history[-settings.RESEARCH_HISTORY_LIMIT:]
+                                        session_store.record_advisor_event(session.session_id, "response", ai_event)
+                                        session_store.persist_session(session, ended=False)
+                            else: # This is advice mode
+                                logger.info(f"Advice mode - skipping validation, sending transcript [{session_id}]")
+                                ai_event = {
+                                    "speaker": "ai",
+                                    "text": full_response,
+                                    "timestamp": int(time.time() * 1000),
+                                    "response_mode": response_mode,
+                                    "context": response_context,
+                                }
+                                log_conversation_event(
+                                    session_id=session.session_id,
+                                    event="ai_response",
+                                    speaker="ai",
+                                    text=full_response,
+                                    timestamp_ms=ai_event["timestamp"],
+                                    context=response_context,
+                                    response_mode=response_mode,
+                                )
+                                await websocket.send_json({
+                                    "type": "TRANSCRIPT_UPDATE",
+                                    "payload": ai_event
                                 })
+                                if session:
+                                    session.advisor_history.append(ai_event)
+                                    session.advisor_history = session.advisor_history[-settings.RESEARCH_HISTORY_LIMIT:]
+                                    session_store.record_advisor_event(session.session_id, "response", ai_event)
+                                    session_store.persist_session(session, ended=False)
                             
-                            # Clear accumulated response
-                            session.current_ai_response = ""
-
                         if session:
                             session.ai_is_speaking = False
                             # Reset speaker to last known human so Listener can resume analysis
@@ -816,6 +1337,11 @@ class GeminiClient:
                                 logger.info(
                                     f"Cleared {count} pending injections after turn complete "
                                     f"[session={session_id}]"
+                                )
+                            if session.pending_intel_context is not None or session.pending_intel_critical_events:
+                                from app.services.negotiation_engine import NegotiationEngine
+                                asyncio.create_task(
+                                    NegotiationEngine.flush_pending_injections(session)
                                 )
 
                         # Turn is over, AI is now listening
@@ -858,6 +1384,21 @@ class GeminiClient:
             except Exception as e:
                 error_type = type(e).__name__
                 error_msg = str(e)
+                is_normal_shutdown = (
+                    "1000" in error_msg
+                    or "ConnectionClosedOK" in error_type
+                    or "sent 1000 (OK)" in error_msg
+                )
+
+                if is_normal_shutdown and session and session.state in {
+                    NegotiationState.ENDING,
+                    NegotiationState.IDLE,
+                }:
+                    logger.info(
+                        f"Receive loop closed cleanly during shutdown [{session_id}]: "
+                        f"{error_type}: {error_msg}"
+                    )
+                    break
 
                 # Determine if this is a recoverable connection drop that warrants auto-reconnect.
                 # 1007 — Chirp 3 codec error (PCM input after audio output)
@@ -991,6 +1532,8 @@ __all__ = [
     'GeminiUnavailableError',
     'build_system_prompt',
     'build_advisor_query',
+    'analyze_vision_frames',
+    'generate_tactical_advice',
     'trigger_advice_response',
     'handle_function_call',
     'perform_web_search',

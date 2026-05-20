@@ -1,0 +1,641 @@
+{
+  "suite": "audio_backend_eval",
+  "run_id": "20260519-110411",
+  "manifest_id": "audio_eval_manifest_pyttsx3_v1",
+  "created_at_ms": 1779169336899,
+  "scenario_count": 1,
+  "summary": {
+    "suite": "audio_backend_eval",
+    "run_id": "pending",
+    "turn_count": 4,
+    "speaker_accuracy": 1.0,
+    "false_user_count": 0,
+    "false_counterparty_count": 0,
+    "wrong_label_count": 0,
+    "missing_transcript_count": 0,
+    "timeout_count": 0,
+    "failure_kind_counts": {
+      "none": 4
+    },
+    "wer_mean": 0.185,
+    "leading_word_drop_count": 0,
+    "trailing_word_drop_count": 0,
+    "latency_ms_mean": 4718.472,
+    "latency_ms_p95": 8671.36,
+    "confusion_matrix": {
+      "user": {
+        "user": 2
+      },
+      "counterparty": {
+        "counterparty": 2
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "turn_count": 4,
+        "speaker_accuracy": 1.0,
+        "false_user_count": 0,
+        "false_counterparty_count": 0,
+        "missing_transcript_count": 0,
+        "wer_mean": 0.185,
+        "p95_latency_ms": 8671.36,
+        "leading_word_drop_count": 0,
+        "trailing_word_drop_count": 0
+      }
+    },
+    "pass": false,
+    "session_id": "bff16204-f316-49de-85f2-13763b5f3f0e"
+  },
+  "scenarios": [
+    {
+      "id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "condition": "clean"
+    }
+  ],
+  "turns": [
+    {
+      "fixture_id": "salary_package__pair_02__clean__turn_1",
+      "scenario_id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "user",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "If base cannot reach one ninety five, I need stronger sign on and equity.",
+      "observed_text": "If base cannot reach 195, I need stronger sign on an equity.",
+      "wer": 0.2857,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "195"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 8671.36,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 5389,
+        "audio_dbfs": -19.488,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "compensation",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "user"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "salary_package__pair_02__clean__turn_1_0",
+            "speaker": "user",
+            "language": null,
+            "text": "If base cannot reach 195, I need stronger sign on an equity.",
+            "timestamp": 1779169294455,
+            "start_time": 1779169294.4551964,
+            "end_time": 1779169299.8441963,
+            "diarized_speaker_id": "user",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "salary_package__pair_02__clean__turn_2",
+      "scenario_id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "counterparty",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Sign on above twenty five needs approval, but equity has more flexibility.",
+      "observed_text": "Sign on above 25 needs approval, but equity has more flexibility.",
+      "wer": 0.1667,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "25"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 3224.78,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 4234,
+        "audio_dbfs": -20.257,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "compensation",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "salary_package__pair_02__clean__turn_2_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+            "timestamp": 1779169300194,
+            "start_time": 1779169300.1941965,
+            "end_time": 1779169304.4281964,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "salary_package__pair_02__clean__turn_3",
+      "scenario_id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "user",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Then I need thirty five sign on and eighty equity to make that work.",
+      "observed_text": "Then I need 35 sign on an AD equity to make that work.",
+      "wer": 0.2857,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "35"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 3546.51,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 4474,
+        "audio_dbfs": -19.68,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "compensation",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "user"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "salary_package__pair_02__clean__turn_3_0",
+            "speaker": "user",
+            "language": null,
+            "text": "Then I need 35 sign on an AD equity to make that work.",
+            "timestamp": 1779169304778,
+            "start_time": 1779169304.7781963,
+            "end_time": 1779169309.2521963,
+            "diarized_speaker_id": "user",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "salary_package__pair_02__clean__turn_4",
+      "scenario_id": "salary_package__pair_02__clean",
+      "voice_pair_id": "pair_02",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "counterparty",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "I can review that package if the base stays fixed.",
+      "observed_text": "I can review that package if the base stays fixed.",
+      "wer": 0.0,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 3431.24,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 2699,
+        "audio_dbfs": -21.233,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "compensation",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "salary_package__pair_02__clean__turn_4_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "I can review that package if the base stays fixed.",
+            "timestamp": 1779169309602,
+            "start_time": 1779169309.6021965,
+            "end_time": 1779169312.3011963,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    }
+  ],
+  "session_id": "bff16204-f316-49de-85f2-13763b5f3f0e",
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "bff16204-f316-49de-85f2-13763b5f3f0e",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779169271.3399057
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "ENROLLMENT_STARTED",
+      "payload": {
+        "duration_seconds": null,
+        "sample_rate": 16000,
+        "message": "Keep speaking until the system confirms your voice sample is ready.",
+        "script": "Hello, I am preparing for an important negotiation today. I want to speak clearly, stay calm under pressure, and explain my position with confidence. My goal is to reach a fair deal, protect my budget, and respond thoughtfully to every offer while keeping the conversation respectful and productive.",
+        "progress": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "LOW_VOLUME",
+        "feedback_message": "Move closer to the microphone and speak a little louder.",
+        "db_level": -91.51155471801758,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.165584087371826,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -19.308046102523804,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -19.320346117019653,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.034499168395996,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -19.929261207580566,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.17327308654785,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_PROGRESS",
+      "payload": {
+        "progress": null,
+        "feedback": "MORE_SPEECH",
+        "feedback_message": "Keep speaking until the system has enough clean speech to build your voice sample.",
+        "db_level": -20.075104236602783,
+        "stability": null,
+        "effective_speech_duration": null
+      }
+    },
+    {
+      "type": "ENROLLMENT_COMPLETE",
+      "payload": {
+        "success": true,
+        "message": "Voice sample ready.",
+        "speaker_mode": "auto",
+        "speechbrain_profile_state": "ready",
+        "progress": null,
+        "feedback": "READY",
+        "feedback_message": "SpeechBrain confirmed a stable voice sample.",
+        "db_level": -20.242140293121338,
+        "effective_speech_duration": 6.6,
+        "stability": 0.9248684048652649
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779169294.3174667
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "bff16204-f316-49de-85f2-13763b5f3f0e",
+        "model": "disabled",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": false,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false,
+          "audio_eval_only": true
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "bff16204-f316-49de-85f2-13763b5f3f0e"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_package__pair_02__clean__turn_1_0",
+        "speaker": "user",
+        "language": null,
+        "text": "If base cannot reach 195, I need stronger sign on an equity.",
+        "timestamp": 1779169294455,
+        "start_time": 1779169294.4551964,
+        "end_time": 1779169299.8441963,
+        "diarized_speaker_id": "user",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_package__pair_02__clean__turn_2_0",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Sign on above 25 needs approval, but equity has more flexibility.",
+        "timestamp": 1779169300194,
+        "start_time": 1779169300.1941965,
+        "end_time": 1779169304.4281964,
+        "diarized_speaker_id": "counterparty",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_package__pair_02__clean__turn_3_0",
+        "speaker": "user",
+        "language": null,
+        "text": "Then I need 35 sign on an AD equity to make that work.",
+        "timestamp": 1779169304778,
+        "start_time": 1779169304.7781963,
+        "end_time": 1779169309.2521963,
+        "diarized_speaker_id": "user",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Salary",
+        "negotiation_type": "salary",
+        "seller_price": null,
+        "user_offer": 195000,
+        "user_target_price": 195000,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": null,
+        "key_moments": [
+          "User links base salary to equity, stating that if a base of 195k isn't met, they will require a stronger equity component."
+        ],
+        "leverage_points": [
+          "User is showing flexibility on the compensation structure, willing to trade a lower base salary for a better equity deal."
+        ],
+        "transcript_snippet": "If base cannot reach 195, I need stronger sign on an equity.",
+        "market_data": null,
+        "cycle": 25
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "Market rate for base salary and equity for the user's specific role, experience level, and location to validate the 195k target."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_package__pair_02__clean__turn_4_0",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I can review that package if the base stays fixed.",
+        "timestamp": 1779169309602,
+        "start_time": 1779169309.6021965,
+        "end_time": 1779169312.3011963,
+        "diarized_speaker_id": "counterparty",
+        "speaker_confidence": null,
+        "transcription_confidence": 0.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "google_stt"
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779169335.9924881
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779169336.8966484
+      }
+    }
+  ]
+}

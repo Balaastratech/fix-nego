@@ -1,0 +1,476 @@
+{
+  "scenario_id": "commercial_lease_001",
+  "title": "Office lease with rent-free period and lock-in tradeoff",
+  "family": "lease",
+  "session_id": "1cecb97e-04c5-4889-adde-4fa43ec6c60e",
+  "created_at": "2026-05-18T18:41:04+05:30",
+  "summary": {
+    "score": 0.79,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.746,
+    "judge_average": 0.826
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They are resisting the one year break option. What should I protect and what can I trade?",
+      "expected_direction": "Protect flexibility or rent-free value; trade break option only for lower price or fit-out support.",
+      "response": "Protect the 3 months rent-free period and the $160 price target first, as these have a direct and compounding financial impact. You can trade the 1-year break option, as the landlord has stated this creates \"too much vacancy risk\" for them. In exchange for giving up the break option, push them to accept your price and rent-free terms, as you would be accepting their preferred 3-year lock-in.",
+      "timestamp_ms": 1779109783311,
+      "deterministic_score": {
+        "score": 0.917,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.6666666666666666,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "1"
+        ],
+        "relevant_terms": [
+          "rent-free",
+          "break option",
+          "fit-out"
+        ],
+        "number_hits": [
+          "1"
+        ],
+        "term_hits": [
+          "rent-free",
+          "break option"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 4,
+          "timing_relevance": 5
+        },
+        "average": 4.88,
+        "passed": true,
+        "rationale": "The response provides excellent, actionable commercial advice that is perfectly grounded in the scenario. It correctly identifies what to protect (price, rent-free) and what to trade (break option) to overcome the impasse. The only minor flaw is a plausible but unstated inference about the landlord's reasoning ('too much vacancy risk'), which is not present in the context.",
+        "best_fix": "Rephrase the landlord's motivation as a likely assumption rather than a stated fact. For example: '...as this likely creates what they see as too much vacancy risk.'"
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to push from one seventy toward one sixty while preserving rent-free value.",
+      "expected_direction": "Counter 170 by asking for 165 or 160 equivalent with rent-free/fit-out economics.",
+      "response": "Say: 'One seventy is a good step, but to get this done we need to be closer to one sixty; let's keep the two months rent-free and find the remaining ten dollars on the base rate.'",
+      "timestamp_ms": 1779109799633,
+      "deterministic_score": {
+        "score": 0.575,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "170",
+          "160",
+          "1"
+        ],
+        "relevant_terms": [
+          "rent-free",
+          "fit-out"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "rent-free"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 2,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 3,
+          "non_genericness": 4,
+          "constraint_obedience": 2,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 3.38,
+        "passed": false,
+        "rationale": "The response hallucinates a key deal term ('two months rent-free') that was not present in the scenario's context. The user's target is three months, so suggesting the user say 'keep the two months' could cause them to make an unintended concession and fails the constraint to 'preserve rent-free value'.",
+        "best_fix": "Replace the hallucinated 'two months' with the user's actual target: \"...let's keep the three months rent-free...\""
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "1cecb97e-04c5-4889-adde-4fa43ec6c60e",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779109763.799231
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779109763.810325
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "1cecb97e-04c5-4889-adde-4fa43ec6c60e",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "1cecb97e-04c5-4889-adde-4fa43ec6c60e"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "One eighty per square foot with a three year lock-in is too aggressive for us.",
+        "timestamp": 1779109772988,
+        "start_time": 1779109772.988,
+        "end_time": 1779109772.988,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The building is in demand, and one eighty reflects the current market for this location.",
+        "timestamp": 1779109773788,
+        "start_time": 1779109773.788,
+        "end_time": 1779109773.788,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is one sixty with three months rent-free and a one year break option.",
+        "timestamp": 1779109774588,
+        "start_time": 1779109774.588,
+        "end_time": 1779109774.588,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "One sixty is low, and the break option creates too much vacancy risk.",
+        "timestamp": 1779109775388,
+        "start_time": 1779109775.388,
+        "end_time": 1779109775.388,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109783311",
+        "speaker": "ai",
+        "text": "Protect the 3 months rent-free period and the $160 price target first, as these have a direct and compounding financial impact. You can trade the 1-year break option, as the landlord has stated this creates \"too much vacancy risk\" for them. In exchange for giving up the break option, push them to accept your price and rent-free terms, as you would be accepting their preferred 3-year lock-in.",
+        "timestamp": 1779109783311,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT  - read  this  verbatim,  do not  paraphrase,  do not  add  or remove  any  number  or term]: Protect the  3  months  rent-free  period  and the  $160  price  target  first,  as these  have a  direct  and compounding  financial  impact.  You can  trade  the 1-year  break  option,  as the  landlord  has stated  this creates  \"too much  vacancy  risk\"  for them.  In exchange  for giving  up the  break  option,  push  them to  accept  your price  and rent-free  terms,  as you  would be  accepting  their preferred  3-year  lock-in.  [/ADVISOR_OUTPUT]",
+        "timestamp": 1779109790772,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Then we need either movement on price or meaningful fit-out support.",
+        "timestamp": 1779109776188,
+        "start_time": 1779109776.188,
+        "end_time": 1779109776.188,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I may be able to do one seventy with two months rent-free, but no one year break option.",
+        "timestamp": 1779109776988,
+        "start_time": 1779109776.988,
+        "end_time": 1779109776.988,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Property lease",
+        "negotiation_type": "renting",
+        "seller_price": "180 per square foot",
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": "To secure a long-term lease (3 years) at a high rental rate.",
+        "key_moments": [
+          "User rejects the initial offer of 180 per square foot with a three-year term as 'too aggressive'."
+        ],
+        "leverage_points": [
+          "User signals that the counterparty's opening offer is unreasonable, forcing the counterparty to justify their price or make a more reasonable offer."
+        ],
+        "transcript_snippet": "One eighty per square foot with a three year lock-in is too aggressive for us.",
+        "market_data": null,
+        "cycle": 15
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "What is the current market rate for a comparable lease in this area?"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109799633",
+        "speaker": "ai",
+        "text": "Say: 'One seventy is a good step, but to get this done we need to be closer to one sixty; let's keep the two months rent-free and find the remaining ten dollars on the base rate.'",
+        "timestamp": 1779109799633,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779109805.3568404
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779109806.049116
+      }
+    }
+  ]
+}

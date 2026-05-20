@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Companion Overlay</title>
+  <link rel="stylesheet" href="./overlay.css" />
+</head>
+<body>
+  <div class="overlay-root" id="overlay-root">
+
+    <!-- Floating AI orb -->
+    <div class="orb-wrap">
+      <button id="assistant-orb" class="assistant-orb state-idle" type="button" title="AI Companion">
+        <!-- SVG ring for mouse-hold 3s progress -->
+        <svg class="orb-ring" id="orb-ring" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="30" stroke="#ff5533" stroke-width="3"
+                  stroke-linecap="round" transform="rotate(-90 32 32)"
+                  stroke-dasharray="188" stroke-dashoffset="188" id="ring-path"/>
+        </svg>
+        <span class="orb-icon" id="orb-icon">✦</span>
+      </button>
+
+      <!-- Meeting window picker popup -->
+      <div id="meeting-menu" class="meeting-menu hidden">
+        <div class="menu-header">Select meeting window</div>
+      </div>
+    </div>
+
+    <!-- Private AI conversation panel -->
+    <div class="caption-panel" id="caption-panel">
+      <!-- AI Listening badge -->
+      <div class="listen-badge">
+        <div class="listen-dots">
+          <div class="listen-dot"></div>
+          <div class="listen-dot"></div>
+          <div class="listen-dot"></div>
+        </div>
+        <span class="listen-label">AI Listening</span>
+      </div>
+
+      <!-- Chat bubbles: only private AI asks + AI replies -->
+      <div class="chat-feed" id="chat-feed"></div>
+    </div>
+
+  </div>
+
+  <!-- Hidden video for meeting window capture -->
+  <video id="meeting-video" class="capture-video" autoplay playsinline muted></video>
+
+  <script src="./overlay.js"></script>
+</body>
+</html>

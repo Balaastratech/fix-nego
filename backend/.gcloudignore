@@ -1,0 +1,41 @@
+.gcloudignore
+.git
+.gitignore
+
+# Python virtual environments - BIGGEST culprit (400MB-1.8GB)
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test files
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Local env files (secrets stay local)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

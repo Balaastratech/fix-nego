@@ -1,0 +1,421 @@
+{
+  "scenario_id": "supplier_moq_001",
+  "title": "Supplier minimum order quantity and payment terms negotiation",
+  "family": "supplier_terms",
+  "session_id": "a51bd2a7-7685-4d0a-8337-356d0c426735",
+  "created_at": "2026-05-18T17:15:46+05:30",
+  "summary": {
+    "score": 0.869,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.938,
+    "judge_average": 0.812
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They offered four fifty five with a forecast commitment. What should I trade next?",
+      "expected_direction": "Trade forecast for lower MOQ/payment protection, not for price alone.",
+      "response": "Based on  the latest  offer  and your  target,  you should  protect  your desired  payment  terms  (Net  45)  and  reject  their proposed  price  increase  to $4.55.  To trade,  you could  offer  to accept  their forecast  commitment  term.",
+      "timestamp_ms": 1779104685926,
+      "deterministic_score": {
+        "score": 0.875,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "4.55",
+          "45"
+        ],
+        "relevant_terms": [
+          "moq",
+          "forecast"
+        ],
+        "number_hits": [
+          "4.55",
+          "45"
+        ],
+        "term_hits": [
+          "forecast"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 1,
+          "speaker_attribution": 5,
+          "actionability": 2,
+          "commercial_quality": 1,
+          "non_genericness": 4,
+          "constraint_obedience": 2,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 3.125,
+        "passed": false,
+        "rationale": "The AI misinterprets the strategic value of the supplier's 'forecast commitment' offer. It suggests the user 'accept' it, rather than using it as leverage for other terms like MOQ or payment protection, which was the expected direction. It also advises rejecting a price concession ($4.55 from $4.80) without a strategic counter-offer or trade, which is poor negotiation. The advice is not actionable in terms of a strategic trade.",
+        "best_fix": "Acknowledge the supplier's price concession to $4.55 and their introduction of a forecast commitment. Advise the user to offer to commit to the forecast in exchange for a lower MOQ (closer to 5000 units) or their desired Net 45 payment terms, or even a quality holdback."
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence that protects payment terms and quality holdback while accepting a reasonable forecast.",
+      "expected_direction": "Accept forecast only if quality holdback and improved payment terms are included.",
+      "response": "Counter that  $4.55  price  by accepting  the forecast  commitment,  but  protect  your requested  payment  terms  and insist  on including  a quality  holdback.",
+      "timestamp_ms": 1779104690014,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "4.55"
+        ],
+        "relevant_terms": [
+          "payment terms",
+          "forecast",
+          "quality holdback"
+        ],
+        "number_hits": [
+          "4.55"
+        ],
+        "term_hits": [
+          "payment terms",
+          "forecast",
+          "quality holdback"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI response is excellent. It provides a single sentence as requested, directly addresses all parts of the user's query (protecting payment terms, including quality holdback, and accepting a forecast), and aligns perfectly with the expected direction. It also introduces a commercially sound price point ($4.55) from the `must_track_numbers` list as part of the counter-offer, demonstrating strong grounding and commercial quality.",
+        "best_fix": "No significant fix needed. The response is highly effective and meets all criteria."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "a51bd2a7-7685-4d0a-8337-356d0c426735",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779104670.4236019
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779104670.4348385
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "a51bd2a7-7685-4d0a-8337-356d0c426735",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "a51bd2a7-7685-4d0a-8337-356d0c426735"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "Ten thousand unit MOQ at four eighty per unit with upfront payment is too much commitment for our first order.",
+        "timestamp": 1779104681362,
+        "start_time": 1779104681.362,
+        "end_time": 1779104681.362,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The MOQ is what lets us hold the four eighty price and reserve production capacity.",
+        "timestamp": 1779104682162,
+        "start_time": 1779104682.162,
+        "end_time": 1779104682.162,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "I can start with five thousand units if we get closer to four forty and net forty five terms.",
+        "timestamp": 1779104682962,
+        "start_time": 1779104682.962,
+        "end_time": 1779104682.962,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Five thousand units at four forty is not workable, but four fifty five may be possible with a forecast commitment.",
+        "timestamp": 1779104683762,
+        "start_time": 1779104683.762,
+        "end_time": 1779104683.762,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Based on  the latest  offer  and your  target,  you should  protect  your desired  payment  terms  (Net  45)  and  reject  their proposed  price  increase  to $4.55.  To trade,  you could  offer  to accept  their forecast  commitment  term.",
+        "timestamp": 1779104685926,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "A forecast is possible, but I need a quality holdback and payment terms before I commit volume.",
+        "timestamp": 1779104684562,
+        "start_time": 1779104684.562,
+        "end_time": 1779104684.562,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "supplier_moq_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We can discuss net thirty and a quality holdback, but net forty five is a stretch.",
+        "timestamp": 1779104685362,
+        "start_time": 1779104685.362,
+        "end_time": 1779104685.362,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "supplier_moq_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "supplier_moq_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Counter that  $4.55  price  by accepting  the forecast  commitment,  but  protect  your requested  payment  terms  and insist  on including  a quality  holdback.",
+        "timestamp": 1779104690014,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779104690.6145635
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779104691.1753373
+      }
+    }
+  ]
+}

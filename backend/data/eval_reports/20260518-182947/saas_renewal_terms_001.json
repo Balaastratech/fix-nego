@@ -1,0 +1,761 @@
+{
+  "scenario_id": "saas_renewal_terms_001",
+  "title": "SaaS renewal with price and payment-term tradeoff",
+  "family": "vendor_renewal",
+  "session_id": "f600b772-45c8-47b3-9f71-f7f79a04ec86",
+  "created_at": "2026-05-18T18:31:06+05:30",
+  "summary": {
+    "score": 0.883,
+    "passed": true,
+    "query_count": 3,
+    "deterministic_average": 0.883,
+    "judge_average": null
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 6,
+      "mode": "advice",
+      "query": "What should I do with their eighty eight offer when my target is eighty and my cap is eighty two only with protections?",
+      "expected_direction": "Reject 88 as insufficient, acknowledge movement, push toward 82 or 80, and keep protections in the frame.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\nTheir offer of $88,000 is still $6,000 above your walk-away price and $8,000 above your target. You should reject this offer and counter with your target price to re-anchor the negotiation. Since they mentioned \"standard terms,\" you need to introduce your required protections now. Protect your target of $80,000 and begin trading on terms to close the gap between $80k and their $88k. Their willingness to drop from $96k to $88k so quickly shows they have room to move.",
+      "timestamp_ms": 1779109216476,
+      "deterministic_score": {
+        "score": 0.65,
+        "checks": {
+          "number_grounding": 0.6666666666666666,
+          "term_grounding": 0.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "88000",
+          "82000",
+          "80000"
+        ],
+        "relevant_terms": [],
+        "number_hits": [
+          "88000",
+          "80000"
+        ],
+        "term_hits": []
+      }
+    },
+    {
+      "after_turn": 12,
+      "mode": "advice",
+      "query": "They are resisting eighty two with full protections. Which term should I trade last and which term should I trade first?",
+      "expected_direction": "Protect recurring risk terms like no auto-renewal, price lock, and service credits; trade lower-value implementation or payment timing first.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\nTrade Net 60 payment terms first; this is a one-time, reversible concession that has the least long-term impact. Protect the price lock, service credits, and no auto-renewal language until the very end. These terms compound in value over the life of the contract and are the most critical to hold onto, especially since you are at your walk-away price of $82,000. Onboarding is a one-time cost you can trade after Net 60 but before touching the compounding protections.",
+      "timestamp_ms": 1779109238836,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "82000"
+        ],
+        "relevant_terms": [
+          "price lock",
+          "service credits",
+          "net 60",
+          "no auto-renewal"
+        ],
+        "number_hits": [
+          "82000"
+        ],
+        "term_hits": [
+          "price lock",
+          "service credits",
+          "net 60",
+          "no auto-renewal"
+        ]
+      }
+    },
+    {
+      "after_turn": 14,
+      "mode": "advice",
+      "query": "They are offering eighty with standard payment timing instead of net sixty. Should I close, push once more, or trade something else?",
+      "expected_direction": "Recommend closing or one final minor push because target price and core protections are achieved; recognize net 60 as the traded concession.",
+      "response": "[SYSTEM: ADVICE MODE ACTIVE]\nYou should push once more. The counterparty's offer of $80,000 meets your price target but concedes only one of your five requested protections (Net 60 payment terms). Their language \"best likely path\" is a soft signal, not a final offer, leaving room to secure the last term. Protect the four compounding terms they have already agreed to (price lock, onboarding, service credits, no auto-renewal) and make one final push to get Net 60 included before you close.",
+      "timestamp_ms": 1779109258694,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "80000"
+        ],
+        "relevant_terms": [
+          "net 60"
+        ],
+        "number_hits": [
+          "80000"
+        ],
+        "term_hits": [
+          "net 60"
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "f600b772-45c8-47b3-9f71-f7f79a04ec86",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779109189.8435547
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779109189.8547418
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "f600b772-45c8-47b3-9f71-f7f79a04ec86",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "f600b772-45c8-47b3-9f71-f7f79a04ec86"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "Thanks for joining. I want to close the renewal today if we can get to a workable structure for one hundred twenty seats.",
+        "timestamp": 1779109201348,
+        "start_time": 1779109201.348,
+        "end_time": 1779109201.348,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We want to keep the account, but the ninety six thousand quote reflects current usage, support coverage, and the expanded footprint from the last cycle.",
+        "timestamp": 1779109202148,
+        "start_time": 1779109202.148,
+        "end_time": 1779109202.148,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "The ninety six thousand quote is too high, especially when last year we were at eighty four thousand.",
+        "timestamp": 1779109202948,
+        "start_time": 1779109202.948,
+        "end_time": 1779109202.948,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I understand the comparison to eighty four, but your environment and support expectations are larger now.",
+        "timestamp": 1779109203748,
+        "start_time": 1779109203.748,
+        "end_time": 1779109203.748,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "My benchmark for a serious renewal starts around eighty, not ninety six.",
+        "timestamp": 1779109204548,
+        "start_time": 1779109204.548,
+        "end_time": 1779109204.548,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "If we are talking about a fast approval path, I can likely move this to eighty eight thousand with standard terms.",
+        "timestamp": 1779109205348,
+        "start_time": 1779109205.348,
+        "end_time": 1779109205.348,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109216476",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\nTheir offer of $88,000 is still $6,000 above your walk-away price and $8,000 above your target. You should reject this offer and counter with your target price to re-anchor the negotiation. Since they mentioned \"standard terms,\" you need to introduce your required protections now. Protect your target of $80,000 and begin trading on terms to close the gap between $80k and their $88k. Their willingness to drop from $96k to $88k so quickly shows they have room to move.",
+        "timestamp": 1779109216476,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  MODE  ACTIVE]  Their  offer  of $88,000  is still  $6,000  above  your walk-away  price  and $8,000  above  your target.  You should  reject  this offer  and counter  with your  target  price  to re-anchor  the negotiation.  Since  they mentioned  \"standard  terms,\"  you need  to introduce  your required  protections  now.  Protect  your target  of $80,000  and begin  trading  on terms  to close  the gap  between  $80k  and their  $88k.  Their willingness  to drop  from $96k  to $88k  so quickly  shows  they have  room to  move.  [/ADVISOR_OUTPUT]",
+        "timestamp": 1779109224263,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "renewal for one hundred twenty seats",
+        "negotiation_type": "service",
+        "seller_price": null,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": null,
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "description": "User opens the negotiation by stating the goal is to finalize a renewal for 120 seats.",
+            "type": "opening_statement"
+          }
+        ],
+        "leverage_points": [
+          {
+            "description": "User is an existing customer renewing a significant number of seats (120), which implies they are a valuable client.",
+            "party": "user"
+          }
+        ],
+        "transcript_snippet": "User [0:01]: Thanks for joining. I want to close the renewal today if we can get to a workable structure for one hundred twenty seats.",
+        "market_data": null,
+        "cycle": 17
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The specific service or software being renewed is not named, making it impossible to research market rates for 120 seats."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_7",
+        "speaker": "user",
+        "language": null,
+        "text": "If price cannot come down enough, the protections need to get materially better.",
+        "timestamp": 1779109206148,
+        "start_time": 1779109206.148,
+        "end_time": 1779109206.148,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_7",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_8",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "If you want stronger protections, I need to trade somewhere because richer terms and lower price do not usually move together.",
+        "timestamp": 1779109206948,
+        "start_time": 1779109206.948,
+        "end_time": 1779109206.948,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_8",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_9",
+        "speaker": "user",
+        "language": null,
+        "text": "I can take eighty two forward only if it includes a price lock, onboarding, service credits, net sixty, and no auto-renewal.",
+        "timestamp": 1779109207748,
+        "start_time": 1779109207.748,
+        "end_time": 1779109207.748,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_9",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_10",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I can probably get to eighty four, but that would still need standard payment terms and normal renewal language.",
+        "timestamp": 1779109208548,
+        "start_time": 1779109208.548,
+        "end_time": 1779109208.548,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_10",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_11",
+        "speaker": "user",
+        "language": null,
+        "text": "If you cannot do eighty two with those protections, I need your best executable position today.",
+        "timestamp": 1779109209348,
+        "start_time": 1779109209.348,
+        "end_time": 1779109209.348,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_11",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_12",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Eighty two is harder, and if I go there I will need to narrow what is included.",
+        "timestamp": 1779109210148,
+        "start_time": 1779109210.148,
+        "end_time": 1779109210.148,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_12",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109238836",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\nTrade Net 60 payment terms first; this is a one-time, reversible concession that has the least long-term impact. Protect the price lock, service credits, and no auto-renewal language until the very end. These terms compound in value over the life of the contract and are the most critical to hold onto, especially since you are at your walk-away price of $82,000. Onboarding is a one-time cost you can trade after Net 60 but before touching the compounding protections.",
+        "timestamp": 1779109238836,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "RESEARCH_COMPLETE",
+      "payload": {
+        "query": "The specific service or software being renewed is not named, making it impossible to research market rates for 120 seats.",
+        "market_data": "Key Facts: It can cost 5 to 25 times more for a company to acquire a new customer than to retain an existing one. [8, 12] A 5% improvement in customer retention can increase profits by 25-95%. [9, 10] | Leverage: Ask for the renewal price, but immediately re-anchor the negotiation by being the first to make an offer. [16, 22] Your opening offer should be based on the value you provide as a large, loyal customer, the high cost for them to replace you, and your knowledge of their other interests (like cash timing or contract length). [11] | Tactics: Tactic 1: Anchor the Price - Be the first to make a comprehensive offer that includes not just price, but also term length and payment timing to frame the entire negotiation. [16, 22] Tactic 2: Unbundle the Deal - Instead of just negotiating the total price, negotiate the price per seat, the features included, and the service level, which can reveal opportunities for savings. Tactic 3: Introduce Competition - Mention that you are evaluating other options or have received quotes from competitors to create pressure, even if you don't name them. [15] | Gap Answer: The specific service or software being renewed is not named, making it impossible to research market rates for 120 seats. To get a specific price, you must ask the counterparty for their renewal offer first. However, do not accept their number as the starting point. Instead, use the high cost of customer acquisition vs. retention as your leverage to re-anchor the negotiation with your own, lower offer. [7, 8, 16]",
+        "timestamp": 1779109243.858607,
+        "trigger_reason": "first_research"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  ACTIVE]  Trade  Net  60  payment  terms  first;  this  is a  one-time,  reversible  concession  that has  the least  long-term  impact.  Protect  the price  lock,  service  credits,  and no  auto-renewal  language  until  the very  end.  These  terms  compound  in value  over the  life  of the contract  and are  the most  critical  to hold  onto,  especially  since  you are  at your  walk-away  price  of $82,000.  Onboarding  is a  one-time  cost  you can  trade  after  Net 60  but before  touching  the compounding  protections.",
+        "timestamp": 1779109245923,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_13",
+        "speaker": "user",
+        "language": null,
+        "text": "If you can get to eighty with the protections, I can push to close this.",
+        "timestamp": 1779109210948,
+        "start_time": 1779109210.948,
+        "end_time": 1779109210.948,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_13",
+        "speaker": "user",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_14",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "My best likely path is eighty thousand with price lock, onboarding, service credits, and no auto-renewal, but standard payment timing instead of net sixty.",
+        "timestamp": 1779109211748,
+        "start_time": 1779109211.748,
+        "end_time": 1779109211.748,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "saas_renewal_terms_001_turn_14",
+        "speaker": "counterparty",
+        "scenario_id": "saas_renewal_terms_001"
+      }
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "Software/Service Renewal for 120 seats",
+        "negotiation_type": "service",
+        "seller_price": 88000,
+        "user_offer": null,
+        "user_target_price": 80000,
+        "user_max_price": null,
+        "sentiment": "positive",
+        "counterparty_goal": "To renew the contract at a higher price by justifying it with the user's increased usage and support needs.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "description": "User opens the negotiation by stating the goal is to finalize a renewal for 120 seats.",
+            "type": "opening_statement"
+          },
+          "Counterparty opens with a $96k quote for renewal.",
+          "User rejects $96k, referencing last year's $84k price and setting a new benchmark of $80k.",
+          "Counterparty makes a concession to $88k in exchange for a fast approval path."
+        ],
+        "leverage_points": [
+          {
+            "description": "User is an existing customer renewing a significant number of seats (120), which implies they are a valuable client.",
+            "party": "user"
+          },
+          "User's leverage is their willingness to renew quickly ('fast approval path') and their anchor point of $80k.",
+          "Counterparty's leverage is the user's increased usage ('expanded footprint') and support needs justifying a price hike."
+        ],
+        "transcript_snippet": "User: My benchmark for a serious renewal starts around eighty, not ninety six. Counterparty: If we are talking about a fast approval path, I can likely move this to eighty eight thousand with standard terms.",
+        "market_data": "Key Facts: It can cost 5 to 25 times more for a company to acquire a new customer than to retain an existing one. [8, 12] A 5% improvement in customer retention can increase profits by 25-95%. [9, 10] | Leverage: Ask for the renewal price, but immediately re-anchor the negotiation by being the first to make an offer. [16, 22] Your opening offer should be based on the value you provide as a large, loyal customer, the high cost for them to replace you, and your knowledge of their other interests (like cash timing or contract length). [11] | Tactics: Tactic 1: Anchor the Price - Be the first to make a comprehensive offer that includes not just price, but also term length and payment timing to frame the entire negotiation. [16, 22] Tactic 2: Unbundle the Deal - Instead of just negotiating the total price, negotiate the price per seat, the features included, and the service level, which can reveal opportunities for savings. Tactic 3: Introduce Competition - Mention that you are evaluating other options or have received quotes from competitors to create pressure, even if you don't name them. [15] | Gap Answer: The specific service or software being renewed is not named, making it impossible to research market rates for 120 seats. To get a specific price, you must ask the counterparty for their renewal offer first. However, do not accept their number as the starting point. Instead, use the high cost of customer acquisition vs. retention as your leverage to re-anchor the negotiation with your own, lower offer. [7, 8, 16]",
+        "cycle": 19
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779109258694",
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE MODE ACTIVE]\nYou should push once more. The counterparty's offer of $80,000 meets your price target but concedes only one of your five requested protections (Net 60 payment terms). Their language \"best likely path\" is a soft signal, not a final offer, leaving room to secure the last term. Protect the four compounding terms they have already agreed to (price lock, onboarding, service credits, no auto-renewal) and make one final push to get Net 60 included before you close.",
+        "timestamp": 1779109258694,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[SYSTEM: ADVICE  ACTIVE]  You should  push  once  more.  The counterparty's  offer  of $80,000  meets  your price  target  but concedes  only  one  of your  five  requested  protections  (Net  60  payment  terms).  Their language  \"best  likely  path\"  is a  soft  signal,  not  a final  offer,  leaving  room to  secure  the last  term.  Protect  the four  compounding  terms  they have  already  agreed  to (price  lock,  onboarding,  service  credits,  no auto-renewal)  and make  one final  push  to get  Net 60  included  before  you close.",
+        "timestamp": 1779109265786,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779109266.353524
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779109266.9789052
+      }
+    }
+  ]
+}

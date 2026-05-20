@@ -1,0 +1,482 @@
+{
+  "scenario_id": "salary_equity_001",
+  "title": "Salary offer with base, sign-on, and equity tradeoff",
+  "family": "salary",
+  "session_id": "a71aea31-5c89-4a45-b57e-d518760feeee",
+  "created_at": "2026-05-18T18:10:50+05:30",
+  "summary": {
+    "score": 0.662,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.662,
+    "judge_average": null
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 6,
+      "mode": "advice",
+      "query": "They may move base to one ninety five but want the rest unchanged. What should I push next?",
+      "expected_direction": "Push total compensation, not base alone; use equity and sign-on as trade levers.",
+      "response": "Their willingness to consider $195k base is a signal, not a confirmed offer. They want",
+      "timestamp_ms": 1779108026892,
+      "deterministic_score": {
+        "score": 0.75,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "195000"
+        ],
+        "relevant_terms": [
+          "sign-on",
+          "equity"
+        ],
+        "number_hits": [
+          "195000"
+        ],
+        "term_hits": []
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence that asks for equity and sign-on without sounding inflexible.",
+      "expected_direction": "Ask for a concrete package around 195 base, 35 sign-on, and 80 equity or equivalent total value.",
+      "response": "Say: 'I appreciate the signal on equity flexibility; to make the one ninety five base work,",
+      "timestamp_ms": 1779108046397,
+      "deterministic_score": {
+        "score": 0.575,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "195000",
+          "35000",
+          "80000"
+        ],
+        "relevant_terms": [
+          "sign-on",
+          "equity"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "equity"
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "a71aea31-5c89-4a45-b57e-d518760feeee",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779107985.6847057
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779107985.7403626
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "a71aea31-5c89-4a45-b57e-d518760feeee",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "a71aea31-5c89-4a45-b57e-d518760feeee"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "I appreciate the offer. I want to make the package work, but the base salary is below where I expected for this scope.",
+        "timestamp": 1779108003653,
+        "start_time": 1779108003.653,
+        "end_time": 1779108003.653,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The current offer is one hundred eighty five thousand base, twenty thousand sign-on, and sixty thousand annual equity.",
+        "timestamp": 1779108004453,
+        "start_time": 1779108004.453,
+        "end_time": 1779108004.453,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "For this role and scope, my target is two hundred five thousand base.",
+        "timestamp": 1779108005253,
+        "start_time": 1779108005.253,
+        "end_time": 1779108005.253,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two hundred five is above the band midpoint for this level, so that will be difficult.",
+        "timestamp": 1779108006053,
+        "start_time": 1779108006.053,
+        "end_time": 1779108006.053,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "If the base cannot reach two hundred five, I need the total package to close the gap.",
+        "timestamp": 1779108006853,
+        "start_time": 1779108006.853,
+        "end_time": 1779108006.853,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "We might be able to discuss one hundred ninety five base if the rest of the package remains unchanged.",
+        "timestamp": 1779108007653,
+        "start_time": 1779108007.653,
+        "end_time": 1779108007.653,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779108026892",
+        "speaker": "ai",
+        "text": "Their willingness to consider $195k base is a signal, not a confirmed offer. They want",
+        "timestamp": 1779108026892,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_7",
+        "speaker": "user",
+        "language": null,
+        "text": "One ninety five helps, but I would need thirty five thousand sign-on and eighty thousand annual equity to make that work.",
+        "timestamp": 1779108008453,
+        "start_time": 1779108008.453,
+        "end_time": 1779108008.453,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_7",
+        "speaker": "user",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "salary_equity_001_turn_8",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Equity has more flexibility than base, but sign-on above twenty five will require approval.",
+        "timestamp": 1779108009253,
+        "start_time": 1779108009.253,
+        "end_time": 1779108009.253,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "salary_equity_001_turn_8",
+        "speaker": "counterparty",
+        "scenario_id": "salary_equity_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "base salary",
+        "negotiation_type": "salary",
+        "seller_price": null,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": "To hire the user for the role.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "event": "User expresses dissatisfaction with the initial salary offer and signals a desire to negotiate."
+          }
+        ],
+        "leverage_points": [
+          {
+            "party": "user",
+            "leverage": "The user is leveraging the 'scope' of the role, implying the responsibilities warrant a higher salary than what was offered."
+          }
+        ],
+        "transcript_snippet": "I appreciate the offer. I want to make the package work, but the base salary is below where I expected for this scope.",
+        "market_data": null,
+        "cycle": 22
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user has an unstated expectation for salary based on the role's scope, but may need data on market rates to anchor their counter-offer."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779108046397",
+        "speaker": "ai",
+        "text": "Say: 'I appreciate the signal on equity flexibility; to make the one ninety five base work,",
+        "timestamp": 1779108046397,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START",
+          "CONTAINS_QUESTIONS:1"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer, You asked questions. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779108049.7427926
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779108050.391582
+      }
+    }
+  ]
+}

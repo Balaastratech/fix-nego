@@ -1,0 +1,525 @@
+{
+  "scenario_id": "sla_penalty_001",
+  "title": "SLA penalty negotiation for managed hosting",
+  "family": "services_contract",
+  "session_id": "3c4285cb-4b41-44ac-8cc7-6ded7281f95b",
+  "created_at": "2026-05-18T18:56:44+05:30",
+  "summary": {
+    "score": 0.898,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.787,
+    "judge_average": 0.988
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They want a cap on the three percent. Should I accept the cap or push tiered credits?",
+      "expected_direction": "Push tiered credits where percentage scales with outage length; cap is acceptable only with the tier; protect the 30 day notice clause.",
+      "response": "Push for tiered credits.\n\nA cap benefits them entirely, while a tiered structure can protect you and still address their concern about uncapped exposure. Tiered credits keep their incentive to restore service quickly, which is your primary goal. A simple cap removes that incentive once the cap is reached. You can use the cap as a fallback, but lead with a tiered structure first.",
+      "timestamp_ms": 1779110740820,
+      "deterministic_score": {
+        "score": 0.575,
+        "checks": {
+          "number_grounding": 0.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "3",
+          "30"
+        ],
+        "relevant_terms": [
+          "tiered credits",
+          "notice clause"
+        ],
+        "number_hits": [],
+        "term_hits": [
+          "tiered credits"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response is excellent. It provides a clear, actionable, and commercially savvy recommendation that directly aligns with the expected direction. It correctly identifies the strategic value of a tiered structure over a simple cap and explains the underlying incentives, empowering the user in the negotiation.",
+        "best_fix": "No fix is needed; the response is ideal."
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence to settle at two percent capped, tiered, with thirty day notice clause.",
+      "expected_direction": "Accept 2 percent with tiered structure, capped, and 30 day notice clause for maintenance, all in one sentence.",
+      "response": "Say: 'Great, let's settle this: two percent per hour capped at twenty percent, with the thirty-day notice clause, and we'll define a simple tiered structure for longer outages.'",
+      "timestamp_ms": 1779110756806,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "30"
+        ],
+        "relevant_terms": [
+          "notice clause"
+        ],
+        "number_hits": [
+          "30"
+        ],
+        "term_hits": [
+          "notice clause"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 4,
+          "timing_relevance": 5
+        },
+        "average": 4.88,
+        "passed": true,
+        "rationale": "The response is excellent. It successfully combines all the user's required elements—two percent, capped, tiered, and the thirty-day notice clause—into a single, commercially sound sentence. The introduction of a specific cap number (20%) is a helpful, commercially aware addition, even though it wasn't explicitly provided in the prompt, which is a minor and helpful hallucination.",
+        "best_fix": "The response is nearly perfect. To avoid introducing a new number, it could have said '...capped at a reasonable percentage...'"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "3c4285cb-4b41-44ac-8cc7-6ded7281f95b",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110723.0418677
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110723.0641084
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "3c4285cb-4b41-44ac-8cc7-6ded7281f95b",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "3c4285cb-4b41-44ac-8cc7-6ded7281f95b"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Our standard SLA credit is half a percent of monthly fee per hour of downtime beyond ninety nine point nine.",
+        "timestamp": 1779110730391,
+        "start_time": 1779110730.391,
+        "end_time": 1779110730.391,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "Half a percent is not enough to be a real deterrent. I need three percent per hour.",
+        "timestamp": 1779110731191,
+        "start_time": 1779110731.191,
+        "end_time": 1779110731.191,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Three percent uncapped would expose us to massive credits for any incident.",
+        "timestamp": 1779110731991,
+        "start_time": 1779110731.991,
+        "end_time": 1779110731.991,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Then propose a cap, not a lower rate.",
+        "timestamp": 1779110732791,
+        "start_time": 1779110732.791,
+        "end_time": 1779110732.791,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110740820",
+        "speaker": "ai",
+        "text": "Push for tiered credits.\n\nA cap benefits them entirely, while a tiered structure can protect you and still address their concern about uncapped exposure. Tiered credits keep their incentive to restore service quickly, which is your primary goal. A simple cap removes that incentive once the cap is reached. You can use the cap as a fallback, but lead with a tiered structure first.",
+        "timestamp": 1779110740820,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "SLA (Service Level Agreement) credit",
+        "negotiation_type": "service",
+        "seller_price": "0.5% of monthly fee per hour of downtime",
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To establish their standard, predefined SLA credit terms for service downtime.",
+        "key_moments": [
+          {
+            "timestamp": "0:01",
+            "summary": "Counterparty states their standard SLA credit: 0.5% of the monthly fee per hour of downtime for uptime below 99.9%."
+          }
+        ],
+        "leverage_points": [],
+        "transcript_snippet": "Our standard SLA credit is half a percent of monthly fee per hour of downtime beyond ninety nine point nine.",
+        "market_data": null,
+        "cycle": 13
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The user needs to know the industry standard for SLA downtime credits to determine if the counterparty's offer is fair or competitive."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT  - read  this  verbatim,  do not  paraphrase,  do not  add  or remove  any  number  or term]: Push for  tiered  credits.  A cap  benefits  them entirely,  while a  tiered  structure  can protect  you and  still  address  their concern  about  uncapped  exposure.  Tiered  credits  keep  their incentive  to restore  service  quickly,  which  is your  primary  goal.  A simple  cap  removes  that incentive  once  the cap  is reached.  You can  use the  cap  as a fallback,  but lead  with a  tiered  structure  first.",
+        "timestamp": 1779110747698,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Two percent per hour capped at twenty percent of the monthly fee.",
+        "timestamp": 1779110733591,
+        "start_time": 1779110733.591,
+        "end_time": 1779110733.591,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "Two percent works if we add a thirty day notice clause for any planned maintenance.",
+        "timestamp": 1779110734391,
+        "start_time": 1779110734.391,
+        "end_time": 1779110734.391,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Thirty day notice for maintenance is reasonable.",
+        "timestamp": 1779110735191,
+        "start_time": 1779110735.191,
+        "end_time": 1779110735.191,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "sla_penalty_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Also, I need a tiered structure - higher percentage for longer outages.",
+        "timestamp": 1779110735991,
+        "start_time": 1779110735.991,
+        "end_time": 1779110735.991,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "sla_penalty_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "sla_penalty_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110756806",
+        "speaker": "ai",
+        "text": "Say: 'Great, let's settle this: two percent per hour capped at twenty percent, with the thirty-day notice clause, and we'll define a simple tiered structure for longer outages.'",
+        "timestamp": 1779110756806,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110761.75575
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110762.48145
+      }
+    }
+  ]
+}

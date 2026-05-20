@@ -1,0 +1,135 @@
+{
+  "run_id": "20260518-183220",
+  "created_at": "2026-05-18T19:01:29+05:30",
+  "scenario_count": 18,
+  "passed": 14,
+  "average_score": 0.887,
+  "results": [
+    {
+      "scenario_id": "saas_renewal_terms_001",
+      "title": "SaaS renewal with price and payment-term tradeoff",
+      "score": 0.787,
+      "passed": false,
+      "report": "saas_renewal_terms_001.json"
+    },
+    {
+      "scenario_id": "salary_equity_001",
+      "title": "Salary offer with base, sign-on, and equity tradeoff",
+      "score": 1.0,
+      "passed": true,
+      "report": "salary_equity_001.json"
+    },
+    {
+      "scenario_id": "services_retainer_scope_001",
+      "title": "Marketing services retainer with scope creep risk",
+      "score": 0.91,
+      "passed": true,
+      "report": "services_retainer_scope_001.json"
+    },
+    {
+      "scenario_id": "hardware_bulk_purchase_001",
+      "title": "Bulk laptop purchase with warranty and delivery tradeoff",
+      "score": 0.944,
+      "passed": true,
+      "report": "hardware_bulk_purchase_001.json"
+    },
+    {
+      "scenario_id": "commercial_lease_001",
+      "title": "Office lease with rent-free period and lock-in tradeoff",
+      "score": 0.79,
+      "passed": false,
+      "report": "commercial_lease_001.json"
+    },
+    {
+      "scenario_id": "supplier_moq_001",
+      "title": "Supplier minimum order quantity and payment terms negotiation",
+      "score": 0.905,
+      "passed": true,
+      "report": "supplier_moq_001.json"
+    },
+    {
+      "scenario_id": "multi_vendor_rfp_001",
+      "title": "Multi-vendor RFP with three competitors on price and SLA",
+      "score": 0.936,
+      "passed": true,
+      "report": "multi_vendor_rfp_001.json"
+    },
+    {
+      "scenario_id": "anchoring_tactic_001",
+      "title": "Counterparty opens with an extreme anchor 3x above market",
+      "score": 0.944,
+      "passed": true,
+      "report": "anchoring_tactic_001.json"
+    },
+    {
+      "scenario_id": "deadline_pressure_001",
+      "title": "Counterparty manufactures urgency to force capitulation",
+      "score": 0.866,
+      "passed": true,
+      "report": "deadline_pressure_001.json"
+    },
+    {
+      "scenario_id": "batna_exploration_001",
+      "title": "User has weak BATNA and must build it before pushing",
+      "score": 0.943,
+      "passed": true,
+      "report": "batna_exploration_001.json"
+    },
+    {
+      "scenario_id": "walk_away_decision_001",
+      "title": "Counterparty offer is below walk-away and AI must recommend walking",
+      "score": 0.932,
+      "passed": true,
+      "report": "walk_away_decision_001.json"
+    },
+    {
+      "scenario_id": "partnership_equity_001",
+      "title": "Three-way founder equity split with vesting and role tradeoff",
+      "score": 0.735,
+      "passed": false,
+      "report": "partnership_equity_001.json"
+    },
+    {
+      "scenario_id": "contract_renegotiation_001",
+      "title": "Renegotiating an existing two-year vendor relationship under price-increase request",
+      "score": 0.948,
+      "passed": true,
+      "report": "contract_renegotiation_001.json"
+    },
+    {
+      "scenario_id": "salary_competing_offers_001",
+      "title": "Using a competing offer to lift the primary offer",
+      "score": 0.888,
+      "passed": true,
+      "report": "salary_competing_offers_001.json"
+    },
+    {
+      "scenario_id": "sla_penalty_001",
+      "title": "SLA penalty negotiation for managed hosting",
+      "score": 0.898,
+      "passed": true,
+      "report": "sla_penalty_001.json"
+    },
+    {
+      "scenario_id": "hostile_tone_001",
+      "title": "Counterparty uses hostile pressure language",
+      "score": 0.784,
+      "passed": false,
+      "report": "hostile_tone_001.json"
+    },
+    {
+      "scenario_id": "info_asymmetry_001",
+      "title": "Counterparty knows the user has a hard deadline",
+      "score": 0.904,
+      "passed": true,
+      "report": "info_asymmetry_001.json"
+    },
+    {
+      "scenario_id": "integrative_winwin_001",
+      "title": "Joint venture across cash, IP rights, and market exclusivity",
+      "score": 0.85,
+      "passed": true,
+      "report": "integrative_winwin_001.json"
+    }
+  ]
+}

@@ -1,0 +1,421 @@
+{
+  "scenario_id": "commercial_lease_001",
+  "title": "Office lease with rent-free period and lock-in tradeoff",
+  "family": "lease",
+  "session_id": "461a18fd-4ed4-404d-8da2-d042ab459b3a",
+  "created_at": "2026-05-18T17:14:28+05:30",
+  "summary": {
+    "score": 0.893,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.854,
+    "judge_average": 0.925
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They are resisting the one year break option. What should I protect and what can I trade?",
+      "expected_direction": "Protect flexibility or rent-free value; trade break option only for lower price or fit-out support.",
+      "response": "Protect the  160  price  point,  as it  is your  target.  Trade  the one-year  break  option  to address  their concern  about  vacancy  risk.  You could  propose  a longer  lock-in  period  or  a later  break  option,  such  as after  three  years.",
+      "timestamp_ms": 1779104624320,
+      "deterministic_score": {
+        "score": 0.833,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.3333333333333333,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "1"
+        ],
+        "relevant_terms": [
+          "rent-free",
+          "break option",
+          "fit-out"
+        ],
+        "number_hits": [
+          "1"
+        ],
+        "term_hits": [
+          "break option"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 3,
+          "non_genericness": 5,
+          "constraint_obedience": 1,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 4.25,
+        "passed": false,
+        "rationale": "The AI correctly identifies what to protect (user's target price) and what to trade (break option), and provides actionable suggestions. However, it fails to adhere to the explicit instruction in the expected direction to trade the break option *only* for a lower price or fit-out support. The suggested trade (longer lock-in/later break option) is a concession without a direct reciprocal gain for the user, which diminishes its commercial quality in the context of the expected direction.",
+        "best_fix": "Protect the 160 price point and the 3 months rent-free period. You can trade the one-year break option, but only in exchange for a further reduction in the annual price (e.g., to 155) or significant fit-out support from the landlord. Do not trade the break option for just a longer lock-in without getting something substantial in return."
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to push from one seventy toward one sixty while preserving rent-free value.",
+      "expected_direction": "Counter 170 by asking for 165 or 160 equivalent with rent-free/fit-out economics.",
+      "response": "Counter their  170  offer  with  160  while  holding  firm  on three  months  rent-free,  explicitly  dropping  the one-year  break  option.",
+      "timestamp_ms": 1779104628001,
+      "deterministic_score": {
+        "score": 0.875,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.5,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "170",
+          "160",
+          "1"
+        ],
+        "relevant_terms": [
+          "rent-free",
+          "fit-out"
+        ],
+        "number_hits": [
+          "170",
+          "160",
+          "1"
+        ],
+        "term_hits": [
+          "rent-free"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The AI response perfectly addresses the user's query. It provides a single, actionable sentence that pushes from 170 towards 160, preserves the rent-free value, and offers a commercially sound trade-off (dropping the break option) to achieve the desired economics. It is well-grounded in the scenario and adheres to all constraints.",
+        "best_fix": "No fix needed, the response is excellent."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "461a18fd-4ed4-404d-8da2-d042ab459b3a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779104612.9047387
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779104612.91679
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "461a18fd-4ed4-404d-8da2-d042ab459b3a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "461a18fd-4ed4-404d-8da2-d042ab459b3a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "One eighty per square foot with a three year lock-in is too aggressive for us.",
+        "timestamp": 1779104620217,
+        "start_time": 1779104620.217,
+        "end_time": 1779104620.217,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "The building is in demand, and one eighty reflects the current market for this location.",
+        "timestamp": 1779104621017,
+        "start_time": 1779104621.017,
+        "end_time": 1779104621.017,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "My target is one sixty with three months rent-free and a one year break option.",
+        "timestamp": 1779104621817,
+        "start_time": 1779104621.817,
+        "end_time": 1779104621.817,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "One sixty is low, and the break option creates too much vacancy risk.",
+        "timestamp": 1779104622617,
+        "start_time": 1779104622.617,
+        "end_time": 1779104622.617,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Protect the  160  price  point,  as it  is your  target.  Trade  the one-year  break  option  to address  their concern  about  vacancy  risk.  You could  propose  a longer  lock-in  period  or  a later  break  option,  such  as after  three  years.",
+        "timestamp": 1779104624320,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Then we need either movement on price or meaningful fit-out support.",
+        "timestamp": 1779104623417,
+        "start_time": 1779104623.417,
+        "end_time": 1779104623.417,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "commercial_lease_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I may be able to do one seventy with two months rent-free, but no one year break option.",
+        "timestamp": 1779104624217,
+        "start_time": 1779104624.217,
+        "end_time": 1779104624.217,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "commercial_lease_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "commercial_lease_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Counter their  170  offer  with  160  while  holding  firm  on three  months  rent-free,  explicitly  dropping  the one-year  break  option.",
+        "timestamp": 1779104628001,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779104628.5960553
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779104629.1560075
+      }
+    }
+  ]
+}

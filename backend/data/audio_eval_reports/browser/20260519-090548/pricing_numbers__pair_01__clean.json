@@ -1,0 +1,687 @@
+{
+  "suite": "audio_browser_eval",
+  "run_id": "20260519-090548",
+  "manifest_id": "audio_eval_manifest_v1",
+  "created_at_ms": 1779161838147,
+  "scenario": {
+    "id": "pricing_numbers__pair_01__clean",
+    "voice_pair_id": "pair_01",
+    "condition": "clean",
+    "condition_tags": [
+      "clean"
+    ]
+  },
+  "summary": {
+    "suite": "audio_browser_eval",
+    "run_id": "20260519-090548",
+    "turn_count": 4,
+    "speaker_accuracy": 0,
+    "false_user_count": 2,
+    "false_counterparty_count": 1,
+    "wrong_label_count": 3,
+    "missing_transcript_count": 1,
+    "timeout_count": 1,
+    "failure_kind_counts": {
+      "pipeline_timeout": 1,
+      "wrong_label": 3
+    },
+    "wer_mean": 1,
+    "leading_word_drop_count": 4,
+    "trailing_word_drop_count": 4,
+    "latency_ms_mean": -646.333,
+    "latency_ms_p95": -32,
+    "confusion_matrix": {
+      "user": {
+        "missing": 1,
+        "counterparty": 1
+      },
+      "counterparty": {
+        "user": 2
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "turn_count": 4,
+        "speaker_accuracy": 0,
+        "false_user_count": 2,
+        "false_counterparty_count": 1,
+        "missing_transcript_count": 1,
+        "wer_mean": 1,
+        "p95_latency_ms": -32,
+        "leading_word_drop_count": 4,
+        "trailing_word_drop_count": 4
+      }
+    },
+    "pass": false
+  },
+  "turns": [
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_1",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": null,
+      "speaker_correct": false,
+      "wrong_label": false,
+      "missing_transcript": true,
+      "timeout": true,
+      "failure_kind": "pipeline_timeout",
+      "failure_reason": "Frontend emitted UTTERANCE_END but no transcript arrived before timeout.",
+      "expected_text": "I can do eighty two only with net sixty and no auto renewal.",
+      "observed_text": "",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 0,
+      "latency_ms": null,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "START_NEGOTIATION",
+        null,
+        null,
+        "UTTERANCE_END",
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [],
+        "utterance_end_payloads": [
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "47c15286-1bd0-41c2-987f-1e0a831dd470",
+              "started_at": 1779161809.165,
+              "ended_at": 1779161812.653,
+              "duration_ms": 3488,
+              "rms": 15827.220444143059
+            },
+            "capturedAt": 1779161812665
+          }
+        ],
+        "audio_chunk_count": 72
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_2",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "user",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": "wrong_label",
+      "failure_reason": "Observed speaker user does not match expected counterparty.",
+      "expected_text": "At eighty four we can keep delivery and warranty included.",
+      "observed_text": "Can do 82 only with net 60 and no auto renewal.",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "82",
+          "60"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 1,
+      "latency_ms": -32,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        "UTTERANCE_END",
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [
+          {
+            "speaker": "user",
+            "text": "Can do 82 only with net 60 and no auto renewal.",
+            "capturedAt": 1779161828096
+          }
+        ],
+        "utterance_end_payloads": [
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "8b4e103f-6061-47b2-8b86-e17cfc4516a9",
+              "started_at": 1779161825.05,
+              "ended_at": 1779161828.105,
+              "duration_ms": 3055,
+              "rms": 26149.50396293398
+            },
+            "capturedAt": 1779161828128
+          }
+        ],
+        "audio_chunk_count": 61
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_3",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "counterparty",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": "wrong_label",
+      "failure_reason": "Observed speaker counterparty does not match expected user.",
+      "expected_text": "Eighty four is still high for fifty units.",
+      "observed_text": "84 we can keep delivery and warranty included.",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "84"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 1,
+      "latency_ms": -268,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        "UTTERANCE_END"
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [
+          {
+            "speaker": "counterparty",
+            "text": "84 we can keep delivery and warranty included.",
+            "capturedAt": 1779161832128
+          }
+        ],
+        "utterance_end_payloads": [
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "b0e29fe1-adea-4fb9-ab2e-257b66a64eed",
+              "started_at": 1779161829.635,
+              "ended_at": 1779161832.392,
+              "duration_ms": 2757,
+              "rms": 16357.000914363854
+            },
+            "capturedAt": 1779161832396
+          }
+        ],
+        "audio_chunk_count": 49
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_4",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "user",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": "wrong_label",
+      "failure_reason": "Observed speaker user does not match expected counterparty.",
+      "expected_text": "Then I can review sixty one if replacement terms stay standard.",
+      "observed_text": "84 is still high for 50 units.",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "84",
+          "50"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 1,
+      "latency_ms": -1639,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        null,
+        "UTTERANCE_END"
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [
+          {
+            "speaker": "user",
+            "text": "84 is still high for 50 units.",
+            "capturedAt": 1779161835870
+          }
+        ],
+        "utterance_end_payloads": [
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "e9309dad-5c5a-4730-b194-e29932606a92",
+              "started_at": 1779161833.406,
+              "ended_at": 1779161837.503,
+              "duration_ms": 4097,
+              "rms": 25603.252280984732
+            },
+            "capturedAt": 1779161837509
+          }
+        ],
+        "audio_chunk_count": 81
+      }
+    }
+  ],
+  "events": [
+    {
+      "transcripts": [
+        {
+          "speaker": "user",
+          "text": "Can do 82 only with net 60 and no auto renewal.",
+          "capturedAt": 1779161828096
+        },
+        {
+          "speaker": "counterparty",
+          "text": "84 we can keep delivery and warranty included.",
+          "capturedAt": 1779161832128
+        },
+        {
+          "speaker": "user",
+          "text": "84 is still high for 50 units.",
+          "capturedAt": 1779161835870
+        }
+      ],
+      "wsEvents": [
+        {
+          "payload": {},
+          "capturedAt": 1779161753767
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161756190
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161758686
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161761197
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161763689
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161766191
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161768688
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161771194
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161773696
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161776184
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161778695
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161781188
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161783685
+        },
+        {
+          "type": "PRIVACY_CONSENT_GRANTED",
+          "payload": {
+            "version": "1.0",
+            "mode": "live"
+          },
+          "capturedAt": 1779161785208
+        },
+        {
+          "type": "ENROLLMENT_START",
+          "payload": {},
+          "capturedAt": 1779161786154
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161786193
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161788694
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161791222
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161793691
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161796441
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161798683
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161801185
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161803685
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161806189
+        },
+        {
+          "type": "START_NEGOTIATION",
+          "payload": {
+            "context": "",
+            "user_context": {},
+            "audio_eval_only": true
+          },
+          "capturedAt": 1779161808452
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161808695
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161811194
+        },
+        {
+          "type": "UTTERANCE_END",
+          "payload": {
+            "utterance_id": "47c15286-1bd0-41c2-987f-1e0a831dd470",
+            "started_at": 1779161809.165,
+            "ended_at": 1779161812.653,
+            "duration_ms": 3488,
+            "rms": 15827.220444143059
+          },
+          "capturedAt": 1779161812665
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161813687
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161816186
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161818716
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161821186
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161823682
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161826184
+        },
+        {
+          "type": "UTTERANCE_END",
+          "payload": {
+            "utterance_id": "8b4e103f-6061-47b2-8b86-e17cfc4516a9",
+            "started_at": 1779161825.05,
+            "ended_at": 1779161828.105,
+            "duration_ms": 3055,
+            "rms": 26149.50396293398
+          },
+          "capturedAt": 1779161828128
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161829083
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161831379
+        },
+        {
+          "type": "UTTERANCE_END",
+          "payload": {
+            "utterance_id": "b0e29fe1-adea-4fb9-ab2e-257b66a64eed",
+            "started_at": 1779161829.635,
+            "ended_at": 1779161832.392,
+            "duration_ms": 2757,
+            "rms": 16357.000914363854
+          },
+          "capturedAt": 1779161832396
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161833703
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779161836184
+        },
+        {
+          "type": "UTTERANCE_END",
+          "payload": {
+            "utterance_id": "e9309dad-5c5a-4730-b194-e29932606a92",
+            "started_at": 1779161833.406,
+            "ended_at": 1779161837.503,
+            "duration_ms": 4097,
+            "rms": 25603.252280984732
+          },
+          "capturedAt": 1779161837509
+        },
+        {
+          "type": "END_NEGOTIATION",
+          "payload": {
+            "final_price": null,
+            "initial_price": null
+          },
+          "capturedAt": 1779161838011
+        }
+      ],
+      "turnWindow": {
+        "transcripts": [
+          {
+            "speaker": "user",
+            "text": "84 is still high for 50 units.",
+            "capturedAt": 1779161835870
+          }
+        ],
+        "utteranceEnds": [
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "e9309dad-5c5a-4730-b194-e29932606a92",
+              "started_at": 1779161833.406,
+              "ended_at": 1779161837.503,
+              "duration_ms": 4097,
+              "rms": 25603.252280984732
+            },
+            "capturedAt": 1779161837509
+          }
+        ],
+        "wsEvents": [
+          {
+            "payload": {},
+            "capturedAt": 1779161833703
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779161836184
+          },
+          {
+            "type": "UTTERANCE_END",
+            "payload": {
+              "utterance_id": "e9309dad-5c5a-4730-b194-e29932606a92",
+              "started_at": 1779161833.406,
+              "ended_at": 1779161837.503,
+              "duration_ms": 4097,
+              "rms": 25603.252280984732
+            },
+            "capturedAt": 1779161837509
+          },
+          {
+            "type": "END_NEGOTIATION",
+            "payload": {
+              "final_price": null,
+              "initial_price": null
+            },
+            "capturedAt": 1779161838011
+          }
+        ],
+        "audioChunkCount": 81,
+        "audioChunkTimestamps": [
+          1779161833408,
+          1779161833456,
+          1779161833551,
+          1779161833551,
+          1779161833602,
+          1779161833652,
+          1779161833702,
+          1779161833751,
+          1779161833804,
+          1779161833852,
+          1779161833902,
+          1779161833952,
+          1779161834002,
+          1779161834056,
+          1779161834101,
+          1779161834152,
+          1779161834201,
+          1779161834251,
+          1779161834302,
+          1779161834352,
+          1779161834402,
+          1779161834454,
+          1779161834501,
+          1779161834554,
+          1779161834613,
+          1779161834752,
+          1779161834788,
+          1779161834788,
+          1779161834810,
+          1779161834873,
+          1779161834902,
+          1779161834952,
+          1779161835002,
+          1779161835052,
+          1779161835179,
+          1779161835180,
+          1779161835326,
+          1779161835347,
+          1779161835460,
+          1779161835472,
+          1779161835472,
+          1779161835473,
+          1779161835539,
+          1779161835551,
+          1779161835601,
+          1779161835653,
+          1779161835701,
+          1779161835751,
+          1779161835802,
+          1779161835852,
+          1779161835959,
+          1779161835961,
+          1779161836001,
+          1779161836051,
+          1779161836102,
+          1779161836151,
+          1779161836201,
+          1779161836254,
+          1779161836295,
+          1779161836343,
+          1779161836393,
+          1779161836446,
+          1779161836494,
+          1779161836548,
+          1779161836594,
+          1779161836643,
+          1779161836694,
+          1779161836746,
+          1779161836793,
+          1779161836843,
+          1779161836893,
+          1779161836943,
+          1779161836993,
+          1779161837043,
+          1779161837093,
+          1779161837142,
+          1779161837193,
+          1779161837243,
+          1779161837293,
+          1779161837343,
+          1779161837393
+        ]
+      },
+      "mediaReady": true
+    }
+  ]
+}

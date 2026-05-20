@@ -1,0 +1,459 @@
+{
+  "suite": "audio_browser_eval",
+  "run_id": "20260519-082041",
+  "manifest_id": "audio_eval_manifest_v1",
+  "created_at_ms": 1779159129797,
+  "scenario": {
+    "id": "pricing_numbers__pair_01__clean",
+    "voice_pair_id": "pair_01",
+    "condition": "clean",
+    "condition_tags": [
+      "clean"
+    ]
+  },
+  "summary": {
+    "suite": "audio_browser_eval",
+    "run_id": "20260519-082041",
+    "turn_count": 4,
+    "speaker_accuracy": 0,
+    "false_user_count": 0,
+    "false_counterparty_count": 0,
+    "wrong_label_count": 0,
+    "missing_transcript_count": 4,
+    "timeout_count": 4,
+    "failure_kind_counts": {
+      "vad_boundary_miss": 4
+    },
+    "wer_mean": 1,
+    "leading_word_drop_count": 4,
+    "trailing_word_drop_count": 4,
+    "latency_ms_mean": null,
+    "latency_ms_p95": null,
+    "confusion_matrix": {
+      "user": {
+        "missing": 2
+      },
+      "counterparty": {
+        "missing": 2
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "turn_count": 4,
+        "speaker_accuracy": 0,
+        "false_user_count": 0,
+        "false_counterparty_count": 0,
+        "missing_transcript_count": 4,
+        "wer_mean": 1,
+        "p95_latency_ms": null,
+        "leading_word_drop_count": 4,
+        "trailing_word_drop_count": 4
+      }
+    },
+    "pass": false
+  },
+  "turns": [
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_1",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": null,
+      "speaker_correct": false,
+      "wrong_label": false,
+      "missing_transcript": true,
+      "timeout": true,
+      "failure_kind": "vad_boundary_miss",
+      "failure_reason": "Frontend never emitted UTTERANCE_END for this fixture.",
+      "expected_text": "I can do eighty two only with net sixty and no auto renewal.",
+      "observed_text": "",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 0,
+      "latency_ms": null,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        "START_NEGOTIATION",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [],
+        "utterance_end_payloads": []
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_2",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": null,
+      "speaker_correct": false,
+      "wrong_label": false,
+      "missing_transcript": true,
+      "timeout": true,
+      "failure_kind": "vad_boundary_miss",
+      "failure_reason": "Frontend never emitted UTTERANCE_END for this fixture.",
+      "expected_text": "At eighty four we can keep delivery and warranty included.",
+      "observed_text": "",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 0,
+      "latency_ms": null,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [],
+        "utterance_end_payloads": []
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_3",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": null,
+      "speaker_correct": false,
+      "wrong_label": false,
+      "missing_transcript": true,
+      "timeout": true,
+      "failure_kind": "vad_boundary_miss",
+      "failure_reason": "Frontend never emitted UTTERANCE_END for this fixture.",
+      "expected_text": "Eighty four is still high for fifty units.",
+      "observed_text": "",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 0,
+      "latency_ms": null,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [],
+        "utterance_end_payloads": []
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_4",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": null,
+      "speaker_correct": false,
+      "wrong_label": false,
+      "missing_transcript": true,
+      "timeout": true,
+      "failure_kind": "vad_boundary_miss",
+      "failure_reason": "Frontend never emitted UTTERANCE_END for this fixture.",
+      "expected_text": "Then I can review sixty one if replacement terms stay standard.",
+      "observed_text": "",
+      "wer": 1,
+      "number_recall": {
+        "expected": [],
+        "observed": [],
+        "hits": [],
+        "misses": [],
+        "recall": 1
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": true,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 1,
+      "transcript_count": 0,
+      "latency_ms": null,
+      "speaker_confidence": null,
+      "stage_markers": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "metadata": {
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "transcript_payloads": [],
+        "utterance_end_payloads": []
+      }
+    }
+  ],
+  "events": [
+    {
+      "transcripts": [],
+      "wsEvents": [
+        {
+          "payload": {},
+          "capturedAt": 1779159045232
+        },
+        {
+          "type": "PRIVACY_CONSENT_GRANTED",
+          "payload": {
+            "version": "1.0",
+            "mode": "live"
+          },
+          "capturedAt": 1779159045645
+        },
+        {
+          "type": "ENROLLMENT_START",
+          "payload": {},
+          "capturedAt": 1779159046926
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159047728
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159050236
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159052765
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159055247
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159057715
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159060223
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159062717
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159065224
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159067725
+        },
+        {
+          "type": "START_NEGOTIATION",
+          "payload": {
+            "context": "",
+            "user_context": {},
+            "audio_eval_only": true
+          },
+          "capturedAt": 1779159069069
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159070213
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159072719
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159075212
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159077720
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159080214
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159082721
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159085214
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159087721
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159090213
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159092722
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159095216
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159097713
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159100213
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159102713
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159105210
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159107711
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159110211
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159112711
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159115211
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159117712
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159120211
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159122711
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159125211
+        },
+        {
+          "payload": {},
+          "capturedAt": 1779159127711
+        },
+        {
+          "type": "END_NEGOTIATION",
+          "payload": {
+            "final_price": null,
+            "initial_price": null
+          },
+          "capturedAt": 1779159129751
+        }
+      ],
+      "turnWindow": {
+        "transcripts": [],
+        "utteranceEnds": [],
+        "wsEvents": [
+          {
+            "payload": {},
+            "capturedAt": 1779159115211
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779159117712
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779159120211
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779159122711
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779159125211
+          },
+          {
+            "payload": {},
+            "capturedAt": 1779159127711
+          },
+          {
+            "type": "END_NEGOTIATION",
+            "payload": {
+              "final_price": null,
+              "initial_price": null
+            },
+            "capturedAt": 1779159129751
+          }
+        ]
+      },
+      "mediaReady": true
+    }
+  ]
+}

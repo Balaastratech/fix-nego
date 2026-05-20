@@ -24,7 +24,8 @@ async def websocket_endpoint(websocket: WebSocket):
         "type": "CONNECTION_ESTABLISHED",
         "payload": {
             "session_id": session_id,
-            "server_time": 0
+            "server_time": 0,
+            "restored": False,
         }
     })
     
@@ -34,28 +35,44 @@ async def websocket_endpoint(websocket: WebSocket):
                 message = await websocket.receive()
                 
                 if message.get("type") == "websocket.disconnect":
-                    logger.info(f"Client disconnected via ASGI [session={session_id}]")
+                    if session.state in {NegotiationState.ENDING, NegotiationState.IDLE}:
+                        logger.info(f"Client disconnected via ASGI after normal session end [session={session_id}]")
+                    else:
+                        logger.info(f"Client disconnected via ASGI [session={session_id}]")
                     break
                 
                 if "bytes" in message and message["bytes"]:
-                    logger.debug(f"🎤 Received binary audio frame: {len(message['bytes'])} bytes")
-                    
                     if session.state == NegotiationState.ACTIVE:
                         if not await NegotiationEngine.validate_message(websocket, session, "AUDIO_CHUNK"):
                             continue
                         await NegotiationEngine.handle_audio_chunk(session, message["bytes"])
+                    elif session.state == NegotiationState.CONSENTED:
+                        # Handle enrollment audio - only if enrollment service is active
+                        enrollment_service = getattr(session, 'enrollment_service', None)
+                        enrollment_state = enrollment_service.state.name if enrollment_service else "NONE"
+                        
+                        if enrollment_service and enrollment_state == "CAPTURING":
+                            result = await enrollment_service.process_audio(message["bytes"])
+                            if result:
+                                logger.info(f"📝 Enrollment {result['type']}")
+                                await websocket.send_json(result)
+                        elif not enrollment_service:
+                            logger.debug("No enrollment service active")
+                        else:
+                            logger.debug(f"Enrollment not capturing ({enrollment_state})")
                     else:
-                        logger.warning(f"Discarding audio chunk in state: {session.state}")
+                        # Send error to frontend to stop sending audio
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "payload": {
+                                "code": "INVALID_STATE",
+                                "message": f"Cannot process audio in state: {session.state.value}"
+                            }
+                        })
                     
                 elif "text" in message and message["text"]:
                     data = json.loads(message["text"])
                     msg_type = data.get("type", "UNKNOWN")
-                    
-                    # Log SPEAKER_IDENTIFIED messages explicitly
-                    if msg_type == "SPEAKER_IDENTIFIED":
-                        logger.info(f"🔍 SPEAKER_IDENTIFIED message received: {data.get('payload')} [session={session_id}]")
-                    else:
-                        logger.debug(f"Received message type: {msg_type} [session={session_id}]")
                     
                     if not await NegotiationEngine.validate_message(websocket, session, msg_type):
                         continue
@@ -71,7 +88,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
                 
     except WebSocketDisconnect:
-        logger.info(f"Client disconnected [session={session_id}]")
+        if session.state in {NegotiationState.ENDING, NegotiationState.IDLE}:
+            logger.info(f"Client disconnected after normal session end [session={session_id}]")
+        else:
+            logger.info(f"Client disconnected [session={session_id}]")
     except Exception as e:
         logger.error(f"WebSocket error [session={session_id}]: {e}", exc_info=True)
         try:
@@ -83,4 +103,7 @@ async def websocket_endpoint(websocket: WebSocket):
             pass
     finally:
         logger.info(f"Cleaning up WebSocket connection [session={session_id}]")
-        await connection_manager.unregister(session_id)
+        await connection_manager.unregister(
+            session_id,
+            preserve_runtime=bool(session.state == NegotiationState.ACTIVE and session.session_resumable),
+        )

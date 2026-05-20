@@ -1,0 +1,407 @@
+{
+  "scenario_id": "hardware_bulk_purchase_001",
+  "title": "Bulk laptop purchase with warranty and delivery tradeoff",
+  "family": "b2b_purchase",
+  "session_id": "b43ae976-759a-4cd4-8ad4-ab0a562b69f7",
+  "created_at": "2026-05-18T16:36:43+05:30",
+  "summary": {
+    "score": 0.742,
+    "passed": false,
+    "query_count": 2,
+    "deterministic_average": 0.742,
+    "judge_average": null
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They moved to sixty two with immediate payment. What should I do next?",
+      "expected_direction": "Use volume and cap, push to 61 with warranty/delivery, do not give payment without value.",
+      "response": "Reject the  $62,000  offer  because  it is  still  above  your $59,000  target.  Counter  by proposing  to accept  the immediate  payment  term  in exchange  for a  price  concession  closer  to your  target.  Specifically,  offer  to accept  immediate  payment  if they  lower  the price  to $60,000.",
+      "timestamp_ms": 1779102392700,
+      "deterministic_score": {
+        "score": 0.683,
+        "checks": {
+          "number_grounding": 0.5,
+          "term_grounding": 0.3333333333333333,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "62000",
+          "61000"
+        ],
+        "relevant_terms": [
+          "warranty",
+          "delivery",
+          "payment"
+        ],
+        "number_hits": [
+          "62000"
+        ],
+        "term_hits": [
+          "payment"
+        ]
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to accept sixty one only if warranty delivery and replacement terms are clear.",
+      "expected_direction": "Condition acceptance on 61 with included warranty, delivery, and explicit replacement coverage.",
+      "response": "Say, \"We  accept  the $61,000  price,  confirming  that this  includes  standard  warranty,  standard  replacement  coverage,  and delivery.\"",
+      "timestamp_ms": 1779102402692,
+      "deterministic_score": {
+        "score": 0.8,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 0.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "61000"
+        ],
+        "relevant_terms": [
+          "warranty",
+          "delivery",
+          "replacement"
+        ],
+        "number_hits": [
+          "61000"
+        ],
+        "term_hits": [
+          "warranty",
+          "delivery",
+          "replacement"
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "b43ae976-759a-4cd4-8ad4-ab0a562b69f7",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779102375.8177593
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779102375.8287337
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "b43ae976-759a-4cd4-8ad4-ab0a562b69f7",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "b43ae976-759a-4cd4-8ad4-ab0a562b69f7"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "We need fifty laptops, but sixty five thousand per unit is above our budget.",
+        "timestamp": 1779102387455,
+        "start_time": 1779102387.455,
+        "end_time": 1779102387.455,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Sixty five thousand includes current stock, standard warranty, and delivery within ten days.",
+        "timestamp": 1779102388255,
+        "start_time": 1779102388.255,
+        "end_time": 1779102388.255,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "For fifty units, I expected the price closer to fifty nine thousand.",
+        "timestamp": 1779102389055,
+        "start_time": 1779102389.055,
+        "end_time": 1779102389.055,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I can move to sixty two thousand if payment is immediate.",
+        "timestamp": 1779102389855,
+        "start_time": 1779102389.855,
+        "end_time": 1779102389.855,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Reject the  $62,000  offer  because  it is  still  above  your $59,000  target.  Counter  by proposing  to accept  the immediate  payment  term  in exchange  for a  price  concession  closer  to your  target.  Specifically,  offer  to accept  immediate  payment  if they  lower  the price  to $60,000.",
+        "timestamp": 1779102392700,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Sixty two still does not solve it. My cap is sixty one only if warranty and delivery stay included.",
+        "timestamp": 1779102390655,
+        "start_time": 1779102390.655,
+        "end_time": 1779102390.655,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Sixty one is possible, but replacement coverage would need to be standard, not premium.",
+        "timestamp": 1779102391455,
+        "start_time": 1779102391.455,
+        "end_time": 1779102391.455,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say, \"We  accept  the $61,000  price,  confirming  that this  includes  standard  warranty,  standard  replacement  coverage,  and delivery.\"",
+        "timestamp": 1779102402692,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779102403.326288
+      }
+    }
+  ]
+}

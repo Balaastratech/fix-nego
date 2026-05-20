@@ -34,33 +34,22 @@ def get_logging_config(log_level: str = "INFO"):
                 "filters": ["correlation_id"],
                 "level": log_level,
             },
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "filename": "logs/app.log",
-                "maxBytes": 1024 * 1024 * 5,  # 5 MB
-                "backupCount": 5,
-                "formatter": "json",
-                "filters": ["correlation_id"],
-                "level": log_level,
-            },
-            "frontend_file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "filename": "logs/frontend.log",
-                "maxBytes": 1024 * 1024 * 5,  # 5 MB
-                "backupCount": 5,
+            "frontend_console": {
+                "class": "logging.StreamHandler",
                 "formatter": "frontend_json",
+                "filters": ["correlation_id"],
                 "level": log_level,
             },
         },
         "loggers": {
             "frontend": {
-                "handlers": ["frontend_file"],
+                "handlers": ["frontend_console"],
                 "level": log_level,
                 "propagate": False,
             },
         },
         "root": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": log_level,
         },
     }

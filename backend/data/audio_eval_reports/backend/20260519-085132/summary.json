@@ -1,0 +1,337 @@
+{
+  "suite": "audio_backend_eval",
+  "run_id": "20260519-085132",
+  "manifest_id": "audio_eval_manifest_v1",
+  "created_at_ms": 1779160951016,
+  "scenario_count": 1,
+  "summary": {
+    "suite": "audio_backend_eval",
+    "run_id": "20260519-085132",
+    "turn_count": 4,
+    "speaker_accuracy": 0.75,
+    "false_user_count": 0,
+    "false_counterparty_count": 1,
+    "wrong_label_count": 1,
+    "missing_transcript_count": 0,
+    "timeout_count": 0,
+    "failure_kind_counts": {
+      "none": 4
+    },
+    "wer_mean": 0.247,
+    "leading_word_drop_count": 1,
+    "trailing_word_drop_count": 0,
+    "latency_ms_mean": 3863.52,
+    "latency_ms_p95": 7016.93,
+    "confusion_matrix": {
+      "user": {
+        "user": 1,
+        "counterparty": 1
+      },
+      "counterparty": {
+        "counterparty": 2
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "turn_count": 4,
+        "speaker_accuracy": 0.75,
+        "false_user_count": 0,
+        "false_counterparty_count": 1,
+        "missing_transcript_count": 0,
+        "wer_mean": 0.247,
+        "p95_latency_ms": 7016.93,
+        "leading_word_drop_count": 1,
+        "trailing_word_drop_count": 0
+      }
+    },
+    "pass": false,
+    "report_count": 1
+  },
+  "scenarios": [
+    {
+      "id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean"
+    }
+  ],
+  "turns": [
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_1",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "user",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "I can do eighty two only with net sixty and no auto renewal.",
+      "observed_text": "I can do 82 only with net 60 and no auto renewal.",
+      "wer": 0.2308,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "82",
+          "60"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 7016.93,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 3998,
+        "audio_dbfs": -19.513,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "user"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "pricing_numbers__pair_01__clean__turn_1_0",
+            "speaker": "user",
+            "language": null,
+            "text": "I can do 82 only with net 60 and no auto renewal.",
+            "timestamp": 1779160916095,
+            "start_time": 1779160916.0956793,
+            "end_time": 1779160920.0936792,
+            "diarized_speaker_id": "user",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_2",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "counterparty",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "At eighty four we can keep delivery and warranty included.",
+      "observed_text": "At 84, we can keep delivery and warranty included.",
+      "wer": 0.2,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "84"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 3008.0,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 3330,
+        "audio_dbfs": -14.695,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "pricing_numbers__pair_01__clean__turn_2_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "At 84, we can keep delivery and warranty included.",
+            "timestamp": 1779160920443,
+            "start_time": 1779160920.4436793,
+            "end_time": 1779160923.7736793,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_3",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "user",
+      "observed_speaker": "counterparty",
+      "speaker_correct": false,
+      "wrong_label": true,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Eighty four is still high for fifty units.",
+      "observed_text": "84 is still high for 50 units.",
+      "wer": 0.375,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "84",
+          "50"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": true,
+      "trailing_word_drop": false,
+      "leading_drop_count": 1,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2642.97,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 2730,
+        "audio_dbfs": -20.408,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "pricing_numbers__pair_01__clean__turn_3_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "84 is still high for 50 units.",
+            "timestamp": 1779160924123,
+            "start_time": 1779160924.1236794,
+            "end_time": 1779160926.8536794,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    },
+    {
+      "fixture_id": "pricing_numbers__pair_01__clean__turn_4",
+      "scenario_id": "pricing_numbers__pair_01__clean",
+      "voice_pair_id": "pair_01",
+      "condition": "clean",
+      "expected_speaker": "counterparty",
+      "observed_speaker": "counterparty",
+      "speaker_correct": true,
+      "wrong_label": false,
+      "missing_transcript": false,
+      "timeout": false,
+      "failure_kind": null,
+      "failure_reason": null,
+      "expected_text": "Then I can review sixty one if replacement terms stay standard.",
+      "observed_text": "Then I can review 61 if replacement terms stay standard.",
+      "wer": 0.1818,
+      "number_recall": {
+        "expected": [],
+        "observed": [
+          "61"
+        ],
+        "hits": [],
+        "misses": [],
+        "recall": 1.0
+      },
+      "leading_word_drop": false,
+      "trailing_word_drop": false,
+      "leading_drop_count": 0,
+      "trailing_drop_count": 0,
+      "transcript_count": 1,
+      "latency_ms": 2786.18,
+      "speaker_confidence": null,
+      "stage_markers": [
+        "UTTERANCE_CLASSIFIED",
+        "UTTERANCE_END",
+        "STT_RESULT",
+        "TRANSCRIPT_DECISION"
+      ],
+      "metadata": {
+        "duration_ms": 4355,
+        "audio_dbfs": -14.74,
+        "condition_tags": [
+          "clean"
+        ],
+        "group": "number_heavy",
+        "session_log_excerpt": [],
+        "speaker_set": [
+          "counterparty"
+        ],
+        "event_count": 1,
+        "payloads": [
+          {
+            "id": "pricing_numbers__pair_01__clean__turn_4_0",
+            "speaker": "counterparty",
+            "language": null,
+            "text": "Then I can review 61 if replacement terms stay standard.",
+            "timestamp": 1779160927203,
+            "start_time": 1779160927.2036793,
+            "end_time": 1779160931.5586793,
+            "diarized_speaker_id": "counterparty",
+            "speaker_confidence": null,
+            "transcription_confidence": 0.0,
+            "eligible_for_context": true,
+            "eligible_for_research": false,
+            "source": "google_stt"
+          }
+        ]
+      }
+    }
+  ]
+}

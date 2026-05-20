@@ -1,0 +1,492 @@
+{
+  "scenario_id": "hardware_bulk_purchase_001",
+  "title": "Bulk laptop purchase with warranty and delivery tradeoff",
+  "family": "b2b_purchase",
+  "session_id": "18cfd36c-e11e-498c-81bb-3cd5a3ee4577",
+  "created_at": "2026-05-18T17:13:30+05:30",
+  "summary": {
+    "score": 0.834,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.784,
+    "judge_average": 0.875
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 4,
+      "mode": "advice",
+      "query": "They moved to sixty two with immediate payment. What should I do next?",
+      "expected_direction": "Use volume and cap, push to 61 with warranty/delivery, do not give payment without value.",
+      "response": "Based on  the latest  offer  and your  target  price,  you should  reject  the $62,000  price  and the  immediate  payment  term.  Counter  with a  price  closer  to your  target  (e.g.,  $60,000)  and propose  a different  payment  term,  such  as  Net  30.  Do not  trade  on warranty  yet.",
+      "timestamp_ms": 1779104540213,
+      "deterministic_score": {
+        "score": 0.767,
+        "checks": {
+          "number_grounding": 0.5,
+          "term_grounding": 0.6666666666666666,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "62000",
+          "61000"
+        ],
+        "relevant_terms": [
+          "warranty",
+          "delivery",
+          "payment"
+        ],
+        "number_hits": [
+          "62000"
+        ],
+        "term_hits": [
+          "warranty",
+          "payment"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 4,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 2,
+          "non_genericness": 4,
+          "constraint_obedience": 2,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 4.0,
+        "passed": false,
+        "rationale": "The AI correctly identifies the current offer and suggests rejecting it. However, it fails to leverage the user's conditional cap of $61,000 for warranty and delivery, instead advising *against* discussing warranty at this stage, which directly contradicts the expected strategic direction. It also misses tracking 'delivery' as a key term and doesn't explicitly mention 'volume' as leverage.",
+        "best_fix": "Reject the $62,000 and immediate payment. Counter at $61,000, explicitly stating that this price includes both warranty and delivery. Emphasize the volume of the purchase as leverage. Propose standard payment terms like Net 30."
+      }
+    },
+    {
+      "after_turn": 6,
+      "mode": "command",
+      "query": "Give me one sentence to accept sixty one only if warranty delivery and replacement terms are clear.",
+      "expected_direction": "Condition acceptance on 61 with included warranty, delivery, and explicit replacement coverage.",
+      "response": "Say, \"We  accept  the $61,000  price,  confirming  this includes  standard  warranty,  delivery  within  ten  days,  and standard  replacement  coverage.\"",
+      "timestamp_ms": 1779104549419,
+      "deterministic_score": {
+        "score": 0.8,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 0.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "61000"
+        ],
+        "relevant_terms": [
+          "warranty",
+          "delivery",
+          "replacement"
+        ],
+        "number_hits": [
+          "61000"
+        ],
+        "term_hits": [
+          "warranty",
+          "delivery",
+          "replacement"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 3,
+          "timing_relevance": 5
+        },
+        "average": 4.75,
+        "passed": true,
+        "rationale": "The AI provides a highly actionable, commercially sound, and non-generic sentence that correctly identifies the price and conditions for acceptance, adhering to the 'one sentence' constraint. It effectively conditions acceptance on the specified inclusions. However, it slightly over-specifies the terms by adding 'standard' to warranty and replacement, and 'within ten days' for delivery, which were not explicitly requested in the user query or scenario. It also shifts the intent from 'if terms are clear' (implying seller clarification) to 'confirming this includes' (implying buyer's expectation of specific terms).",
+        "best_fix": "Say, 'We accept the $61,000 price, provided you confirm clear and comprehensive terms for warranty, delivery, and replacement coverage.'"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "18cfd36c-e11e-498c-81bb-3cd5a3ee4577",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779104526.4938023
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779104526.5044956
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "18cfd36c-e11e-498c-81bb-3cd5a3ee4577",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "18cfd36c-e11e-498c-81bb-3cd5a3ee4577"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_1",
+        "speaker": "user",
+        "language": null,
+        "text": "We need fifty laptops, but sixty five thousand per unit is above our budget.",
+        "timestamp": 1779104535078,
+        "start_time": 1779104535.078,
+        "end_time": 1779104535.078,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_1",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_2",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Sixty five thousand includes current stock, standard warranty, and delivery within ten days.",
+        "timestamp": 1779104535878,
+        "start_time": 1779104535.878,
+        "end_time": 1779104535.878,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_2",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_3",
+        "speaker": "user",
+        "language": null,
+        "text": "For fifty units, I expected the price closer to fifty nine thousand.",
+        "timestamp": 1779104536678,
+        "start_time": 1779104536.678,
+        "end_time": 1779104536.678,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_3",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_4",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "I can move to sixty two thousand if payment is immediate.",
+        "timestamp": 1779104537478,
+        "start_time": 1779104537.478,
+        "end_time": 1779104537.478,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_4",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Based on  the latest  offer  and your  target  price,  you should  reject  the $62,000  price  and the  immediate  payment  term.  Counter  with a  price  closer  to your  target  (e.g.,  $60,000)  and propose  a different  payment  term,  such  as  Net  30.  Do not  trade  on warranty  yet.",
+        "timestamp": 1779104540213,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_5",
+        "speaker": "user",
+        "language": null,
+        "text": "Sixty two still does not solve it. My cap is sixty one only if warranty and delivery stay included.",
+        "timestamp": 1779104538278,
+        "start_time": 1779104538.278,
+        "end_time": 1779104538.278,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_5",
+        "speaker": "user",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_6",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Sixty one is possible, but replacement coverage would need to be standard, not premium.",
+        "timestamp": 1779104539078,
+        "start_time": 1779104539.078,
+        "end_time": 1779104539.078,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "hardware_bulk_purchase_001_turn_6",
+        "speaker": "counterparty",
+        "scenario_id": "hardware_bulk_purchase_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": "laptops",
+        "negotiation_type": "buying_goods",
+        "seller_price": 65000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "unknown",
+        "counterparty_goal": null,
+        "key_moments": [
+          "User states counterparty's price is above budget."
+        ],
+        "leverage_points": [
+          "User has a budget constraint."
+        ],
+        "transcript_snippet": "User [0:01]: We need fifty laptops, but sixty five thousand per unit is above our budget.",
+        "market_data": null,
+        "cycle": 9
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "Understanding the typical market price for fifty laptops and what the user's budget might be."
+      }
+    },
+    {
+      "type": "AI_CORRECTION_SENT",
+      "payload": {
+        "violations": [
+          "MISSING_ACTION_START"
+        ],
+        "correction": "STOP. Rule violations: You must start with: Ask/Say/Counter/Tell/Push/Walk/Stay/Offer. Respond again following ALL rules. Start with an action word. End with a command, not a question."
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say, \"We  accept  the $61,000  price,  confirming  this includes  standard  warranty,  delivery  within  ten  days,  and standard  replacement  coverage.\"",
+        "timestamp": 1779104549419,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779104550.0203428
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779104550.6337228
+      }
+    }
+  ]
+}

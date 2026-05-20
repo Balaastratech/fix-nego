@@ -1,0 +1,39 @@
+# Python virtual environments (BIGGEST culprit - can be 400MB+)
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test files
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Dev/local files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

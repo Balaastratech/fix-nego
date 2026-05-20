@@ -1,0 +1,268 @@
+"""
+Speaker Service
+
+This module handles real-time speaker classification during negotiations.
+It uses Voice Activity Detection (VAD) to detect speech segments, generates
+voice embeddings, and classifies speakers as "user" or "counterparty" based
+on cosine similarity with the enrolled voice fingerprint.
+
+The service processes audio in 30ms frames, detects segment boundaries,
+and runs classification asynchronously to avoid blocking the event loop.
+"""
+
+import logging
+import time
+import asyncio
+from typing import Optional
+import numpy as np
+import webrtcvad
+
+from app.models.negotiation import NegotiationSession
+from app.services.voice_encoder import VoiceEncoder
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class SpeakerService:
+    """
+    Real-time speaker classification service.
+    
+    This service:
+    1. Processes incoming PCM audio using Voice Activity Detection (VAD)
+    2. Detects speech segment boundaries (silence → speech, speech → silence)
+    3. Generates voice embeddings for complete segments
+    4. Classifies speakers using cosine similarity with user enrollment
+    5. Updates session state with speaker labels and confidence scores
+    
+    Attributes:
+        session: The negotiation session containing user enrollment
+        vad: WebRTC VAD instance for speech detection
+        frame_buffer: Accumulates bytes until complete 30ms frame
+        is_speech: Current speech state (True = speech, False = silence)
+        segment_start_time: Timestamp when current segment started
+        current_segment: Accumulated audio bytes for current segment
+    """
+    
+    # Constants
+    SAMPLE_RATE = 16000  # Hz
+    BYTES_PER_SAMPLE = 2  # 16-bit audio
+    FRAME_DURATION_MS = 30  # milliseconds
+    FRAME_SIZE = (SAMPLE_RATE * FRAME_DURATION_MS // 1000) * BYTES_PER_SAMPLE  # 960 bytes
+    
+    def __init__(self, session: NegotiationSession, on_segment_complete_callback=None):
+        """
+        Initialize speaker service for a session.
+        
+        Args:
+            session: The negotiation session with user enrollment
+            on_segment_complete_callback: Optional async callback(speaker, audio, timestamp, speaker_changed) 
+                                         called when a speech segment completes (VAD detects silence)
+        """
+        self.session = session
+        self.on_segment_complete_callback = on_segment_complete_callback
+        
+        # Initialize VAD with aggressiveness from config
+        aggressiveness = getattr(settings, 'SPEAKER_VAD_AGGRESSIVENESS', 2)
+        self.vad = webrtcvad.Vad(aggressiveness)
+        
+        # Frame buffering
+        self.frame_buffer: bytes = b""
+        
+        # Segment tracking
+        self.is_speech: bool = False
+        self.segment_start_time: Optional[float] = None
+        self.current_segment: bytes = b""
+        
+        logger.info(f"SpeakerService initialized [session={session.session_id}, vad_aggressiveness={aggressiveness}]")
+    
+    async def feed_audio(self, chunk: bytes) -> None:
+        """
+        Process incoming PCM audio for speaker classification.
+        
+        This method buffers audio until complete 30ms frames are available,
+        then processes each frame through VAD to detect speech segments.
+        
+        Args:
+            chunk: PCM audio chunk (any size, will be buffered)
+        """
+        # Accumulate audio into frame buffer
+        self.frame_buffer += chunk
+        
+        # Process complete frames
+        while len(self.frame_buffer) >= self.FRAME_SIZE:
+            frame = self.frame_buffer[:self.FRAME_SIZE]
+            self.frame_buffer = self.frame_buffer[self.FRAME_SIZE:]
+            self._process_frame(frame)
+    
+    def _process_frame(self, frame: bytes) -> None:
+        """
+        Run VAD on a single 30ms frame.
+        
+        This method:
+        1. Checks if frame contains speech using webrtcvad
+        2. Detects segment boundaries (silence → speech, speech → silence)
+        3. Accumulates frames into current segment
+        4. Triggers classification when segment ends
+        
+        Args:
+            frame: Exactly 960 bytes (30ms at 16kHz, 16-bit mono)
+        """
+        try:
+            # Run VAD on frame
+            is_speech = self.vad.is_speech(frame, self.SAMPLE_RATE)
+            
+            # Detect silence → speech transition (segment start)
+            if is_speech and not self.is_speech:
+                self.is_speech = True
+                self.segment_start_time = time.time()
+                self.current_segment = frame
+                logger.debug("Speech segment started")
+            
+            # Continue accumulating speech
+            elif is_speech and self.is_speech:
+                self.current_segment += frame
+            
+            # Detect speech → silence transition (segment end)
+            elif not is_speech and self.is_speech:
+                self.is_speech = False
+                
+                # Calculate segment duration
+                duration = len(self.current_segment) / (self.SAMPLE_RATE * self.BYTES_PER_SAMPLE)
+                logger.debug(f"Speech segment ended: {duration:.2f}s")
+                
+                # Classify segment asynchronously
+                segment_audio = self.current_segment
+                self.current_segment = b""
+                asyncio.create_task(self._classify_segment(segment_audio))
+        
+        except Exception as e:
+            logger.error(f"VAD frame processing error: {e}", exc_info=True)
+            # Graceful degradation: continue processing next frames
+    
+    async def _classify_segment(self, audio: bytes) -> str:
+        """
+        Classify a speech segment as user or counterparty.
+        
+        This method:
+        1. Checks minimum segment duration
+        2. Checks if user enrollment exists
+        3. Checks manual override status
+        4. Generates segment embedding
+        5. Calculates cosine similarity with user embedding
+        6. Applies threshold to determine speaker label
+        7. Updates session state
+        
+        Args:
+            audio: PCM audio of complete speech segment
+            
+        Returns:
+            Speaker label: "user", "counterparty", or "unknown"
+        """
+        try:
+            # Calculate segment duration
+            duration = len(audio) / (self.SAMPLE_RATE * self.BYTES_PER_SAMPLE)
+            
+            # Check minimum segment duration
+            min_duration = getattr(settings, 'SPEAKER_MIN_SEGMENT_DURATION', 0.5)
+            if duration < min_duration:
+                logger.debug(f"Segment too short ({duration:.2f}s < {min_duration}s), skipping classification")
+                return "unknown"
+            
+            # Check if enrollment exists
+            if self.session.user_embedding is None:
+                logger.debug("No user enrollment found, labeling as unknown")
+                return "unknown"
+            
+            # Check manual override
+            if self.session.manual_override_until:
+                if isinstance(self.session.manual_override_until, float):
+                    if time.time() < self.session.manual_override_until:
+                        logger.debug("Manual override active, using manual label")
+                        return self.session.current_speaker
+                elif self.session.manual_override_until == float('inf'):
+                    logger.debug("Manual mode active, using manual label")
+                    return self.session.current_speaker
+            
+            # Generate segment embedding (CPU-intensive, run in thread pool)
+            encoder = VoiceEncoder.get_instance()
+            loop = asyncio.get_event_loop()
+            segment_embedding = await loop.run_in_executor(
+                None,
+                encoder.embed_utterance,
+                audio
+            )
+            
+            # Calculate cosine similarity (fast numpy operation, run in event loop)
+            similarity = float(np.dot(segment_embedding, self.session.user_embedding))
+            
+            # Apply threshold
+            threshold = getattr(settings, 'SPEAKER_SIMILARITY_THRESHOLD', 0.70)
+            label = "user" if similarity > threshold else "counterparty"
+            
+            # Detect speaker change
+            speaker_changed = self.session.current_speaker != label
+            current_time = time.time()
+            
+            # Update session state
+            previous_speaker = self.session.current_speaker
+            self.session.current_speaker = label
+            self.session.speaker_last_updated = current_time
+            
+            # Append to confidence history
+            self.session.speaker_confidence_history.append({
+                "speaker": label,
+                "timestamp": current_time,
+                "confidence": similarity,
+                "duration": duration
+            })
+            
+            # Append to speaker timeline (used by ListenerAgent)
+            self.session.speaker_timeline.append({
+                "speaker": label,
+                "timestamp": current_time
+            })
+            
+            logger.info(
+                f"Speaker classified: {label} (confidence={similarity:.3f}, duration={duration:.2f}s) "
+                f"[session={self.session.session_id}]"
+            )
+            
+            # Trigger transcription for EVERY completed segment (not just speaker changes)
+            # This ensures continuous transcription even when the same person speaks multiple times
+            if self.on_segment_complete_callback:
+                logger.info(f"🎤 Segment complete: {label} spoke for {duration:.2f}s, triggering transcription")
+                asyncio.create_task(self.on_segment_complete_callback(
+                    speaker=label,
+                    audio=audio,
+                    timestamp=current_time,
+                    speaker_changed=speaker_changed
+                ))
+            
+            return label
+        
+        except Exception as e:
+            logger.error(f"Classification failed: {e}", exc_info=True)
+            # Graceful degradation: return unknown and continue
+            return "unknown"
+    
+    def get_current_speaker(self) -> str:
+        """
+        Get the most recent speaker label.
+        
+        Returns:
+            Speaker label: "user", "counterparty", or "unknown"
+        """
+        return self.session.current_speaker
+    
+    def get_confidence_score(self) -> float:
+        """
+        Get the cosine similarity score of the last classification.
+        
+        Returns:
+            Confidence score (0.0 to 1.0), or 0.0 if no classifications yet
+        """
+        if not self.session.speaker_confidence_history:
+            return 0.0
+        
+        return self.session.speaker_confidence_history[-1].get("confidence", 0.0)

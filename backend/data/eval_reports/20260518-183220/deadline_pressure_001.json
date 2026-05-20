@@ -1,0 +1,528 @@
+{
+  "scenario_id": "deadline_pressure_001",
+  "title": "Counterparty manufactures urgency to force capitulation",
+  "family": "tactic_detection",
+  "session_id": "2a33eabd-fe3b-4016-b9a3-27b6436c222a",
+  "created_at": "2026-05-18T18:47:17+05:30",
+  "summary": {
+    "score": 0.866,
+    "passed": true,
+    "query_count": 2,
+    "deterministic_average": 0.916,
+    "judge_average": 0.825
+  },
+  "ai_pairs": [
+    {
+      "after_turn": 2,
+      "mode": "advice",
+      "query": "They claim the price expires today. Should I accept the pressure or push back?",
+      "expected_direction": "Push back on artificial deadline; do not concede; reset to the user's target of 48000 with quarterly billing and exit clause.",
+      "response": "Push back. The \"exploding offer\" is a common tactic to force a quick decision before you can evaluate the deal or seek alternatives. Your response that you \"do not make decisions to artificial deadlines\" was correct. The gap between their $60,000 offer and your $48,000 target is significant, and giving in to their timeline pressure removes your ability to negotiate that gap. Hold your position and focus on getting them to respond to your $48,000 target price.",
+      "timestamp_ms": 1779110174031,
+      "deterministic_score": {
+        "score": 0.833,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 0.3333333333333333,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "48000"
+        ],
+        "relevant_terms": [
+          "quarterly billing",
+          "exit clause",
+          "deadline"
+        ],
+        "number_hits": [
+          "48000"
+        ],
+        "term_hits": [
+          "deadline"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 3,
+          "speaker_attribution": 1,
+          "actionability": 4,
+          "commercial_quality": 4,
+          "non_genericness": 5,
+          "constraint_obedience": 3,
+          "hallucination_avoidance": 1,
+          "timing_relevance": 5
+        },
+        "average": 3.25,
+        "passed": false,
+        "rationale": "The response critically fails on hallucination avoidance and speaker attribution by inventing a past action and a direct quote from the user ('Your response that you 'do not make decisions to artificial deadlines' was correct.'). This is a major error. It also fails to mention the user's other key terms (quarterly billing, exit clause).",
+        "best_fix": "Remove the hallucinated sentence. Add the missing terms to the final recommendation, e.g., 'Hold your position and focus on getting them to respond to your target of $48,000 with quarterly billing and a 30-day exit clause.'"
+      }
+    },
+    {
+      "after_turn": 8,
+      "mode": "command",
+      "query": "Give me one sentence that closes at forty eight thousand with quarterly billing and the exit clause.",
+      "expected_direction": "Offer 48000 explicitly contingent on quarterly billing and 30 day exit clause.",
+      "response": "Say: 'I can sign today at forty eight thousand with quarterly billing and the thirty day exit clause included.'",
+      "timestamp_ms": 1779110192994,
+      "deterministic_score": {
+        "score": 1.0,
+        "checks": {
+          "number_grounding": 1.0,
+          "term_grounding": 1.0,
+          "actionable": 1.0,
+          "concise": 1.0,
+          "non_generic": 1.0
+        },
+        "relevant_numbers": [
+          "48000",
+          "30"
+        ],
+        "relevant_terms": [
+          "quarterly billing",
+          "exit clause"
+        ],
+        "number_hits": [
+          "48000",
+          "30"
+        ],
+        "term_hits": [
+          "quarterly billing",
+          "exit clause"
+        ]
+      },
+      "judge": {
+        "scores": {
+          "deal_state_grounding": 5,
+          "speaker_attribution": 5,
+          "actionability": 5,
+          "commercial_quality": 5,
+          "non_genericness": 5,
+          "constraint_obedience": 5,
+          "hallucination_avoidance": 5,
+          "timing_relevance": 5
+        },
+        "average": 5.0,
+        "passed": true,
+        "rationale": "The response is excellent. It provides a single, actionable sentence that perfectly incorporates all the user's required terms (price, billing, exit clause). It also cleverly leverages the vendor's deadline pressure by offering to 'sign today' if the user's conditions are met, which is a strong negotiation tactic.",
+        "best_fix": "No fix is needed; the response is ideal."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "CONNECTION_ESTABLISHED",
+      "payload": {
+        "session_id": "2a33eabd-fe3b-4016-b9a3-27b6436c222a",
+        "server_time": 0,
+        "restored": false
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "IDLE",
+        "current_state": "CONSENTED",
+        "timestamp": 1779110155.0772827
+      }
+    },
+    {
+      "type": "CONSENT_ACKNOWLEDGED",
+      "payload": {
+        "mode": "roleplay",
+        "recording_active": true
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "CONSENTED",
+        "current_state": "ACTIVE",
+        "timestamp": 1779110155.0892646
+      }
+    },
+    {
+      "type": "AI_CONNECTING",
+      "payload": {
+        "message": "Connecting to AI advisor..."
+      }
+    },
+    {
+      "type": "SESSION_STARTED",
+      "payload": {
+        "session_id": "2a33eabd-fe3b-4016-b9a3-27b6436c222a",
+        "model": "gemini-live-2.5-flash-native-audio",
+        "features": {
+          "audio": true,
+          "vision": true,
+          "web_search": true,
+          "dual_model": false,
+          "persistence": false,
+          "session_resume": false
+        }
+      }
+    },
+    {
+      "type": "PERSISTENCE_STATUS",
+      "payload": {
+        "ready": false,
+        "session_id": "2a33eabd-fe3b-4016-b9a3-27b6436c222a"
+      }
+    },
+    {
+      "type": "LANGUAGE_UPDATE",
+      "payload": {
+        "language": null,
+        "response_language": "en-US"
+      }
+    },
+    {
+      "type": "COPILOT_STARTED",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_1",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "If we sign today, I can hold the sixty thousand annual rate. After today it returns to seventy two.",
+        "timestamp": 1779110163312,
+        "start_time": 1779110163.312,
+        "end_time": 1779110163.312,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_1",
+        "speaker": "counterparty",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_2",
+        "speaker": "user",
+        "language": null,
+        "text": "I do not make decisions to artificial deadlines. My budget target is forty eight thousand.",
+        "timestamp": 1779110164112,
+        "start_time": 1779110164.112,
+        "end_time": 1779110164.112,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_2",
+        "speaker": "user",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110174031",
+        "speaker": "ai",
+        "text": "Push back. The \"exploding offer\" is a common tactic to force a quick decision before you can evaluate the deal or seek alternatives. Your response that you \"do not make decisions to artificial deadlines\" was correct. The gap between their $60,000 offer and your $48,000 target is significant, and giving in to their timeline pressure removes your ability to negotiate that gap. Hold your position and focus on getting them to respond to your $48,000 target price.",
+        "timestamp": 1779110174031,
+        "source": "pro_advice",
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "CONTEXT_UPDATE",
+      "payload": {
+        "item": null,
+        "negotiation_type": "service",
+        "seller_price": 60000,
+        "user_offer": null,
+        "user_target_price": null,
+        "user_max_price": null,
+        "sentiment": "neutral",
+        "counterparty_goal": "To secure an immediate agreement by creating a sense of urgency with a time-limited offer.",
+        "key_moments": [
+          {
+            "type": "exploding_offer",
+            "description": "Counterparty offers a discounted annual rate of $60,000, valid only for today, after which it increases to $72,000."
+          }
+        ],
+        "leverage_points": [
+          {
+            "type": "time_pressure",
+            "description": "The counterparty is using a deadline (today) to pressure the user into accepting the $60,000 rate."
+          }
+        ],
+        "transcript_snippet": "If we sign today, I can hold the sixty thousand annual rate. After today it returns to seventy two.",
+        "market_data": null,
+        "cycle": 13
+      }
+    },
+    {
+      "type": "RESEARCH_STARTED",
+      "payload": {
+        "query": "The market value of the service being offered is unknown, making it difficult to assess if $60,000 or $72,000 is a fair price."
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "[ADVISOR_OUTPUT -  or seek  alternatives.  Your response  that you  \"do not  make  decisions  to artificial  deadlines\"  was  correct.  The gap  between  their $60,000  offer  and your  $48,000  target  is significant,  and giving  in to  their timeline  pressure  removes  your ability  to negotiate  that  gap.  Hold  your position  and focus  on getting  them to  respond  to your  $48,000  target  price.  [/ADVISOR_OUTPUT]",
+        "timestamp": 1779110181409,
+        "response_mode": "advice"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_3",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Forty eight is well below our floor. The sixty figure already reflects the urgency discount.",
+        "timestamp": 1779110164912,
+        "start_time": 1779110164.912,
+        "end_time": 1779110164.912,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_3",
+        "speaker": "counterparty",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_4",
+        "speaker": "user",
+        "language": null,
+        "text": "Then I am happy to wait and see what the seventy two number actually delivers in your standard quote.",
+        "timestamp": 1779110165712,
+        "start_time": 1779110165.712,
+        "end_time": 1779110165.712,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_4",
+        "speaker": "user",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_5",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Let us not lose momentum. I can do fifty five thousand if we sign by end of week.",
+        "timestamp": 1779110166512,
+        "start_time": 1779110166.512,
+        "end_time": 1779110166.512,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_5",
+        "speaker": "counterparty",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_6",
+        "speaker": "user",
+        "language": null,
+        "text": "I also need quarterly billing and a thirty day exit clause.",
+        "timestamp": 1779110167312,
+        "start_time": 1779110167.312,
+        "end_time": 1779110167.312,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_6",
+        "speaker": "user",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_7",
+        "speaker": "counterparty",
+        "language": null,
+        "text": "Annual billing is our standard, but I can consider quarterly with a small uplift.",
+        "timestamp": 1779110168112,
+        "start_time": 1779110168.112,
+        "end_time": 1779110168.112,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_7",
+        "speaker": "counterparty",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "deadline_pressure_001_turn_8",
+        "speaker": "user",
+        "language": null,
+        "text": "Quarterly billing without uplift, exit clause, and a number close to my target is what closes this.",
+        "timestamp": 1779110168912,
+        "start_time": 1779110168.912,
+        "end_time": 1779110168.912,
+        "speaker_confidence": 1.0,
+        "transcription_confidence": 1.0,
+        "eligible_for_context": true,
+        "eligible_for_research": false,
+        "source": "simulated_text",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "SIMULATED_TURN_ACCEPTED",
+      "payload": {
+        "id": "deadline_pressure_001_turn_8",
+        "speaker": "user",
+        "scenario_id": "deadline_pressure_001"
+      }
+    },
+    {
+      "type": "AI_THINKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "id": "pro_advice_1779110192994",
+        "speaker": "ai",
+        "text": "Say: 'I can sign today at forty eight thousand with quarterly billing and the thirty day exit clause included.'",
+        "timestamp": 1779110192994,
+        "source": "pro_advice",
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AUDIO_INTERRUPTED",
+      "payload": {}
+    },
+    {
+      "type": "AI_SPEAKING",
+      "payload": {}
+    },
+    {
+      "type": "TRANSCRIPT_UPDATE",
+      "payload": {
+        "speaker": "ai",
+        "text": "Say: 'I  can  sign  today  at  forty  eight thousand  dollars  with  quarterly  billing  and the  thirty  day exit  clause  included.'",
+        "timestamp": 1779110195362,
+        "response_mode": "command"
+      }
+    },
+    {
+      "type": "AI_LISTENING",
+      "payload": {}
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ACTIVE",
+        "current_state": "ENDING",
+        "timestamp": 1779110195.95995
+      }
+    },
+    {
+      "type": "OUTCOME_SUMMARY",
+      "payload": {
+        "deal_reached": false,
+        "initial_price": null,
+        "final_price": null,
+        "savings": null,
+        "savings_percentage": null,
+        "market_value": null,
+        "vs_market": null,
+        "negotiation_duration_seconds": 0,
+        "key_moves": [],
+        "effectiveness_score": 0.0,
+        "transcript_summary": ""
+      }
+    },
+    {
+      "type": "NEGOTIATION_STATE_CHANGED",
+      "payload": {
+        "previous_state": "ENDING",
+        "current_state": "IDLE",
+        "timestamp": 1779110196.5849557
+      }
+    }
+  ]
+}
