@@ -44,14 +44,17 @@ logger = logging.getLogger(__name__)
 
 # Valid messages per state
 VALID_MESSAGES: Dict[NegotiationState, list[str]] = {
-    NegotiationState.IDLE:      ["PRIVACY_CONSENT_GRANTED"],
-    NegotiationState.CONSENTED: ["START_NEGOTIATION", "ENROLLMENT_START", "ENROLLMENT_AUDIO"],
+    NegotiationState.IDLE:      ["PRIVACY_CONSENT_GRANTED", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
+    NegotiationState.CONSENTED: ["START_NEGOTIATION", "ENROLLMENT_START", "ENROLLMENT_AUDIO", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
     NegotiationState.ACTIVE:    [
         "VISION_FRAME",
         "SCREEN_FRAME",
         "AUDIO_CHUNK",
         "LOCAL_MIC_PCM",
         "REMOTE_APP_PCM",
+        "ASK_AI_PCM",
+        "AI_PLAYBACK_DONE",
+        "TRACE_CLIENT_EVENT",
         "MEETING_BINDING",
         "CAPTURE_HEALTH",
         "HOLD_TO_ASK_STATE",
@@ -273,6 +276,10 @@ class NegotiationEngine:
                 # Pre-warm the gRPC/STT connection so the first real utterance
                 # doesn't hit a 12-15s TLS cold-start delay.
                 async def _warmup_stt():
+                    is_desktop = getattr(session, "source_mode", None) == SourceMode.VIRTUAL_COMPANION_DESKTOP.value
+                    if is_desktop:
+                        logger.info("Skipping batch STT warmup for desktop companion session [session=%s]", session.session_id)
+                        return
                     try:
                         from app.services.stt_service import SpeechTranscriptionService as _STT
                         from app.services.utterance_types import FinalizedUtterance as _FU
@@ -452,7 +459,7 @@ class NegotiationEngine:
             )
             return
 
-        is_live_mode = bool(payload.get("live_mode", False))
+        is_live_mode = bool(payload.get("live_mode", False)) or (session.source_mode == SourceMode.VIRTUAL_COMPANION_DESKTOP.value)
         now = time.time()
 
         # ── Tier 2: forward to Gemini Live during hold-to-talk ────────────────
@@ -980,6 +987,10 @@ class NegotiationEngine:
             await NegotiationEngine.handle_companion_audio(session, websocket, payload, msg_type)
         elif msg_type == "REMOTE_APP_PCM":
             await NegotiationEngine.handle_companion_audio(session, websocket, payload, msg_type)
+        elif msg_type == "ASK_AI_PCM":
+            await NegotiationEngine.handle_companion_audio(session, websocket, payload, msg_type)
+        elif msg_type == "TRACE_CLIENT_EVENT":
+            await NegotiationEngine.handle_trace_client_event(session, payload, websocket)
         elif msg_type == "MEETING_BINDING":
             await NegotiationEngine.handle_meeting_binding(session, payload, websocket)
         elif msg_type == "CAPTURE_HEALTH":
@@ -1018,8 +1029,23 @@ class NegotiationEngine:
             await NegotiationEngine.handle_utterance_end(session, payload, websocket)
         elif msg_type == "SIMULATED_NEGOTIATION_TURN":
             await NegotiationEngine.handle_simulated_negotiation_turn(session, payload, websocket)
+        elif msg_type == "AI_PLAYBACK_DONE":
+            session.ai_audio_playing = False
+            session.last_ai_audio_played_at = time.time()
+            logger.debug("AI audio playback finished — REMOTE_APP_PCM resumed [session=%s]", session.session_id)
         else:
             logger.warning(f"Unknown message type {msg_type}")
+    @staticmethod
+    async def handle_trace_client_event(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        from app.utils.session_trace import get_session_trace
+        trace = get_session_trace(session.session_id)
+        if trace:
+            trace.record(
+                category=payload.get("surface") or "client",
+                name=payload.get("event_name") or "generic_client_event",
+                summary=payload.get("summary") or "",
+                data=payload.get("detail") or {},
+            )
     @staticmethod
     async def handle_speaker_stopped(session: NegotiationSession, websocket: WebSocket) -> None:
         """
@@ -1211,6 +1237,7 @@ class NegotiationEngine:
 
         # When user presses button (OFF -> ON)
         if active and not was_active and session.live_session:
+            session.ai_audio_playing = False
             # Clear any leftover audio from a previous question
             session.question_capture_bytes = b""
             session.last_user_transcript = ""
@@ -1281,6 +1308,15 @@ class NegotiationEngine:
 
         # When user releases button (ON -> OFF)
         if not active and was_active and session.live_session:
+            # Capture real-time streaming transcript fallback if batch transcription is missing/unclear
+            fallback_text = session.companion_partial_text.get("ask_ai", "").strip()
+            # Clean up ask_ai partials and cancel any running background transcription task immediately to prevent late partials
+            session.companion_partial_text.pop("ask_ai", None)
+            session.companion_partial_started_at.pop("ask_ai", None)
+            partial_task = session.companion_partial_tasks.pop("ask_ai", None)
+            if partial_task and not partial_task.done():
+                partial_task.cancel()
+
             # Take captured audio and send the question as text to Live AI.
             # Text-based questions ensure the AI answers what was actually asked,
             # not just the general context.
@@ -1289,6 +1325,7 @@ class NegotiationEngine:
 
             async def _handle_question(
                 q_audio: bytes,
+                fallback_q_text: str = "",
                 live_session=session.live_session,
                 listener=session.listener_agent,
                 lock=session.gemini_send_lock,
@@ -1302,6 +1339,28 @@ class NegotiationEngine:
                             None, lambda: listener._fast_transcribe(q_audio)
                         )
                         q_text = (q_text or "").strip()
+
+                    if not q_text and fallback_q_text:
+                        q_text = fallback_q_text
+                        logger.info(f"[Engine] Audio transcription empty, falling back to real-time partial: '{q_text}'")
+
+                    if not q_text:
+                        # No audio transcript and no fallback partial text. 
+                        # Short-circuit and notify the user to try again.
+                        try:
+                            await ws.send_json({
+                                "type": "AI_RESPONSE",
+                                "payload": {
+                                    "speaker": "ai",
+                                    "text": "I didn't catch that clearly. Hold and ask again.",
+                                    "timestamp": int(time.time() * 1000),
+                                    "context": "ask_ai",
+                                }
+                            })
+                        except Exception:
+                            pass
+                        logger.info("[Engine] Short-circuited empty query with 'Hold and ask again'")
+                        return
 
                     # Show what the user asked in the sidebar transcript
                     if q_text:
@@ -1367,7 +1426,7 @@ class NegotiationEngine:
                 except Exception as e:
                     logger.warning(f"[Engine] Question handling failed: {e}")
 
-            asyncio.create_task(_handle_question(question_audio))
+            asyncio.create_task(_handle_question(question_audio, fallback_text))
 
     @staticmethod
     async def handle_start_copilot(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:

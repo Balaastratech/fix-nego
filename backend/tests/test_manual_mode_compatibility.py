@@ -147,6 +147,8 @@ class TestManualModeCompatibility:
             websocket=websocket,
             on_context_ready=None
         )
+        listener_agent._running = True
+        listener_agent._batch_interval = 0.0
         
         # Mock the transcription method
         listener_agent._fast_transcribe = Mock(return_value="Hello, this is a test")
@@ -162,6 +164,8 @@ class TestManualModeCompatibility:
             start_time=start_time,
             end_time=end_time
         )
+        if listener_agent._background_tasks:
+            await asyncio.gather(*list(listener_agent._background_tasks), return_exceptions=True)
         
         # Assert
         # Verify TRANSCRIPT_UPDATE was sent
@@ -189,6 +193,7 @@ class TestManualModeCompatibility:
         session = Mock()
         session.session_id = "test-session"
         session.manual_override_until = time.time() - 1  # Expired
+        session.user_addressing_ai = False
         
         websocket = AsyncMock()
         listener_agent = Mock()
@@ -198,6 +203,7 @@ class TestManualModeCompatibility:
             websocket=websocket,
             listener_agent=listener_agent
         )
+        perfect_listener.overlap_detection_enabled = True
         
         # Mock the internal methods
         perfect_listener._detect_overlap = AsyncMock(return_value=(False, []))
@@ -208,7 +214,7 @@ class TestManualModeCompatibility:
         await perfect_listener.process_audio_chunk(chunk)
         
         # Assert
-        # Pipeline should be called (manual mode expired)
+        # Automatic processing resumes when manual override expires.
         perfect_listener._detect_overlap.assert_called_once()
     
     @pytest.mark.asyncio

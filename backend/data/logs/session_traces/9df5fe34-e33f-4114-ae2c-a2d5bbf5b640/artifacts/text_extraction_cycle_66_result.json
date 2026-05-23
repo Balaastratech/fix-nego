@@ -1,0 +1,22 @@
+{
+  "item": null,
+  "negotiation_type": "unknown",
+  "buyer_offer": null,
+  "counterparty_price": null,
+  "user_price": null,
+  "user_target_price": null,
+  "user_walk_away_price": null,
+  "counterparty_goal": "To get the user to ask for their opening offer.",
+  "key_moments": [
+    "Counterparty instructs user to ask for an opening offer."
+  ],
+  "leverage_points": [],
+  "counterparty_sentiment": "neutral",
+  "research_query": null,
+  "research_needed": false,
+  "research_gap": null,
+  "transcript_snippet": "Counterparty [1:36]: Once you confirm can hear you, proceed by asking for their opening offer.",
+  "counterparty_person_name": null,
+  "counterparty_company": null,
+  "meeting_legal_terms": []
+}

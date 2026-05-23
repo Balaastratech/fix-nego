@@ -8,6 +8,7 @@
 // Configure fast-check for property-based testing
 // Minimum 100 iterations per property test as per design document
 import fc from 'fast-check';
+import '@testing-library/jest-dom/vitest';
 
 // Set default number of runs for property tests
 export const DEFAULT_NUM_RUNS = 100;

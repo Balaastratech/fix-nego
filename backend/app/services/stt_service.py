@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
 import struct
-from urllib.parse import urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
 from typing import Any
 
 from app.config import settings
@@ -88,9 +91,13 @@ def _pcm_to_wav(pcm_data: bytes) -> bytes:
 class SpeechTranscriptionService:
     def __init__(self, session: NegotiationSession):
         self.session = session
+        self._provider = (settings.TRANSCRIPTION_PROVIDER or "google_stt").strip().lower()
         self._clients: dict[str, Any] = {}
         self._ensured_recognizers: set[tuple[str, str, str]] = set()
-        self._global_limiter = GlobalLimiter.get("google_stt", settings.STT_GLOBAL_CONCURRENCY)
+        self._global_limiter = GlobalLimiter.get(
+            f"stt:{self._provider}",
+            settings.STT_GLOBAL_CONCURRENCY,
+        )
 
     def _get_client(self, location_override: str | None = None):
         _sanitize_broken_loopback_proxy_env()
@@ -153,45 +160,211 @@ class SpeechTranscriptionService:
             or ("recognizer" in normalized and "not found" in normalized)
         )
 
+    def _provider_minutes_metric_key(self) -> str:
+        if self._provider == "deepgram":
+            return "deepgram_stt_minutes"
+        return "google_stt_minutes"
+
+    def _provider_log_name(self) -> str:
+        if self._provider == "deepgram":
+            return "Deepgram STT"
+        return "Google STT"
+
+    def _normalize_deepgram_language_code(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        normalized = value.strip().replace("_", "-")
+        if not normalized:
+            return None
+
+        lowered = normalized.casefold()
+        mapping = {
+            "auto": "multi",
+            "multi": "multi",
+            "en": "en",
+            "en-us": "en-US",
+            "en-gb": "en-GB",
+            "en-au": "en-AU",
+            "en-in": "en-IN",
+            "en-nz": "en-NZ",
+            "hi": "hi",
+            "hi-in": "hi",
+            "es": "es",
+            "es-us": "es",
+            "es-mx": "es",
+            "es-es": "es",
+            "es-419": "es-419",
+        }
+        if lowered in mapping:
+            return mapping[lowered]
+        if lowered.startswith("hi"):
+            return "hi"
+        if lowered.startswith("es"):
+            return "es"
+        if lowered.startswith("en-"):
+            parts = normalized.split("-", 1)
+            if len(parts) == 2 and parts[1]:
+                return f"en-{parts[1].upper()}"
+        return normalized
+
+    def _resolve_deepgram_language(
+        self,
+        language_hint: str | None = None,
+        response_language_hint: str | None = None,
+    ) -> str:
+        configured = [
+            code
+            for code in (
+                self._normalize_deepgram_language_code(value)
+                for value in settings.deepgram_language_codes_list
+            )
+            if code
+        ]
+
+        configured_set = set(configured)
+        for hint in (language_hint, response_language_hint):
+            normalized_hint = self._normalize_deepgram_language_code(hint)
+            if normalized_hint and normalized_hint in configured_set:
+                return normalized_hint
+
+        if not configured:
+            return "multi"
+        if len(configured_set) > 1:
+            return "multi"
+        return configured[0]
+
+    def _resolve_deepgram_keyterms(self) -> list[str]:
+        return self._resolve_adaptation_phrases()[:50]
+
+    def _build_deepgram_request_url(
+        self,
+        *,
+        language: str,
+        keyterms: list[str],
+    ) -> str:
+        params: list[tuple[str, str]] = [
+            ("model", settings.DEEPGRAM_MODEL),
+            ("smart_format", "true"),
+            ("utterances", "true"),
+            ("utt_split", str(settings.DEEPGRAM_UTTERANCE_SPLIT)),
+            ("language", language),
+        ]
+        if settings.DEEPGRAM_DIARIZATION_ENABLED:
+            params.append(("diarize", "true"))
+        for keyterm in keyterms[:100]:
+            params.append(("keyterm", keyterm))
+
+        query = urlencode(params, doseq=True)
+        return f"{settings.DEEPGRAM_API_BASE_URL}?{query}"
+
+    def _parse_deepgram_words(
+        self,
+        words: list[dict[str, Any]] | None,
+        fallback_confidence: float | None,
+    ) -> list[dict[str, Any]]:
+        diarized_turns: list[dict[str, Any]] = []
+        current_turn: dict[str, Any] | None = None
+
+        for word in words or []:
+            speaker = word.get("speaker")
+            if speaker is None:
+                continue
+
+            speaker_id = str(speaker)
+            word_text = str(word.get("word") or "").strip()
+            if not word_text:
+                continue
+
+            start_time = float(word.get("start") or 0.0)
+            end_time = float(word.get("end") or start_time)
+            confidence = word.get("confidence")
+            if confidence is None:
+                confidence = fallback_confidence
+            confidence_value = float(confidence or 0.0)
+
+            if current_turn and current_turn["diarized_speaker_id"] == speaker_id:
+                current_turn["text"] = f"{current_turn['text']} {word_text}".strip()
+                current_turn["end_time"] = end_time
+            else:
+                if current_turn:
+                    diarized_turns.append(current_turn)
+                current_turn = {
+                    "diarized_speaker_id": speaker_id,
+                    "text": word_text,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "transcription_confidence": confidence_value,
+                }
+
+        if current_turn:
+            diarized_turns.append(current_turn)
+        return diarized_turns
+
+    def _parse_deepgram_response(
+        self,
+        payload: dict[str, Any],
+        *,
+        adaptation_phrases: list[str],
+    ) -> dict[str, Any]:
+        results = payload.get("results") or {}
+        channels = results.get("channels") or []
+        alternatives = ((channels[0] if channels else {}) or {}).get("alternatives") or []
+        if not alternatives:
+            return {
+                "text": "",
+                "confidence": None,
+                "diarized_turns": [],
+                "adaptation_phrases": adaptation_phrases,
+                "provider": "deepgram",
+            }
+
+        best = max(alternatives, key=lambda alt: float(alt.get("confidence") or 0.0))
+        confidence = best.get("confidence")
+        confidence_value = float(confidence) if confidence is not None else None
+        words = best.get("words") or []
+        diarized_turns = self._parse_deepgram_words(words, confidence_value)
+        language_code = best.get("language") or results.get("language")
+
+        if not diarized_turns:
+            for utterance in results.get("utterances") or []:
+                transcript = str(utterance.get("transcript") or "").strip()
+                if not transcript:
+                    continue
+                speaker = utterance.get("speaker")
+                if speaker is None:
+                    continue
+                diarized_turns.append(
+                    {
+                        "diarized_speaker_id": str(speaker),
+                        "text": transcript,
+                        "start_time": float(utterance.get("start") or 0.0),
+                        "end_time": float(utterance.get("end") or 0.0),
+                        "transcription_confidence": float(
+                            utterance.get("confidence") or confidence_value or 0.0
+                        ),
+                    }
+                )
+
+        return {
+            "text": str(best.get("transcript") or ""),
+            "confidence": confidence_value,
+            "language_code": language_code,
+            "diarized_turns": diarized_turns,
+            "adaptation_phrases": adaptation_phrases,
+            "provider": "deepgram",
+        }
+
     async def transcribe(self, utterance: FinalizedUtterance) -> FinalizedUtterance:
         stt_started = asyncio.get_event_loop().time()
-        async with self.session.stt_lock:
-            async with self._global_limiter:
-                self.session.session_metrics["stt_requests"] += 1
-                self.session.session_metrics["google_stt_minutes"] += utterance.duration_ms / 60000.0
-
-                async def _on_retry(attempt: int, exc: Exception) -> None:
-                    self.session.session_metrics["stt_retry_count"] += 1
-                    logger.warning(
-                        "[STT] retrying utterance %s attempt=%s session=%s error=%s",
-                        utterance.utterance_id,
-                        attempt,
-                        self.session.session_id,
-                        exc,
-                    )
-
-                async def _call():
-                    return await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: self._recognize_sync(
-                                utterance.audio,
-                                language_hint=self.session.language,
-                                response_language_hint=self.session.response_language,
-                            ),
-                        ),
-                        timeout=settings.STT_END_TO_END_TIMEOUT_SECONDS,
-                    )
-
-                response = await run_with_retries(
-                    "google_stt_recognize",
-                    _call,
-                    max_retries=settings.STT_MAX_RETRIES,
-                    base_backoff_ms=settings.STT_BASE_BACKOFF_MS,
-                    max_backoff_ms=settings.STT_MAX_BACKOFF_MS,
-                    is_retryable=self._is_retryable,
-                    on_retry=_on_retry,
-                )
+        response = await self.transcribe_audio(
+            utterance.audio,
+            utterance_id=utterance.utterance_id,
+            duration_ms=utterance.duration_ms,
+            language_hint=self.session.language,
+            response_language_hint=self.session.response_language,
+            timeout_seconds=settings.STT_END_TO_END_TIMEOUT_SECONDS,
+            count_metrics=True,
+        )
         logger.info(
             "[STT] utterance complete id=%s duration_ms=%s stt_elapsed_ms=%.1f [session=%s]",
             utterance.utterance_id,
@@ -241,6 +414,56 @@ class SpeechTranscriptionService:
 
         return utterance
 
+    async def transcribe_audio(
+        self,
+        audio: bytes,
+        *,
+        utterance_id: str,
+        duration_ms: int = 0,
+        language_hint: str | None = None,
+        response_language_hint: str | None = None,
+        timeout_seconds: float | None = None,
+        count_metrics: bool = False,
+    ) -> dict[str, Any]:
+        async with self._global_limiter:
+            if count_metrics:
+                self.session.session_metrics["stt_requests"] += 1
+                self.session.session_metrics[self._provider_minutes_metric_key()] += duration_ms / 60000.0
+
+            async def _on_retry(attempt: int, exc: Exception) -> None:
+                if count_metrics:
+                    self.session.session_metrics["stt_retry_count"] += 1
+                logger.warning(
+                    "[STT] retrying utterance %s attempt=%s session=%s error=%s",
+                    utterance_id,
+                    attempt,
+                    self.session.session_id,
+                    exc,
+                )
+
+            async def _call():
+                return await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: self._recognize_sync(
+                            audio,
+                            language_hint=language_hint,
+                            response_language_hint=response_language_hint,
+                        ),
+                    ),
+                    timeout=timeout_seconds or settings.STT_END_TO_END_TIMEOUT_SECONDS,
+                )
+
+            return await run_with_retries(
+                f"{self._provider}_recognize",
+                _call,
+                max_retries=settings.STT_MAX_RETRIES,
+                base_backoff_ms=settings.STT_BASE_BACKOFF_MS,
+                max_backoff_ms=settings.STT_MAX_BACKOFF_MS,
+                is_retryable=self._is_retryable,
+                on_retry=_on_retry,
+            )
+
     def _resolve_language_codes(
         self,
         language_hint: str | None = None,
@@ -252,11 +475,9 @@ class SpeechTranscriptionService:
             if hint and hint in configured:
                 return [hint]
 
-        # Per official Chirp 3 docs (us/eu multi-region):
-        #   - language_codes=["auto"] IS supported for automatic language detection
-        #   - Multiple explicit codes are also supported
-        # Just return whatever is configured. Empty → "auto" (language-agnostic).
         if not configured:
+            return ["auto"]
+        if settings.GOOGLE_STT_MODEL == "chirp_3" and len(configured) > 1:
             return ["auto"]
         return configured
 
@@ -299,18 +520,94 @@ class SpeechTranscriptionService:
 
         return phrases[:25]
 
+    def _recognize_deepgram_sync(
+        self,
+        audio: bytes,
+        language_hint: str | None = None,
+        response_language_hint: str | None = None,
+    ) -> dict[str, Any]:
+        if not settings.DEEPGRAM_API_KEY:
+            raise RuntimeError("DEEPGRAM_API_KEY is not configured")
+
+        language = self._resolve_deepgram_language(language_hint, response_language_hint)
+        adaptation_phrases = self._resolve_deepgram_keyterms()
+        request_url = self._build_deepgram_request_url(
+            language=language,
+            keyterms=adaptation_phrases,
+        )
+        payload = _pcm_to_wav(audio)
+
+        logger.info(
+            "[STT] Deepgram request prepared model=%s language=%s keyterm_count=%s [session=%s]",
+            settings.DEEPGRAM_MODEL,
+            language,
+            len(adaptation_phrases),
+            self.session.session_id,
+        )
+
+        request = Request(
+            request_url,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Token {settings.DEEPGRAM_API_KEY}",
+                "Content-Type": "audio/wav",
+            },
+        )
+
+        import time as _time
+
+        started = _time.monotonic()
+        try:
+            with urlopen(request, timeout=settings.STT_RPC_TIMEOUT_SECONDS) as response:
+                raw_body = response.read()
+        except HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Deepgram listen failed status={exc.code} reason={exc.reason} body={error_body[:400]}"
+            ) from exc
+        except URLError as exc:
+            raise RuntimeError(f"Deepgram listen transport failed: {exc.reason}") from exc
+        finally:
+            elapsed_ms = (_time.monotonic() - started) * 1000.0
+            logger.info(
+                "[STT] Deepgram listen finished model=%s elapsed_ms=%.1f [session=%s]",
+                settings.DEEPGRAM_MODEL,
+                elapsed_ms,
+                self.session.session_id,
+            )
+
+        try:
+            response_payload = json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:
+            raise RuntimeError(
+                f"Deepgram listen returned non-JSON response: {raw_body[:200]!r}"
+            ) from exc
+
+        return self._parse_deepgram_response(
+            response_payload,
+            adaptation_phrases=adaptation_phrases,
+        )
+
     def _recognize_sync(
         self,
         audio: bytes,
         language_hint: str | None = None,
         response_language_hint: str | None = None,
     ) -> dict[str, Any]:
+        if self._provider == "deepgram":
+            return self._recognize_deepgram_sync(
+                audio,
+                language_hint=language_hint,
+                response_language_hint=response_language_hint,
+            )
+
         from google.cloud.speech_v2.types import cloud_speech
         language_codes = self._resolve_language_codes(language_hint, response_language_hint)
         adaptation_phrases = self._resolve_adaptation_phrases()
 
         adaptation = None
-        if adaptation_phrases:
+        if adaptation_phrases and float(settings.GOOGLE_STT_HINT_BOOST) > 0.0:
             adaptation = cloud_speech.SpeechAdaptation(
                 phrase_sets=[
                     cloud_speech.SpeechAdaptation.AdaptationPhraseSet(
@@ -743,22 +1040,22 @@ class SpeechTranscriptionService:
             # Pass an explicit en-US hint so the probe never exercises the
             # invalid `["auto"]` path for Chirp 3 at the `us` endpoint.
             self._recognize_sync(b"\x00" * 32000, language_hint="en-US")
-            capability_registry.set_google_stt(
-                capability_registry.google_stt().__class__(
+            capability_registry.set_stt(
+                capability_registry.stt().__class__(
                     available=True,
                     reason="ok",
-                    provider="google_stt",
-                    region=settings.GOOGLE_STT_REGION,
+                    provider=self._provider,
+                    region=settings.GOOGLE_STT_REGION if self._provider == "google_stt" else settings.DEEPGRAM_API_BASE_URL,
                 )
             )
             return True, "ok"
         except Exception as exc:
-            capability_registry.set_google_stt(
-                capability_registry.google_stt().__class__(
+            capability_registry.set_stt(
+                capability_registry.stt().__class__(
                     available=False,
                     reason=str(exc),
-                    provider="google_stt",
-                    region=settings.GOOGLE_STT_REGION,
+                    provider=self._provider,
+                    region=settings.GOOGLE_STT_REGION if self._provider == "google_stt" else settings.DEEPGRAM_API_BASE_URL,
                 )
             )
             return False, str(exc)

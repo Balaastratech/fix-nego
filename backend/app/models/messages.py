@@ -65,7 +65,7 @@ class HoldToAskStatePayload(BaseModel):
 
 
 class CompanionAudioPayload(BaseModel):
-    """Payload for LOCAL_MIC_PCM / REMOTE_APP_PCM messages."""
+    """Payload for LOCAL_MIC_PCM / REMOTE_APP_PCM / ASK_AI_PCM messages."""
     pcm_base64: str
     timestamp_ms: int
     is_final: bool = False
@@ -125,6 +125,7 @@ class ConnectionEstablishedPayload(BaseModel):
     session_id: str
     server_time: int
     restored: bool = False
+    resume_token: Optional[str] = None
 
 
 class ConsentAcknowledgedPayload(BaseModel):
@@ -195,6 +196,9 @@ class TranscriptUpdatePayload(BaseModel):
     speaker: str
     text: str
     timestamp: int
+    is_partial: bool = False
+    source: Optional[str] = None
+    context: Optional[str] = None
 
 
 class StrategyUpdatePayload(BaseModel):

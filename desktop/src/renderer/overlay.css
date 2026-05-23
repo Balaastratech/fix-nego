@@ -108,8 +108,8 @@ html, body {
   position: absolute;
   top: 0;
   left: 70px;
-  min-width: 280px;
-  max-width: 340px;
+  min-width: 300px;
+  max-width: 380px;
   max-height: 440px;
   overflow-y: auto;
   background: rgba(12, 15, 26, 0.96);
@@ -134,12 +134,28 @@ html, body {
   color: rgba(255,255,255,0.4);
 }
 
+/* Thumbnail inside each meeting option */
+.menu-thumb {
+  width: 72px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: #0a0c14;
+  flex-shrink: 0;
+}
+.meeting-option.active .menu-thumb { border-color: rgba(244,200,74,0.35); }
+.menu-option-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.menu-option-info span:first-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px;
+}
+
 .meeting-option {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 7px 10px;
   border: none;
   border-radius: 12px;
   background: transparent;
@@ -271,14 +287,15 @@ html, body {
   color: #0a5c30;
 }
 
-/* Hidden capture video element */
+/* Hidden capture video element but visible in DOM and render tree to keep pipeline active */
 .capture-video {
   position: absolute;
-  left: -9999px;
-  top: -9999px;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  left: 10px;
+  top: 10px;
+  width: 4px;
+  height: 4px;
+  opacity: 0.01;
+  z-index: -9999;
   pointer-events: none;
 }
 
@@ -302,4 +319,133 @@ html, body {
 @keyframes dot-bounce {
   0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
   40%            { transform: scale(1.2); opacity: 1.0; }
+}
+
+/* ── Capture preview (small thumbnail below the orb) ────────────────────── */
+.capture-preview {
+  display: block;
+  width: 58px;        /* same width as the orb so it lines up cleanly */
+  height: 33px;       /* 16:9 for 58px wide */
+  margin-top: 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: #0a0c14;
+  object-fit: cover;
+  -webkit-app-region: no-drag;
+}
+.capture-preview.hidden { display: none; }
+
+/* ── Screen picker modal ─────────────────────────────────────────────────── */
+.screen-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  -webkit-app-region: no-drag;
+}
+.screen-picker-overlay.hidden { display: none; }
+
+.screen-picker-modal {
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  width: min(760px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+}
+
+.screen-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.screen-picker-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e8e8;
+  letter-spacing: 0.02em;
+}
+.screen-picker-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.screen-picker-close:hover { background: rgba(255,255,255,0.1); color: #eee; }
+
+.screen-picker-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 18px 0;
+}
+.picker-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.picker-tab:hover { color: #ccc; }
+.picker-tab.active { color: #ff5533; border-bottom-color: #ff5533; }
+
+.screen-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 14px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.picker-source-card {
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.picker-source-card:hover {
+  border-color: #ff5533;
+  background: rgba(255,85,51,0.08);
+}
+.picker-source-thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+  background: #111;
+}
+.picker-source-name {
+  font-size: 11px;
+  color: #ccc;
+  padding: 6px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen-picker-footer {
+  padding: 8px 18px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.screen-picker-hint {
+  font-size: 10px;
+  color: #666;
 }

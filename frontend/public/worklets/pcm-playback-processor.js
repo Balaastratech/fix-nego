@@ -13,9 +13,20 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
     this._minBufferSamples = 1200; // 50ms minimum buffer - start playing quickly
     this._isPlaying = false;
     this._silenceFrames = 0;
-    this._maxSilenceFrames = 240; // 10 seconds of silence tolerance (240 frames @ 128 samples/frame)
+    this._maxSilenceFrames = 240; // about 1.3s of silence tolerance at 24kHz
 
     this.port.onmessage = (event) => {
+      if (event.data && typeof event.data === 'object' && event.data.type === 'clear') {
+        const wasPlaying = this._isPlaying || this._queue.length > 0;
+        this._queue = [];
+        this._isPlaying = false;
+        this._silenceFrames = 0;
+        if (wasPlaying) {
+          this.port.postMessage({ type: 'playback_stopped' });
+        }
+        return;
+      }
+
       const totalQueued = this._queue.reduce((sum, buf) => sum + buf.length, 0);
       if (totalQueued * 2 > this._maxQueueBytes) {
         // Drop oldest chunk to prevent unbounded queue growth
@@ -29,6 +40,7 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
       if (!this._isPlaying && queuedSamples >= this._minBufferSamples) {
         this._isPlaying = true;
         this._silenceFrames = 0;
+        this.port.postMessage({ type: 'playback_started' });
       }
     };
   }
@@ -70,10 +82,12 @@ class PCMPlaybackProcessor extends AudioWorkletProcessor {
       }
       this._silenceFrames++;
       
-      // Only stop playing after sustained silence (10 seconds)
+      // Only stop playing after sustained silence
       // This keeps playback running between chunks that arrive with gaps
       if (this._silenceFrames > this._maxSilenceFrames) {
         this._isPlaying = false;
+        this._silenceFrames = 0;
+        this.port.postMessage({ type: 'playback_stopped' });
       }
     } else {
       // Reset silence counter when we have audio

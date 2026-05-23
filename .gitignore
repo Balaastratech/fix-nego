@@ -77,6 +77,11 @@ OPENCODE.md
 backend/logs/
 localhost-*.log
 
+# Transcript files (may contain secrets)
+transcript.jsonl
+transcript - Copy.jsonl
+*.jsonl
+
 # Planning / internal docs
 .planning/
 .claude/

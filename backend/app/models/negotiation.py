@@ -3,6 +3,7 @@ from typing import Optional, Any
 from pydantic import BaseModel, ConfigDict, Field
 import asyncio
 import time
+import uuid
 
 from app.models.companion import CaptureHealth, CompanionHoldState, MeetingBinding, SourceMode
 
@@ -31,6 +32,7 @@ class NegotiationSession(BaseModel):
     response_language: Optional[str] = None
     session_resumable: bool = True
     session_restored: bool = False
+    resume_token: str = Field(default_factory=lambda: uuid.uuid4().hex)
     last_persisted_at: Optional[float] = None
     degraded_mode: Optional[str] = None
     source_mode: str = SourceMode.IN_PERSON_WEB.value
@@ -69,6 +71,9 @@ class NegotiationSession(BaseModel):
     
     # AI speaking state - used to pause intel injections while AI is generating audio
     ai_is_speaking: bool = False
+    # True while frontend is actively playing Gemini PCM in the user's earphone.
+    # This gates remote loopback capture so the AI does not transcribe itself.
+    ai_audio_playing: bool = False
     # Queue for intel injections that were skipped while AI was speaking
     pending_injections: list = Field(default_factory=list)
     pending_live_snapshot: Optional[dict] = None
@@ -86,10 +91,13 @@ class NegotiationSession(BaseModel):
     
     # Accumulates AI response text for validation at turn_complete
     current_ai_response: str = ""
+    recent_ai_responses: list[str] = Field(default_factory=list)
+    last_ai_audio_played_at: float = 0.0
 
-    # Response mode for AI responses (set by Get Advice / Get Command buttons)
-    # "advice" = skip validation, "command" = apply validation
-    response_mode: str = "command"
+    # Retained for compatibility with older clients. The active behavior is now
+    # a single automatic answer policy that chooses the response shape from the
+    # user's question instead of a manual mode toggle.
+    response_mode: str = "auto"
 
     # Context submitted via the SetupDialog (item, target_price, max_price, extra_context)
     user_context: dict = Field(default_factory=dict)
@@ -155,6 +163,11 @@ class NegotiationSession(BaseModel):
     pending_utterance_id: Optional[str] = None
     pending_utterance_started_at: Optional[float] = None
     pending_utterance_rms: float = 0.0
+    partial_transcript_text: Optional[str] = None
+    partial_transcript_task: Optional[Any] = None
+    partial_transcript_started_at: Optional[float] = None
+    partial_transcript_last_emit_at: float = 0.0
+    partial_transcript_source: Optional[str] = None
 
     # Speaker segment tracking — who is speaking NOW (set on button click)
     speaker_segment_start: float = 0.0      # kept for manual_mode guard only
@@ -170,18 +183,31 @@ class NegotiationSession(BaseModel):
     # Transcribed to text on button release for reliable Live AI question answering.
     # Audio is NOT pushed to the listener buffer during this window.
     question_capture_bytes: bytes = b""
+    question_capture_id: Optional[str] = None
+    question_capture_started_at: Optional[float] = None
+    question_capture_chunk_count: int = 0
+    question_capture_last_chunk_at: Optional[float] = None
+    ignore_local_mic_until: float = 0.0
+    current_ask_capture: dict = Field(default_factory=dict)
     companion_audio_buffers: dict[str, bytes] = Field(default_factory=dict)
     companion_audio_started_at: dict[str, float] = Field(default_factory=dict)
     companion_last_chunk_at: dict[str, float] = Field(default_factory=dict)
     companion_last_transcript_at: dict[str, float] = Field(default_factory=dict)
+    companion_partial_tasks: dict[str, Any] = Field(default_factory=dict)
+    companion_partial_text: dict[str, str] = Field(default_factory=dict)
+    companion_partial_started_at: dict[str, float] = Field(default_factory=dict)
 
     # Outcome tracking
     initial_price: Optional[float] = None
     final_price: Optional[float] = None
+    final_summary: dict = Field(default_factory=dict)
     transcript: list[dict] = Field(default_factory=list)
     research_history: list[dict] = Field(default_factory=list)
     advisor_history: list[dict] = Field(default_factory=list)
     vision_history: list[dict] = Field(default_factory=list)
+    trace_jsonl_path: Optional[str] = None
+    trace_report_path: Optional[str] = None
+    trace_refs: dict = Field(default_factory=dict)
 
     # Continuous Pro Vision Analysis fields
     # Stores structured VisionObservation dicts produced by analyze_vision_frames()
@@ -217,12 +243,18 @@ class NegotiationSession(BaseModel):
             "research_requests": 0,
             "research_failures": 0,
             "google_stt_minutes": 0.0,
+            "deepgram_stt_minutes": 0.0,
             "speechbrain_verification_calls": 0,
             "speechbrain_ambiguous_turns": 0,
             "azure_verification_calls": 0,
             "gemini_live_input_tokens": 0,
             "gemini_live_output_tokens": 0,
             "research_calls": 0,
+            "ask_attempts": 0,
+            "ask_retry_count": 0,
+            "ask_audio_input_failures": 0,
+            "ask_capture_dedicated_count": 0,
+            "transcript_duplicate_drops": 0,
         }
     )
     sidecar_lock: Any = Field(default_factory=asyncio.Lock)

@@ -1,0 +1,19 @@
+BACKGROUND INTEL
+Item: unknown
+Negotiation Type: unknown
+User Role: unknown
+ROLE RULE: You are advising the USER. If the counterparty says they want to SELL, the user is BUYING. If the counterparty says they want to BUY, the user is SELLING. Always respond from the User's perspective.
+Counterparty price: None
+User price: None
+User Target Price: None
+User Walk-Away Price: None
+Counterparty Sentiment: unknown
+Counterparty Goal: unknown
+Key moments: none
+Leverage points: none
+Market research: Not yet researched
+
+CONVERSATION [FROM TRANSCRIPT] (User: = person you advise, Counterparty: = other party):
+
+User [0:21]: Can you hear
+END BACKGROUND INTEL

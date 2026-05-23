@@ -17,6 +17,7 @@ def test_companion_session_defaults():
     assert session.capture_health["remote_audio_ok"] is False
     assert session.hold_state["active"] is False
     assert session.companion_quality_mode == "inactive"
+    assert session.ai_audio_playing is False
 
 
 def test_apply_start_payload_sets_companion_mode_defaults():
@@ -69,7 +70,8 @@ async def test_companion_audio_uses_source_derived_speaker():
     websocket = AsyncMock()
     pcm = b"\x01\x02" * 2000
 
-    with patch("app.services.companion_runtime.session_store.persist_session") as persist_mock:
+    with patch("app.services.companion_runtime._deepgram_streaming_enabled", return_value=False), \
+         patch("app.services.companion_runtime.session_store.persist_session") as persist_mock:
         await companion_runtime.handle_audio_payload(
             session,
             websocket,
@@ -89,6 +91,95 @@ async def test_companion_audio_uses_source_derived_speaker():
     assert utterance.source == "desktop_remote_app"
     assert utterance.metadata["participant_origin"] == "remote_counterparty"
     persist_mock.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_remote_audio_is_dropped_while_ai_audio_is_playing():
+    session = NegotiationSession(session_id="companion-ai-audio-gate")
+    session.source_mode = SourceMode.VIRTUAL_COMPANION_DESKTOP.value
+    session.meeting_binding = {"is_bound": True}
+    session.capture_health = {"remote_audio_ok": True, "unsafe_device_loopback": False}
+    session.listener_agent = AsyncMock()
+    session.ai_audio_playing = True
+    websocket = AsyncMock()
+    pcm = b"\x01\x02" * 2000
+
+    with patch("app.services.companion_runtime.session_store.persist_session") as persist_mock:
+        await companion_runtime.handle_audio_payload(
+            session,
+            websocket,
+            {
+                "pcm_base64": base64.b64encode(pcm).decode("ascii"),
+                "timestamp_ms": 1234567890,
+                "started_at_ms": 1234567000,
+                "utterance_id": "remote-turn-muted",
+                "is_final": True,
+            },
+            companion_runtime.REMOTE_APP_MESSAGE,
+        )
+
+    session.listener_agent.process_diarized_utterance.assert_not_awaited()
+    persist_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_local_mic_tail_is_dropped_during_post_hold_grace():
+    session = NegotiationSession(session_id="companion-post-hold-tail")
+    session.source_mode = SourceMode.VIRTUAL_COMPANION_DESKTOP.value
+    session.meeting_binding = {"is_bound": True}
+    session.capture_health = {"remote_audio_ok": True, "unsafe_device_loopback": False}
+    session.listener_agent = AsyncMock()
+    session.ignore_local_mic_until = 9999999999.0
+    websocket = AsyncMock()
+    pcm = b"\x01\x02" * 2000
+
+    with patch("app.services.companion_runtime.session_store.persist_session") as persist_mock:
+        await companion_runtime.handle_audio_payload(
+            session,
+            websocket,
+            {
+                "pcm_base64": base64.b64encode(pcm).decode("ascii"),
+                "timestamp_ms": 1234567890,
+                "started_at_ms": 1234567000,
+                "utterance_id": "local-tail",
+                "is_final": True,
+            },
+            companion_runtime.LOCAL_MIC_MESSAGE,
+        )
+
+    session.listener_agent.process_diarized_utterance.assert_not_awaited()
+    persist_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dedicated_ask_ai_pcm_is_buffered_without_public_transcript():
+    session = NegotiationSession(session_id="companion-ask-ai")
+    session.source_mode = SourceMode.VIRTUAL_COMPANION_DESKTOP.value
+    session.meeting_binding = {"is_bound": True}
+    session.capture_health = {"remote_audio_ok": True, "unsafe_device_loopback": False}
+    session.listener_agent = AsyncMock()
+    websocket = AsyncMock()
+    pcm = b"\x01\x02" * 2000
+
+    with patch("app.services.companion_runtime.session_store.persist_session") as persist_mock:
+        await companion_runtime.handle_audio_payload(
+            session,
+            websocket,
+            {
+                "pcm_base64": base64.b64encode(pcm).decode("ascii"),
+                "timestamp_ms": 1234567890,
+                "started_at_ms": 1234567000,
+                "utterance_id": "ask-ai-turn",
+                "is_final": True,
+            },
+            companion_runtime.ASK_AI_MESSAGE,
+        )
+
+    assert session.question_capture_bytes == pcm
+    assert session.question_capture_chunk_count == 1
+    assert session.current_ask_capture["transport"] == "desktop_ask_ai_pcm"
+    session.listener_agent.process_diarized_utterance.assert_not_awaited()
+    persist_mock.assert_not_called()
 
 
 def test_session_store_persists_companion_context(tmp_path):

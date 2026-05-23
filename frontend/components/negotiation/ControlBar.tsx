@@ -1,19 +1,17 @@
 import React from 'react';
-import { Mic, MicOff, Camera, CameraOff, PhoneOff, Phone } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Phone } from 'lucide-react';
 
 interface ControlBarProps {
   isAudioActive: boolean;
-  isVisionActive: boolean;
   isNegotiating: boolean;
   onToggleAudio: () => void;
-  onToggleVision: () => void;
   onStartNegotiation: () => void;
   onEndNegotiation: () => void;
 }
 
 export function ControlBar({
-  isAudioActive, isVisionActive, isNegotiating,
-  onToggleAudio, onToggleVision, onStartNegotiation, onEndNegotiation,
+  isAudioActive, isNegotiating,
+  onToggleAudio, onStartNegotiation, onEndNegotiation,
 }: ControlBarProps) {
   return (
     <div className="flex items-center space-x-6">
@@ -57,18 +55,6 @@ export function ControlBar({
           <Phone className="w-5 h-5 mr-2" />Start Session
         </button>
       )}
-
-      <button
-        onClick={onToggleVision}
-        disabled={!isNegotiating}
-        className={`flex items-center justify-center p-4 rounded-full transition-all duration-200 ${!isNegotiating ? 'opacity-25 cursor-not-allowed' : 'hover:scale-105'}`}
-        style={isVisionActive
-          ? { background: 'rgba(245,197,24,0.15)', border: '1px solid rgba(245,197,24,0.5)', color: '#f5c518', boxShadow: '0 0 16px rgba(245,197,24,0.25)' }
-          : { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)' }}
-        title={isVisionActive ? 'Disable Camera' : 'Enable Camera'}
-      >
-        {isVisionActive ? <Camera className="w-6 h-6" /> : <CameraOff className="w-6 h-6" />}
-      </button>
     </div>
   );
 }

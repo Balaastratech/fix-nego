@@ -94,7 +94,7 @@ def _validate_runtime_configuration() -> None:
         return value is True
 
     supported_auto_languages = set(settings.supported_auto_speaker_languages_list)
-    requested_languages = set(settings.google_stt_language_codes_list)
+    requested_languages = set(settings.transcription_language_codes_list)
 
     if settings.SPEECHBRAIN_ENABLED:
         conflicting = []
@@ -124,6 +124,7 @@ def _validate_runtime_configuration() -> None:
 async def _run_capability_probes_in_background() -> None:
     probe_session = NegotiationSession(session_id="startup-probe")
     stt_service = SpeechTranscriptionService(probe_session)
+    stt_provider = settings.TRANSCRIPTION_PROVIDER
 
     try:
         stt_ok, stt_reason = await asyncio.wait_for(
@@ -135,10 +136,31 @@ async def _run_capability_probes_in_background() -> None:
     except Exception as exc:
         stt_ok, stt_reason = False, str(exc) or type(exc).__name__
 
-    if stt_ok:
+    if stt_provider == "deepgram":
+        if stt_ok:
+            logger.info(
+                "Deepgram STT probe succeeded",
+                extra={
+                    "stt_provider": stt_provider,
+                    "stt_model": settings.DEEPGRAM_MODEL,
+                    "deepgram_base_url": settings.DEEPGRAM_API_BASE_URL,
+                },
+            )
+        else:
+            logger.error(
+                "Deepgram STT probe failed",
+                extra={
+                    "stt_provider": stt_provider,
+                    "stt_model": settings.DEEPGRAM_MODEL,
+                    "deepgram_base_url": settings.DEEPGRAM_API_BASE_URL,
+                    "reason": stt_reason,
+                },
+            )
+    elif stt_ok:
         logger.info(
             "Google STT diarization probe succeeded",
             extra={
+                "stt_provider": stt_provider,
                 "google_stt_region": settings.GOOGLE_STT_REGION,
                 "google_stt_location": settings.GOOGLE_STT_LOCATION,
                 "google_stt_recognizer": settings.GOOGLE_STT_RECOGNIZER,
@@ -149,18 +171,19 @@ async def _run_capability_probes_in_background() -> None:
         logger.error(
             "Google STT diarization probe failed",
             extra={
+                "stt_provider": stt_provider,
                 "google_stt_region": settings.GOOGLE_STT_REGION,
                 "google_stt_location": settings.GOOGLE_STT_LOCATION,
                 "google_stt_recognizer": settings.GOOGLE_STT_RECOGNIZER,
                 "reason": stt_reason,
             },
         )
-    capability_registry.set_google_stt(
+    capability_registry.set_stt(
         CapabilityStatus(
             available=stt_ok,
             reason=stt_reason,
-            provider="google_stt",
-            region=settings.GOOGLE_STT_REGION,
+            provider=stt_provider,
+            region=settings.GOOGLE_STT_REGION if stt_provider == "google_stt" else settings.DEEPGRAM_API_BASE_URL,
         )
     )
 
@@ -195,6 +218,7 @@ async def _run_capability_probes_in_background() -> None:
         "Capability path selected",
         extra={
             "active_capability_path": capability_registry.active_path(),
+            "stt_provider": stt_provider,
             "google_stt_region": settings.GOOGLE_STT_REGION,
             "speechbrain_enabled": settings.SPEECHBRAIN_ENABLED,
         },
@@ -220,6 +244,7 @@ async def startup_event():
     logger.info(
         "Capability probes scheduled in background",
         extra={
+            "stt_provider": settings.TRANSCRIPTION_PROVIDER,
             "google_stt_region": settings.GOOGLE_STT_REGION,
             "speechbrain_device": settings.SPEECHBRAIN_DEVICE,
         },
@@ -229,7 +254,7 @@ async def startup_event():
         extra={
             "stt_mode": settings.TRANSCRIPTION_PROVIDER,
             "speaker_mode": "speechbrain" if settings.SPEECHBRAIN_ENABLED else "manual",
-            "supported_launch_languages": settings.google_stt_language_codes_list,
+            "supported_launch_languages": settings.transcription_language_codes_list,
             "persistence_enabled": False,
             "vision_enabled": settings.VISION_ENABLED,
             "session_resumption_enabled": False,

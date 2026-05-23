@@ -1,0 +1,20 @@
+{
+  "item": null,
+  "negotiation_type": "unknown",
+  "buyer_offer": null,
+  "counterparty_price": null,
+  "user_price": null,
+  "user_target_price": null,
+  "user_walk_away_price": null,
+  "counterparty_goal": null,
+  "key_moments": [],
+  "leverage_points": [],
+  "counterparty_sentiment": "unknown",
+  "research_query": null,
+  "research_needed": false,
+  "research_gap": null,
+  "transcript_snippet": "User [0:33]: You hear me? Can you hear me?\nUser [1:00]: The fuck I'm seeing half transcript.",
+  "counterparty_person_name": null,
+  "counterparty_company": null,
+  "meeting_legal_terms": []
+}

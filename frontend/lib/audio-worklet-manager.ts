@@ -28,6 +28,11 @@ export interface CaptureCallbacks {
   onError?: (error: AudioManagerError) => void;
 }
 
+export interface PlaybackCallbacks {
+  onPlaybackStarted?: () => void;
+  onPlaybackStopped?: () => void;
+}
+
 export class AudioManagerError extends Error {
   constructor(
     message: string,
@@ -77,11 +82,16 @@ export class AudioWorkletManager {
 
   private playbackCtx: AudioContext | null = null;
   private playbackNode: AudioWorkletNode | null = null;
+  private playbackCallbacks: PlaybackCallbacks | null = null;
 
   private callbacks: CaptureCallbacks | null = null;
 
   constructor(config: AudioManagerConfig = {}) {
     Object.assign(this.cfg, config);
+  }
+
+  setPlaybackCallbacks(callbacks: PlaybackCallbacks | null): void {
+    this.playbackCallbacks = callbacks;
   }
 
   async startCapture(callbacks: CaptureCallbacks): Promise<void> {
@@ -191,6 +201,7 @@ export class AudioWorkletManager {
       await this.loadWorklet(this.playbackCtx, '/worklets/pcm-playback-processor.js');
 
       this.playbackNode = new AudioWorkletNode(this.playbackCtx, 'pcm-playback-processor');
+      this.playbackNode.port.onmessage = this.handlePlaybackMessage;
       this.playbackNode.connect(this.playbackCtx.destination);
       this.playbackState = 'ready';
     } catch (err) {
@@ -209,6 +220,13 @@ export class AudioWorkletManager {
       return;
     }
     this.playbackNode.port.postMessage(chunk, [chunk]);
+  }
+
+  clearQueue(): void {
+    if (!this.playbackNode || this.playbackState !== 'ready') {
+      return;
+    }
+    this.playbackNode.port.postMessage({ type: 'clear' });
   }
 
   async resumeContexts(): Promise<void> {
@@ -288,6 +306,22 @@ export class AudioWorkletManager {
 
     if (this._bypassVAD || this.isSpeaking) {
       this.callbacks?.onChunk(buffer);
+    }
+  };
+
+  private handlePlaybackMessage = (event: MessageEvent): void => {
+    const message = event.data as { type?: string } | undefined;
+    if (!message || typeof message !== 'object') {
+      return;
+    }
+
+    if (message.type === 'playback_started') {
+      this.playbackCallbacks?.onPlaybackStarted?.();
+      return;
+    }
+
+    if (message.type === 'playback_stopped') {
+      this.playbackCallbacks?.onPlaybackStopped?.();
     }
   };
 
@@ -459,6 +493,9 @@ export class AudioWorkletManager {
   }
 
   private async teardownPlayback(): Promise<void> {
+    if (this.playbackNode) {
+      this.playbackNode.port.onmessage = null;
+    }
     this.playbackNode?.disconnect();
     this.playbackNode = null;
     if (this.playbackCtx) {

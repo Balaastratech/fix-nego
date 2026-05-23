@@ -21,10 +21,14 @@
         <span class="orb-icon" id="orb-icon">✦</span>
       </button>
 
+      <!-- Small capture preview shown below the orb when screen capture is active -->
+      <video id="capture-preview" class="capture-preview hidden" autoplay playsinline muted></video>
+
       <!-- Meeting window picker popup -->
       <div id="meeting-menu" class="meeting-menu hidden">
         <div class="menu-header">Select meeting window</div>
       </div>
+
     </div>
 
     <!-- Private AI conversation panel -->
@@ -47,6 +51,24 @@
 
   <!-- Hidden video for meeting window capture -->
   <video id="meeting-video" class="capture-video" autoplay playsinline muted></video>
+
+  <!-- Screen source picker modal -->
+  <div id="screen-picker-overlay" class="screen-picker-overlay hidden">
+    <div class="screen-picker-modal">
+      <div class="screen-picker-header">
+        <span class="screen-picker-title">Select screen or window to capture</span>
+        <button id="screen-picker-close" class="screen-picker-close" title="Cancel">✕</button>
+      </div>
+      <div class="screen-picker-tabs">
+        <button class="picker-tab active" data-tab="screen">Screens</button>
+        <button class="picker-tab" data-tab="window">Windows</button>
+      </div>
+      <div id="screen-picker-grid" class="screen-picker-grid"></div>
+      <div class="screen-picker-footer">
+        <span class="screen-picker-hint">Tip: Capture a full screen for best stability. Window capture may flicker when the app redraws.</span>
+      </div>
+    </div>
+  </div>
 
   <script src="./overlay.js"></script>
 </body>

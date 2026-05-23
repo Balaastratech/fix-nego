@@ -117,11 +117,11 @@ def test_advisor_query_contains_quality_rules_and_live_deal_state():
         user_query="Should I close or counter?",
     )
 
-    assert "ANSWER QUALITY RULES" in query
+    assert "Answer quality rules:" in query
     assert "LIVE DEAL-STATE BRIEF" in query
     assert "latest offer" in query
-    assert "target/cap" in query
-    assert "MY REQUEST: Should I close or counter?" in query
+    assert "target or cap" in query
+    assert "User request: Should I close or counter?" in query
 
 
 def test_advisor_query_brief_names_active_protection_terms():
@@ -346,7 +346,7 @@ async def test_run_scenario_defers_judging_until_after_socket_closes(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_ask_advice_includes_response_mode_signal():
+async def test_ask_advice_uses_single_automatic_answer_policy():
     websocket = AsyncMock()
     websocket.send_json = AsyncMock()
     live_session = Mock()
@@ -372,12 +372,13 @@ async def test_ask_advice_includes_response_mode_signal():
     await NegotiationEngine.handle_ask_advice(
         session,
         {
-            "response_mode": "advice",
             "query": "What should I do with their 88 offer?",
         },
         websocket,
     )
 
     sent_query = live_session.send.await_args.kwargs["input"]
-    assert "[SYSTEM: ADVICE MODE ACTIVE]" in sent_query
+    assert "The next user message is the real question." in sent_query
+    assert "choose the right response shape from the user's intent" in sent_query
+    assert "[SYSTEM:" not in sent_query
     assert "What should I do with their 88 offer?" in sent_query

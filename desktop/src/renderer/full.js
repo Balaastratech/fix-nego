@@ -23,6 +23,8 @@ const dotMic          = $("dot-mic");
 const dotVbcable      = $("dot-vbcable");
 const dotOutput       = $("dot-output");
 const vbcableHint     = $("vbcable-hint");
+const listenBanner    = $("listen-banner");
+const listenLabel     = $("listen-label");
 const transcriptList  = $("transcript-list");
 const privateList     = $("private-list");
 const transcriptCount = $("transcript-count");
@@ -35,12 +37,27 @@ const state = {
   holdActive: false,
   meetingTitle: null,
   selectedTarget: null,
+  selectedSourceId: null,   // desktop source id matched from getScreenSources
   meetingTargets: [],
+  screenSources: [],        // from getScreenSources — has thumbnails
   conversationEntries: [],
   privateEntries: [],
   listeningDeviceId: null,
   vbCableDeviceId: null,
+  selectedMicLabel: null,
+  orbState: null,
 };
+
+function upsertEntry(list, entry, limit) {
+  const next = [...list];
+  const existingIndex = next.findIndex((item) => item.id === entry.id);
+  if (existingIndex >= 0) {
+    next[existingIndex] = { ...next[existingIndex], ...entry };
+    return next.slice(-limit);
+  }
+  next.push(entry);
+  return next.slice(-limit);
+}
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function renderSessionStatus() {
@@ -64,6 +81,13 @@ function renderSessionStatus() {
   btnStart.style.display  = state.sessionLive ? "none" : "flex";
   btnEnd.style.display    = state.sessionLive ? "flex" : "none";
   btnStart.disabled = !state.selectedTarget || state.sessionLive || state.sessionStarting;
+  // Update the card hint so user knows they can click to switch screens mid-session
+  const cardHint = document.querySelector("#card-picker .card-hint");
+  if (cardHint) {
+    cardHint.textContent = state.sessionLive
+      ? "Click any screen below to switch capture instantly."
+      : "Select your meeting app window. Mic routing, VB-CABLE, and output device are configured automatically.";
+  }
 }
 
 function renderMeetingStatus() {
@@ -76,16 +100,56 @@ function renderMeetingStatus() {
   }
 }
 
+const BANNER_LABELS = {
+  ready:        "🎙 Listening — speak naturally",
+  speaking:     "🔵 Your voice detected — transcribing...",
+  transcribing: "⚡ Processing speech...",
+  ai:           "🤖 AI is responding...",
+};
+
+function renderListenBanner() {
+  const orb = state.orbState;
+  if (!state.sessionLive) {
+    listenBanner.classList.add("hidden");
+    return;
+  }
+  listenBanner.classList.remove("hidden");
+  let bannerState = "ready";
+  if (state.holdActive)          bannerState = "ai";
+  else if (orb === "responding") bannerState = "ai";
+  else if (orb === "processing") bannerState = "transcribing";
+  else if (orb === "listening")  bannerState = "speaking";
+  else                           bannerState = "ready";
+
+  listenBanner.setAttribute("data-state", bannerState);
+  listenLabel.textContent = BANNER_LABELS[bannerState] || BANNER_LABELS.ready;
+}
+
 function renderDevices() {
   const hasVb  = Boolean(state.vbCableDeviceId);
   const hasOut = Boolean(state.listeningDeviceId);
-  labelMic.textContent = state.sessionLive ? "System default mic" : "Auto on session start";
+  labelMic.textContent = state.sessionLive
+    ? (state.selectedMicLabel || "System default mic")
+    : "Auto on session start";
   dotMic.className = "device-dot" + (state.sessionLive ? " ok" : "");
   labelVbcable.textContent = hasVb ? "CABLE Input (detected ✓)" : "Not found";
   dotVbcable.className = "device-dot" + (hasVb ? " ok" : " err");
   vbcableHint.style.display = hasVb ? "none" : "block";
   labelOutput.textContent = hasOut ? "Headphones / Default" : "Auto on session start";
   dotOutput.className = "device-dot" + (hasOut ? " ok" : "");
+}
+
+function findSourceForTarget(t) {
+  // Match a meetingTarget to a screenSource by title substring
+  if (!state.screenSources.length) return null;
+  const title = (t.window_title || "").toLowerCase();
+  // Exact match first
+  let match = state.screenSources.find(s => s.name.toLowerCase() === title);
+  // Partial match: window title starts with source name or vice-versa
+  if (!match) match = state.screenSources.find(s =>
+    title.includes(s.name.toLowerCase()) || s.name.toLowerCase().includes(title)
+  );
+  return match || null;
 }
 
 function renderMeetingTargets() {
@@ -98,25 +162,48 @@ function renderMeetingTargets() {
     return;
   }
   for (const t of state.meetingTargets) {
+    const isSelected = state.selectedTarget?.window_title === t.window_title;
+    const src = findSourceForTarget(t);
+
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "target-btn" +
-      (state.selectedTarget?.window_title === t.window_title ? " selected" : "");
+    btn.className = "target-btn" + (isSelected ? " selected" : "");
+
+    // Thumbnail (shown if we have a screen source match)
+    if (src?.thumbnail) {
+      const thumb = document.createElement("img");
+      thumb.className = "target-thumb";
+      thumb.src = src.thumbnail;
+      thumb.alt = t.window_title;
+      btn.appendChild(thumb);
+    }
+
+    const info = document.createElement("div");
+    info.className = "target-info";
+
     const name = document.createElement("span");
     name.className = "target-name";
     name.textContent = t.window_title;
+
     const chip = document.createElement("span");
     chip.className = "platform-chip";
     chip.textContent = t.platform_hint;
-    btn.appendChild(name);
-    btn.appendChild(chip);
+
+    info.appendChild(name);
+    info.appendChild(chip);
+    btn.appendChild(info);
+
     btn.addEventListener("click", () => {
-      state.selectedTarget = t;
-      state.meetingTitle   = t.window_title;
+      state.selectedTarget  = t;
+      state.selectedSourceId = src?.id || t.target_id || null;
+      state.meetingTitle    = t.window_title;
       renderMeetingTargets();
       renderMeetingStatus();
       renderSessionStatus();
-      channel.postMessage({ type: "COMMAND_SELECT_MEETING", payload: { target: t } });
+      channel.postMessage({
+        type: "COMMAND_SELECT_MEETING",
+        payload: { target: t, source_id: src?.id || t.target_id || null },
+      });
     });
     meetingList.appendChild(btn);
   }
@@ -156,10 +243,11 @@ function renderAll() {
   renderSessionStatus();
   renderMeetingStatus();
   renderDevices();
+  renderListenBanner();
   renderEntryList(transcriptList, state.conversationEntries,
     "Transcript appears once the session starts.");
   renderEntryList(privateList, state.privateEntries,
-    "Hold Space or hold left mouse for 3 s to talk to AI privately.");
+    "Hold the floating AI orb to talk to AI privately.");
   transcriptCount.textContent = state.conversationEntries.length;
   privateCount.textContent    = state.privateEntries.length;
 }
@@ -173,8 +261,11 @@ channel.onmessage = (ev) => {
     state.sessionStarting = Boolean(payload.sessionStarting);
     state.holdActive      = Boolean(payload.holdActive);
     state.meetingTitle    = payload.meetingTitle || null;
-    state.listeningDeviceId = payload.listeningDeviceId || null;
-    state.vbCableDeviceId   = payload.vbCableDeviceId || null;
+    state.listeningDeviceId  = payload.listeningDeviceId || null;
+    state.vbCableDeviceId    = payload.vbCableDeviceId || null;
+    state.selectedMicLabel   = payload.selectedMicLabel || null;
+    state.orbState = payload.orbState || null;
+    renderListenBanner();
     if (Array.isArray(payload.meetingTargets) && payload.meetingTargets.length)
       state.meetingTargets = payload.meetingTargets;
     if (Array.isArray(payload.conversationEntries))
@@ -187,15 +278,20 @@ channel.onmessage = (ev) => {
   }
 
   if (type === "CONVERSATION_ENTRY" && payload) {
-    state.conversationEntries.push(payload);
-    state.conversationEntries = state.conversationEntries.slice(-80);
+    // When a final (non-partial) entry arrives, remove any partials for the same
+    // speaker so the same utterance doesn't appear as "Hi" (partial) + "Hello." (final).
+    if (!payload.isPartial && payload.speaker) {
+      state.conversationEntries = state.conversationEntries.filter(
+        (e) => !(e.isPartial && e.speaker === payload.speaker)
+      );
+    }
+    state.conversationEntries = upsertEntry(state.conversationEntries, payload, 80);
     renderEntryList(transcriptList, state.conversationEntries, "");
     transcriptCount.textContent = state.conversationEntries.length;
   }
 
   if (type === "PRIVATE_ENTRY" && payload) {
-    state.privateEntries.push(payload);
-    state.privateEntries = state.privateEntries.slice(-40);
+    state.privateEntries = upsertEntry(state.privateEntries, payload, 40);
     renderEntryList(privateList, state.privateEntries, "");
     privateCount.textContent = state.privateEntries.length;
   }
@@ -216,11 +312,21 @@ btnEnd.addEventListener("click", () => {
 btnMinimize.addEventListener("click", () => {
   bridge.minimizeFullWindow().catch(() => {});
 });
-btnRefresh.addEventListener("click", async () => {
+async function refreshTargets() {
   try {
-    state.meetingTargets = await bridge.listMeetingTargets();
+    // Load both the meeting target list AND thumbnails in parallel
+    const [targets, sources] = await Promise.all([
+      bridge.listMeetingTargets().catch(() => []),
+      bridge.getScreenSources ? bridge.getScreenSources().catch(() => []) : Promise.resolve([]),
+    ]);
+    if (targets.length)  state.meetingTargets = targets;
+    if (sources.length)  state.screenSources  = sources;
   } catch (_) {}
   renderMeetingTargets();
+}
+
+btnRefresh.addEventListener("click", async () => {
+  await refreshTargets();
   channel.postMessage({ type: "REQUEST_STATE" });
 });
 
@@ -228,9 +334,8 @@ btnRefresh.addEventListener("click", async () => {
 window.addEventListener("load", () => {
   renderAll();
   channel.postMessage({ type: "REQUEST_STATE" });
-  // Try to get fresh target list
   setTimeout(async () => {
-    try { state.meetingTargets = await bridge.listMeetingTargets(); renderMeetingTargets(); } catch (_) {}
+    await refreshTargets();
     channel.postMessage({ type: "REQUEST_STATE" });
   }, 800);
 });

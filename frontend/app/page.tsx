@@ -26,7 +26,6 @@ export default function Home() {
         sendEnrollmentAudio,
         setSpeakerMode,
         setResponseLanguage,
-        sendFrame,
         websocket,
         audioManager,
     } = useNegotiation();
@@ -62,7 +61,6 @@ export default function Home() {
 
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const [isVisionActive, setIsVisionActive] = useState(false);
   const [sessionResearchHistory, setSessionResearchHistory] = useState<any[]>([]);
   const [sessionVisionHistory, setSessionVisionHistory] = useState<any[]>([]);
 
@@ -205,7 +203,6 @@ export default function Home() {
       setShowEnrollmentModal(false);
       setIsSessionActive(false);
       setIsAudioActive(false);
-      setIsVisionActive(false);
       lastSessionIdRef.current = state.sessionId;
     }
   }, [resetState, state.sessionId]);
@@ -227,29 +224,17 @@ export default function Home() {
   const handleEndNegotiation = () => {
     setIsSessionActive(false);
     setIsAudioActive(false);
-    setIsVisionActive(false);
     endNegotiation(null, null);
   };
 
   const handleToggleAudio = () => setIsAudioActive(prev => !prev);
-  const handleToggleVision = () => setIsVisionActive(prev => !prev);
-
-  const handleGetAdvice = () => {
-    if (!websocket || !websocket.isConnected) return;
-    websocket.sendControl('SET_RESPONSE_MODE', { mode: 'advice' });
-  };
-
-  const handleGetCommand = () => {
-    if (!websocket || !websocket.isConnected) return;
-    websocket.sendControl('SET_RESPONSE_MODE', { mode: 'command' });
-  };
 
   const handleSpeakerSelected = (speaker: 'user' | 'counterparty') => {
     setCurrentSpeaker(speaker);
     setManualSpeaker(speaker);
   };
 
-  const dashboardState = { ...state, isNegotiating: isSessionActive, isAudioActive, isVisionActive };
+  const dashboardState = { ...state, isNegotiating: isSessionActive, isAudioActive, isVisionActive: false };
 
   return (
     <main className="h-screen w-screen overflow-hidden text-neutral-900 bg-neutral-100 font-sans">
@@ -272,18 +257,13 @@ export default function Home() {
         validationErrors={validationErrors}
         onConsent={handleConsent}
         onToggleAudio={handleToggleAudio}
-        onToggleVision={handleToggleVision}
-        onVisionFrame={sendFrame}
         onStartNegotiation={handleStartNegotiation}
         onEndNegotiation={handleEndNegotiation}
         onStartCopilot={startCopilot}
-        onGetAdvice={handleGetAdvice}
-        onGetCommand={handleGetCommand}
         onUserAddressingAI={setUserAddressingAI}
         isAILoading={isAILoading}
         onSpeakerSelected={handleSpeakerSelected}
         currentSpeaker={currentSpeaker}
-        responseMode={state.responseMode}
         responseLanguage={state.responseLanguage}
         onResponseLanguageChange={setResponseLanguage}
         aiLiveTranscription={state.aiLiveTranscription}
@@ -291,7 +271,6 @@ export default function Home() {
         speakerMode={state.speakerMode}
         onSpeakerModeChange={handleSpeakerModeChange}
         sessionResearchHistory={sessionResearchHistory}
-        sessionVisionHistory={sessionVisionHistory}
       />
     </main>
   );

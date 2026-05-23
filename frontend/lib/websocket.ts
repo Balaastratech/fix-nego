@@ -1,6 +1,6 @@
-import { AudioWorkletManager } from './audio-worklet-manager';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { AudioWorkletManager } from './audio-worklet-manager';
 
 /**
  * NegotiationWebSocket
@@ -22,6 +22,13 @@ export class NegotiationWebSocket {
   constructor(url: string, audioManager: AudioWorkletManager) {
     this.url = url;
     this.audioManager = audioManager;
+    this.audioManager.setPlaybackCallbacks({
+      onPlaybackStopped: () => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.sendControl('AI_PLAYBACK_DONE', {});
+        }
+      },
+    });
   }
 
   get isConnected(): boolean {

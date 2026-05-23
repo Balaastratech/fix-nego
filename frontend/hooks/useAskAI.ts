@@ -3,7 +3,7 @@ import { NegotiationWebSocket } from '../lib/websocket';
 import { NegotiationState, TranscriptEntry } from './useNegotiationState';
 
 /**
- * Hook for handling "Ask AI" button functionality.
+ * Hook for handling one-shot Ask AI requests.
  * 
  * Features:
  * - Manages loading state during AI response
@@ -27,11 +27,9 @@ export function useAskAI(
   const [isLoading, setIsLoading] = useState(false);
 
   /**
-   * Ask AI for advice or command based on current negotiation state.
-   * 
-   * @param mode - "advice" for full response, "command" for validated response
+   * Ask AI based on current negotiation state.
    */
-  const askAI = useCallback(async (mode: 'advice' | 'command' = 'advice') => {
+  const askAI = useCallback(async () => {
     // Check if websocket is available
     if (!websocket || !websocket.isConnected) {
       console.error('Cannot ask AI: WebSocket not connected');
@@ -64,7 +62,6 @@ export function useAskAI(
 
       // Bundle state and send ASK_ADVICE message
       websocket.sendControl('ASK_ADVICE', {
-        response_mode: mode,
         state: {
           item: state.item,
           seller_price: state.seller_price,

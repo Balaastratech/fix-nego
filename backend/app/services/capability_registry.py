@@ -17,29 +17,35 @@ class CapabilityStatus:
 class CapabilityRegistry:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._google_stt = CapabilityStatus(False, "not_probed", "google_stt")
+        self._stt = CapabilityStatus(False, "not_probed", settings.TRANSCRIPTION_PROVIDER)
         self._speechbrain = CapabilityStatus(False, "not_probed", "speechbrain")
 
-    def set_google_stt(self, status: CapabilityStatus) -> None:
+    def set_stt(self, status: CapabilityStatus) -> None:
         with self._lock:
-            self._google_stt = status
+            self._stt = status
+
+    def stt(self) -> CapabilityStatus:
+        with self._lock:
+            return CapabilityStatus(**asdict(self._stt))
+
+    def set_google_stt(self, status: CapabilityStatus) -> None:
+        self.set_stt(status)
 
     def set_speechbrain(self, status: CapabilityStatus) -> None:
         with self._lock:
             self._speechbrain = status
 
     def google_stt(self) -> CapabilityStatus:
-        with self._lock:
-            return CapabilityStatus(**asdict(self._google_stt))
+        return self.stt()
 
     def speechbrain(self) -> CapabilityStatus:
         with self._lock:
             return CapabilityStatus(**asdict(self._speechbrain))
 
     def active_path(self) -> str:
-        google_ok = self.google_stt().available
+        stt_ok = self.stt().available
         speechbrain_ok = self.speechbrain().available
-        if google_ok and speechbrain_ok:
+        if stt_ok and speechbrain_ok:
             return "full"
         return "degraded"
 

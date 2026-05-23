@@ -5,13 +5,13 @@ from app.ai_assets import (
     DEFAULT_GEMINI_FALLBACK_MODEL,
     DEFAULT_GEMINI_FLASH_MODEL,
     DEFAULT_GOOGLE_STT_HINT_BOOST,
-    DEFAULT_GOOGLE_STT_HINT_PHRASES,
     DEFAULT_GEMINI_LIVE_MODEL,
     DEFAULT_GOOGLE_STT_LANGUAGE_CODES,
     DEFAULT_GOOGLE_STT_MODEL,
     DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES,
     qualify_model_name,
 )
+# DEFAULT_GOOGLE_STT_HINT_PHRASES removed — hardcoded keywords caused STT hallucinations
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,14 @@ class Config(BaseSettings):
     GOOGLE_STT_RECOGNIZER: str = "_"
     GOOGLE_STT_MODEL: str = DEFAULT_GOOGLE_STT_MODEL
     GOOGLE_STT_LANGUAGE_CODES: str = DEFAULT_GOOGLE_STT_LANGUAGE_CODES
-    GOOGLE_STT_HINT_PHRASES: str = DEFAULT_GOOGLE_STT_HINT_PHRASES
-    GOOGLE_STT_HINT_BOOST: float = DEFAULT_GOOGLE_STT_HINT_BOOST
+    GOOGLE_STT_HINT_PHRASES: str = ""   # removed — no hardcoded domain keywords
+    GOOGLE_STT_HINT_BOOST: float = DEFAULT_GOOGLE_STT_HINT_BOOST  # stays 0.0 = disabled
+    DEEPGRAM_API_KEY: str = ""
+    DEEPGRAM_API_BASE_URL: str = "https://api.deepgram.com/v1/listen"
+    DEEPGRAM_MODEL: str = "nova-3"
+    DEEPGRAM_LANGUAGE_CODES: str = DEFAULT_GOOGLE_STT_LANGUAGE_CODES
+    DEEPGRAM_DIARIZATION_ENABLED: bool = False
+    DEEPGRAM_UTTERANCE_SPLIT: float = 0.45
     STT_GLOBAL_CONCURRENCY: int = 8
     STT_MAX_RETRIES: int = 2
     STT_BASE_BACKOFF_MS: int = 300
@@ -124,8 +130,8 @@ class Config(BaseSettings):
     VISION_PRO_MAX_FRAMES: int = 4                # max frames to send per Pro call
     VISION_FRAME_DIFF_THRESHOLD: float = 0.15     # scene-change threshold (0–1; 0.15 = 15%)
     VISION_OBS_MAX_HISTORY: int = 20              # max vision observations kept in session
-    VISION_OBS_STALENESS_SECONDS: float = 60.0    # don't inject vision intel older than this
-    VISION_PRO_LIVE_COOLDOWN_SECONDS: float = 8.0 # slower Pro rate during hold-to-talk mode
+    VISION_OBS_STALENESS_SECONDS: float = 30.0    # lowered from 60s — use only fresh observations
+    VISION_PRO_LIVE_COOLDOWN_SECONDS: float = 3.0 # lowered from 8s — same rate as non-live so vision is always fresh when user holds orb
     VISION_LIVE_SEND_INTERVAL_SECONDS: float = 0.75
     VISION_INTEL_SEND_INTERVAL_SECONDS: float = 2.0
     SUPPORTED_AUTO_SPEAKER_LANGUAGES: str = DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES
@@ -180,7 +186,18 @@ class Config(BaseSettings):
 
     @property
     def google_stt_hint_phrases_list(self) -> list[str]:
-        return [phrase.strip() for phrase in self.GOOGLE_STT_HINT_PHRASES.split(",") if phrase.strip()]
+        # Returns empty — hardcoded hint phrases removed; session-dynamic phrases still used
+        return []
+
+    @property
+    def deepgram_language_codes_list(self) -> list[str]:
+        return [code.strip() for code in self.DEEPGRAM_LANGUAGE_CODES.split(",") if code.strip()]
+
+    @property
+    def transcription_language_codes_list(self) -> list[str]:
+        if self.TRANSCRIPTION_PROVIDER == "deepgram":
+            return self.deepgram_language_codes_list
+        return self.google_stt_language_codes_list
 
     @property
     def supported_auto_speaker_languages_list(self) -> list[str]:
@@ -262,14 +279,26 @@ class Config(BaseSettings):
         if self.AUTO_SPEAKER_MODE not in {"conservative"}:
             logger.warning(f"Invalid AUTO_SPEAKER_MODE={self.AUTO_SPEAKER_MODE}, expected 'conservative'")
 
-        if self.TRANSCRIPTION_PROVIDER not in {"google_stt"}:
+        if self.TRANSCRIPTION_PROVIDER not in {"google_stt", "deepgram"}:
             logger.warning(
-                f"Invalid TRANSCRIPTION_PROVIDER={self.TRANSCRIPTION_PROVIDER}, expected 'google_stt'"
+                f"Invalid TRANSCRIPTION_PROVIDER={self.TRANSCRIPTION_PROVIDER}, expected 'google_stt' or 'deepgram'"
             )
 
         if self.BROWSER_VAD_PROVIDER not in {"webrtc_wasm"}:
             logger.warning(
                 f"Invalid BROWSER_VAD_PROVIDER={self.BROWSER_VAD_PROVIDER}, expected 'webrtc_wasm'"
+            )
+
+        if self.TRANSCRIPTION_PROVIDER == "deepgram" and not self.DEEPGRAM_API_KEY:
+            logger.warning(
+                "TRANSCRIPTION_PROVIDER=deepgram but DEEPGRAM_API_KEY is not set. "
+                "Deepgram STT requests will fail until the API key is configured."
+            )
+
+        if self.DEEPGRAM_UTTERANCE_SPLIT <= 0:
+            logger.warning(
+                "Invalid DEEPGRAM_UTTERANCE_SPLIT=%s, must be positive",
+                self.DEEPGRAM_UTTERANCE_SPLIT,
             )
 
         if not (0.0 <= self.SPEECHBRAIN_ACCEPT_THRESHOLD <= 1.0):

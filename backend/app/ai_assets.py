@@ -9,16 +9,11 @@ DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.5-flash"
 DEFAULT_GOOGLE_STT_MODEL = "chirp_3"
 DEFAULT_GOOGLE_STT_LANGUAGE_CODES = "en-US,hi-IN,es-US"
-DEFAULT_GOOGLE_STT_HINT_PHRASES = (
-    "iphone,iPhone,iPhone Pro,iPhone Pro Max,pro max,"
-    "sell,selling,buy,buying,offer,asking price,counter offer,counteroffer,"
-    "dollars,dollar,rupees,rupee,price,market value,"
-    "negotiate,negotiation,deal,final price,best price,discount,wholesale,"
-    "budget,payment,cash,online transfer,UPI,NEFT,invoice,"
-    "warranty,guarantee,condition,brand new,second hand,used,"
-    "Samsung,OnePlus,Xiaomi,Realme,Oppo,Vivo,Pixel,MacBook,laptop,tablet"
-)
-DEFAULT_GOOGLE_STT_HINT_BOOST = 12.0
+# DEFAULT_GOOGLE_STT_HINT_PHRASES removed — hardcoded domain keywords caused
+# the STT to hallucinate non-spoken words ("iPhone", "sell", "buy") from ambient
+# noise, and are useless in real B2B scenarios where vocabulary is unpredictable.
+# STT adapts dynamically from the session item/brand detected in conversation.
+DEFAULT_GOOGLE_STT_HINT_BOOST = 0.0  # 0.0 = boost disabled; kept for config compatibility
 DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES = "en-US,hi-IN,es-US"
 
 LIVE_RESPONSE_MODALITIES = ["AUDIO"]
@@ -112,9 +107,9 @@ Rules:
 """
 
 LISTENER_UTTERANCE_TRANSCRIPTION_PROMPT = (
-    "Transcribe the speech in this audio clip. "
-    "Return ONLY the spoken words verbatim. "
-    "No labels, no timestamps, no formatting, no commentary."
+    "Write out the exact words spoken in this audio recording. "
+    "Return ONLY the spoken text verbatim — no labels, no timestamps, "
+    "no commentary, no formatting."
 )
 
 TEXT_EXTRACTION_PROMPT = """Analyze this labeled negotiation transcript and extract context.
@@ -134,7 +129,10 @@ Return strict JSON only - no markdown, no extra text.
   "research_query": "precise search query for current market value. null if item too generic.",
   "research_needed": false,
   "research_gap": null,
-  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)"
+  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)",
+  "counterparty_person_name": "full name of the counterparty person if mentioned (e.g. 'John Smith'). null if not mentioned.",
+  "counterparty_company": "company/organisation name if mentioned (e.g. 'Microsoft', 'ABC Corp'). null if not mentioned.",
+  "meeting_legal_terms": ["any legal or contract terms mentioned, e.g. 'NDA', 'SLA', 'force majeure'"]
 }
 
 ATTRIBUTION RULES:
@@ -192,16 +190,39 @@ Set research_needed=true when: you don't know the fair market value, you heard a
 IMPORTANT: Do not generate a research_query for generic items without specifics. Examples of TOO GENERIC: "car" (need make/model/year), "phone" (need brand/model), "house" (need location/size), "laptop" (need brand/specs). Only generate research_query when you have actionable details.
 """
 
-ADVISOR_SYSTEM_PROMPT = """You are a negotiation commander. You operate in TWO MODES. You MUST wait for the [SYSTEM: ... MODE ACTIVE] signal before each response to know which mode to use.
+ADVISOR_SYSTEM_PROMPT = """You are a negotiation commander. You operate in TWO MODES.
+You decide the mode yourself based on what the user is asking — no external signal needed.
 
 ================================================================
-  MODE SWITCHING - CRITICAL
+  MODE SELECTION — AUTOMATIC, BASED ON QUESTION TYPE
 ================================================================
-Before every response you will receive either:
-  [SYSTEM: COMMAND MODE ACTIVE] -> use Command Mode rules below
-  [SYSTEM: ADVICE MODE ACTIVE]  -> use Advice Mode rules below
+Read the user's question and pick the mode that fits their intent.
+Do NOT wait for any [SYSTEM: ...] signal. Decide yourself every time.
 
-NEVER mix modes. NEVER give advice in command mode. NEVER give commands in advice mode.
+Use COMMAND MODE when the user wants:
+  - What exact words to say right now ("what should I say", "give me a line", "how do I respond")
+  - A specific next action ("should I accept", "what do I do next", "counter or not")
+  - To justify, push, walk, or close ("how do I justify X", "push for Y")
+  Examples: "What should I say now?" / "Give me a sentence" / "How to respond to their offer"
+
+Use ADVICE MODE when the user wants:
+  - Facts or explanations ("what is X", "why", "explain", "what does X mean")
+  - Strategic analysis ("what's the deal state", "is this fair", "what should I protect")
+  - Market or concept information ("what is the market price", "what is an iPhone 15 Pro Max")
+  Examples: "What is their real goal?" / "Is $500 fair?" / "Explain the leverage here"
+
+Detecting the right mode:
+  "What should I say to justify $800?" → COMMAND MODE (they need exact words)
+  "How do I justify $800?" → COMMAND MODE (give them words to use)
+  "What is the iPhone 15 Pro Max?" → ADVICE MODE (factual question, information needed)
+  "Is this a good offer?" → ADVICE MODE (evaluation + reasoning)
+  "Should I walk away?" → COMMAND MODE (yes/no + exact next step)
+  "What is market value?" → ADVICE MODE (data answer)
+
+NEVER mix modes in one response.
+NEVER announce the mode name in your response. Never say "ADVICE MODE", "COMMAND MODE",
+or any mode label aloud. Start directly with your answer — no preamble about which mode
+you are in. The mode is internal logic only.
 
 QUESTION ANSWERING - HIGHEST PRIORITY:
 When you see [USER'S EXACT QUESTION], that is what the user literally asked.
@@ -406,6 +427,7 @@ Give ONE exact tactical command. Rules:
 9. If the user asks to ask for X and Y, your sentence must explicitly ask for both X and Y unless one is clearly unsafe.
 10. Apply Rule 2 (Numeric Specificity), Rule 2a (Digits), Rule 2b (Exact Terms), Rule 4 (Constraints), and Rule 6 (Preserve Target) on every command.
 11. NEVER include any system marker like "[SYSTEM:", "[USER'S EXACT QUESTION]", "[ADVISOR_OUTPUT", or "[TACTICAL REQUEST" in your response. Start with the action word directly.
+12. NEVER say "COMMAND MODE", "ADVICE MODE", or any mode name. Start directly with your answer.
 
 ================================================================
   ADVICE MODE
@@ -422,6 +444,7 @@ Provide strategic analysis. Rules:
 9. Apply Rule 1 (Grounding) and Rule 5 (Soft vs Confirmed) on every advice answer - never quote a hedged position as a confirmed offer.
 10. Apply Rule 2a (Digits) and Rule 2b (Exact Terms) and Rule 6 (Preserve Target) on every advice answer.
 11. NEVER include any system marker like "[SYSTEM:", "[USER'S EXACT QUESTION]", "[ADVISOR_OUTPUT", or "[TACTICAL REQUEST" in your response.
+12. NEVER say "COMMAND MODE", "ADVICE MODE", or any mode name. Start directly with your answer.
 
 ================================================================
   FEW-SHOT EXAMPLES (study these patterns)
@@ -475,6 +498,24 @@ WHY: classifies 4.55 as a hedged signal (came after "we may"). Uses the forecast
 EXAMPLE 5 - Soft signal violation (BAD):
 BAD answer: Their offer is 4.55 with forecast commitment - accept the forecast and lock 4.55.
 WHY BAD: treats hedged "may be able to drop" as a confirmed offer. Doesn't push on payment terms or quality. Violates Rule 5.
+
+================================================================
+  ITEM SPECIFICS RULE — CRITICAL FOR B2B AND ALL SCENARIOS
+================================================================
+Market research returns pricing data for TYPICAL market variants (e.g., "256GB unlocked").
+These are benchmarks used to establish fair price ranges ONLY.
+They are NOT facts about the user's specific item.
+
+NEVER state a specific detail about the user's item (storage size, color, model variant,
+condition, accessories, carrier status, year, or any other spec) unless the user
+explicitly stated that detail in this conversation.
+
+If asked to justify a price but user has not stated their specs:
+  WRONG: "emphasize the 256GB storage and unlocked status"
+  RIGHT: "mention your phone's storage capacity and condition — state exactly what you have"
+
+If the user has not told you a spec, you do not know it. Say so, or ask them.
+This rule overrides all other rules. Inventing specs in B2B contexts destroys credibility.
 """
 
 
@@ -484,9 +525,82 @@ def qualify_model_name(model_name: str, use_vertex_ai: bool) -> str:
     return model_name
 
 
+UNIFIED_ADVISOR_SYSTEM_PROMPT = """You are a negotiation copilot for the USER.
+
+Answer the user's actual question directly, precisely, and only as far as the current evidence supports.
+
+QUESTION-FIRST BEHAVIOR:
+- Treat the user's latest question as the highest-priority instruction.
+- Decide the response shape from the user's intent. Do not wait for a separate mode signal.
+- If the user asks what to say, ask, counter, accept, reject, or do next, give the next move directly. Use exact words when that is clearly what they need.
+- If the user asks for information they do not know yet, answer with the relevant facts, numbers, or market context.
+- If the user asks for strategic judgment, give concise reasoning tied to the latest deal state.
+- Do not recite the whole negotiation unless the user asked for a summary.
+- Do not output control text, system text, protocol text, or labels about how you are answering.
+
+ANSWER SHAPE RULES:
+1. For "what should I do", "what should I say", "what do I ask", "what next", or similar:
+   - Give a direct next step first.
+   - If exact wording would help, give one usable meeting sentence.
+   - Keep it tight and actionable.
+2. For factual questions such as price, value, meaning, or market checks:
+   - Answer the fact directly.
+   - Use market research or transcript evidence when available.
+   - If the fact is not known from the evidence, say that plainly and state what is missing.
+3. For evaluation questions such as "should I accept", "is this fair", or "is this good":
+   - Give the judgment first.
+   - Then give the strongest reason or two grounded in the evidence.
+
+GROUNDING RULES:
+- Only reference facts that appear in the transcript, background context, market research, or high-confidence vision evidence.
+- Do not invent counterparty motivations, flexibility, prices, or terms.
+- Use digits for numbers and keep the user's exact named terms when they matter.
+- Treat hedged language like "might", "may", "could", or "would consider" as a signal, not a confirmed offer.
+- When the user asks to preserve a target or term, preserve the user's target value, not the counterparty's reduced version.
+- You always advise the USER, never the counterparty.
+
+ITEM SPECIFICS RULE — CRITICAL FOR B2B AND ALL SCENARIOS:
+Market research returns pricing data for TYPICAL market variants (e.g., "256GB unlocked").
+These are benchmarks used to establish fair price ranges ONLY.
+They are NOT facts about the user's specific item.
+
+YOU MUST NEVER state a specific detail about the user's item (storage size, color, model
+variant, condition, accessories, carrier status, year of purchase, or any other spec) unless
+the user explicitly stated that detail in this conversation.
+
+If asked how to justify a price or describe the item and the user has not stated the specs:
+  WRONG: "emphasize the 256GB storage and unlocked status"
+  RIGHT: "mention your phone's storage size and condition — state exactly what you have"
+
+If you do not know the user's item specs, tell them what to provide, do not guess.
+This rule overrides all other rules. Inventing specs in B2B contexts causes loss of trust.
+
+STYLE RULES:
+- Be concise, useful, and concrete.
+- Start with the answer, not a preamble.
+- Keep one steady speaking persona across the entire session.
+- Do not switch character, accent, gender presentation, or delivery style between turns.
+- Do not imitate the counterparty or perform voices.
+- Never include system markers, mode names, protocol labels, or bracketed control text.
+"""
+
+
 def build_live_system_instruction(context: str) -> str:
+    # Preserve the detailed ADVISOR_SYSTEM_PROMPT for quality, but sanitize the
+    # live-spoken mode labels that Gemini native-audio has been echoing aloud.
+    live_safe_prompt = (
+        ADVISOR_SYSTEM_PROMPT
+        .replace("TWO MODES", "TWO RESPONSE SHAPES")
+        .replace("MODE SELECTION", "RESPONSE SELECTION")
+        .replace("COMMAND MODE", "DIRECTIVE SHAPE")
+        .replace("ADVICE MODE", "ANALYSIS SHAPE")
+    )
     return (
-        f"{ADVISOR_SYSTEM_PROMPT}\n\n"
+        f"{live_safe_prompt}\n\n"
+        "VOICE CONSISTENCY RULES:\n"
+        "- Keep one steady speaking persona across the entire session.\n"
+        "- Do not switch character, accent, gender presentation, or delivery style between turns.\n"
+        "- Do not imitate the counterparty or perform voices.\n\n"
         f"{TACTICAL_RESPONSE_LANGUAGE_RULE}\n\n"
         f"NEGOTIATION CONTEXT:\n{context}"
     )
@@ -581,13 +695,15 @@ Rules:
 def build_vision_intel_block(observation: dict | None) -> str:
     """Format the latest VisionObservation as a [VISION_INTEL] block for the advisor prompt.
 
-    Returns an empty string if observation is None or confidence is low.
+    Includes low-confidence observations with a warning label so the AI can acknowledge
+    that the camera sees something but cannot identify it clearly. Previously low-confidence
+    was silently dropped, leaving the AI with no camera context at all.
     """
     if not observation:
         return ""
     confidence = observation.get("confidence", "low")
-    if confidence == "low":
-        return ""
+    # Include all confidence levels — low confidence = AI knows camera is limited,
+    # not that camera is absent. The system prompt rule [RULE 7] handles usage.
 
     import time as _time
     age_s = _time.time() - observation.get("timestamp", 0)
@@ -660,43 +776,45 @@ def build_pre_query_brief(
     vision_observation: dict | None = None,
 ) -> str:
     vision_block = build_vision_intel_block(vision_observation)
+    # Extract only what the user explicitly stated about their item
+    item_name = context.get("item") or "unknown"
     return (
-        "[LISTENER_INTEL: PRE-QUERY BRIEF]\n"
-        f"Item: {context.get('item') or 'unknown'}\n"
+        # Re-state the core identity and anti-hallucination rule on every query.
+        # Context window compression (slidingWindow) can discard early session content,
+        # causing the model to drift and invent facts. This reminder keeps it grounded.
+        "REMINDER — You are a negotiation copilot. Your role: advise the USER only.\n"
+        "REMINDER — NEVER state specs about the user's item (storage, condition, model variant, accessories)\n"
+        "           unless the user explicitly said them in this conversation. Market research specs\n"
+        "           describe MARKET VARIANTS for pricing benchmarks, NOT the user's specific item.\n\n"
+        "Background context for the user's next question:\n"
+        f"Item being negotiated: {item_name}\n"
         f"Type: {context.get('negotiation_type') or 'unknown'}\n"
-        f"Their asking price: {context.get('seller_asking_price') or context.get('counterparty_price')}\n"
-        f"My offer: {context.get('buyer_offer') or context.get('user_price')}\n"
-        f"My target: {context.get('user_target_price')}\n"
-        f"My walk-away: {context.get('user_walk_away_price')}\n"
+        f"Their asking/offering price: {context.get('seller_asking_price') or context.get('counterparty_price')}\n"
+        f"User's stated price: {context.get('buyer_offer') or context.get('user_price')}\n"
+        f"User's target: {context.get('user_target_price')}\n"
+        f"User's walk-away: {context.get('user_walk_away_price')}\n"
         f"Their sentiment: {context.get('counterparty_sentiment', 'unknown')}\n"
         f"Their goal: {context.get('counterparty_goal', 'unknown')}\n"
         f"Key moments: {_join_text(context.get('key_moments', []), '; ') or 'none'}\n"
         f"Leverage: {_join_text(context.get('leverage_points', []), '; ') or 'none'}\n"
-        f"Market research: {market_info}\n"
+        f"Market research (price benchmarks for typical variants — NOT the user's item specs): {market_info}\n"
         + (f"\n{vision_block}" if vision_block else "")
-        + f"\nCONVERSATION SO FAR:\n{transcript_text}\n"
-        "[/LISTENER_INTEL]\n"
-        "INSTRUCTION: Stay silent. Do not respond yet. Wait for the user to speak."
+        + f"\nCONVERSATION SO FAR (only what was actually said):\n{transcript_text}\n"
+        "Use this as private background context only. Do not answer this brief by itself. "
+        "Answer only the user's next question."
     )
 
 
 def build_mode_activation_instruction(response_mode: str) -> str:
-    if response_mode == "advice":
-        return (
-            "[SYSTEM: ADVICE MODE ACTIVE]\n"
-            "The user is about to ask you a specific question. "
-            "Your response MUST directly answer their exact question. "
-            "Use the intel above as background context only. "
-            "Do not ignore their question or give a generic strategy overview. "
-            "Their question is coming now - wait for it."
-        )
+    # response_mode kept for compatibility only — behavior is fully automatic.
+    # CRITICAL: Do NOT use the words "Command" or "Advice" here — the AI echoes
+    # whatever label appears in the last user-turn text, causing it to speak
+    # "ADVICE MODE." or "COMMAND MODE." aloud at the start of every response.
     return (
-        "[SYSTEM: COMMAND MODE ACTIVE]\n"
-        "The user is about to ask you a specific question. "
-        "Give ONE direct tactical command that answers their exact question. "
-        "Use the intel above as context only - do not recite it. "
-        "Start with: Ask / Say / Counter / Tell / Push / Walk / Stay / Offer. "
-        "Their question is coming now - wait for it."
+        "The user's question is arriving now. "
+        "If they want exact words to say or a specific action to take, give one short directive sentence. "
+        "If they want analysis, facts, or evaluation, give 2-3 clear sentences. "
+        "Start directly with your answer. Never label or preface your response."
     )
 
 
@@ -707,7 +825,7 @@ def build_copilot_priming_text(
     accumulated_transcript: str,
 ) -> str:
     return (
-        "[LISTENER_INTEL: PRIMING]\n"
+        "BACKGROUND INTEL (priming)\n"
         f"Negotiation Type: {context.get('negotiation_type') or 'unknown'}\n"
         f"Item: {context.get('item') or 'unknown'}\n"
         f"Counterparty Goal: {context.get('counterparty_goal') or 'unknown'}\n"
@@ -722,7 +840,7 @@ def build_copilot_priming_text(
         f"Key Moments: {_join_text(context.get('key_moments', []), ', ')}\n"
         f"Leverage Points: {_join_text(context.get('leverage_points', []), ', ')}\n"
         f"Full Conversation Transcript:\n{accumulated_transcript}\n"
-        "[/LISTENER_INTEL]"
+        "END BACKGROUND INTEL"
     )
 
 
@@ -739,27 +857,71 @@ def build_listener_intel_block(
     events_text: str,
     accumulated_transcript: str,
 ) -> str:
-    return (
-        "[LISTENER_INTEL]\n"
-        f"Item: {context.get('item') or 'unknown'}\n"
-        f"Negotiation Type: {negotiation_type}\n"
-        f"User Role: {user_role}\n"
+    # Base intel block
+    parts = [
+        "BACKGROUND INTEL\n",
+        f"Item: {context.get('item') or 'unknown'}\n",
+        f"Negotiation Type: {negotiation_type}\n",
+        f"User Role: {user_role}\n",
         "ROLE RULE: You are advising the USER. If the counterparty says they want to SELL, "
         "the user is BUYING. If the counterparty says they want to BUY, the user is SELLING. "
-        "Always respond from the User's perspective.\n"
-        f"{counterparty_price_label}: {counterparty_price_val}\n"
-        f"{user_price_label}: {user_price_val}\n"
-        f"User Target Price: {context.get('user_target_price')}\n"
-        f"User Walk-Away Price: {context.get('user_walk_away_price')}\n"
-        f"Counterparty Sentiment: {context.get('counterparty_sentiment', 'unknown')}\n"
-        f"Counterparty Goal: {context.get('counterparty_goal', 'unknown')}\n"
-        f"Key moments: {_join_text(context.get('key_moments', []), '; ') or 'none'}\n"
-        f"Leverage points: {_join_text(context.get('leverage_points', []), '; ') or 'none'}\n"
-        f"Market research: {market_info}"
-        f"{events_text}\n"
-        f"\nCONVERSATION (User: = person you advise, Counterparty: = other party):\n{accumulated_transcript}\n"
-        "[/LISTENER_INTEL]"
-    )
+        "Always respond from the User's perspective.\n",
+        f"{counterparty_price_label}: {counterparty_price_val}\n",
+        f"{user_price_label}: {user_price_val}\n",
+        f"User Target Price: {context.get('user_target_price')}\n",
+        f"User Walk-Away Price: {context.get('user_walk_away_price')}\n",
+        f"Counterparty Sentiment: {context.get('counterparty_sentiment', 'unknown')}\n",
+        f"Counterparty Goal: {context.get('counterparty_goal', 'unknown')}\n",
+        f"Key moments: {_join_text(context.get('key_moments', []), '; ') or 'none'}\n",
+        f"Leverage points: {_join_text(context.get('leverage_points', []), '; ') or 'none'}\n",
+        f"Market research: {market_info}",
+        f"{events_text}\n",
+    ]
+
+    # ── Person intel (auto-populated when name detected in transcript) ─────
+    person_intel = context.get("counterparty_person_intel") or {}
+    if person_intel and person_intel.get("title"):
+        person_name = person_intel.get("full_name") or context.get("counterparty_person_name", "counterparty")
+        parts.append(
+            f"\n[FROM RESEARCH — PERSON INTEL: {person_name}]\n"
+            f"Title: {person_intel.get('title', 'unknown')}\n"
+            f"Seniority: {person_intel.get('seniority', 'unknown')}\n"
+            f"Decision-maker: {person_intel.get('decision_maker', 'unknown')}\n"
+            f"Negotiation style: {person_intel.get('negotiation_style', 'unknown')}\n"
+            f"Their pain points: {person_intel.get('pain_points', 'unknown')}\n"
+            f"Leverage: {person_intel.get('leverage', 'none found')}\n"
+        )
+
+    # ── Company intel (auto-populated when company detected in transcript) ─
+    company_intel = context.get("counterparty_company_intel") or {}
+    if company_intel and company_intel.get("industry"):
+        company_name = company_intel.get("company_name") or context.get("counterparty_company", "their company")
+        parts.append(
+            f"\n[FROM RESEARCH — COMPANY INTEL: {company_name}]\n"
+            f"Size: {company_intel.get('size', 'unknown')}\n"
+            f"Financial health: {company_intel.get('financial_health', 'unknown')}\n"
+            f"Procurement style: {company_intel.get('procurement_style', 'unknown')}\n"
+            f"Urgency signals: {company_intel.get('urgency_signals', 'none detected')}\n"
+            f"Key leverage: {_join_text(company_intel.get('key_leverage_points', []), '; ') or 'none found'}\n"
+            f"Recent news: {company_intel.get('recent_news', 'none')}\n"
+        )
+
+    # ── Document intel (auto-populated when documents detected in vision) ──
+    doc_summary = context.get("document_context_summary") or ""
+    if doc_summary:
+        parts.append(
+            f"\n[FROM VISION — DOCUMENT ANALYSIS]\n"
+            f"{doc_summary}\n"
+        )
+
+    # ── Price conflict alert ────────────────────────────────────────────────
+    price_conflict = context.get("price_conflict")
+    if price_conflict:
+        parts.append(f"\n[CONFLICT ALERT] {price_conflict}\n")
+
+    parts.append(f"\nCONVERSATION [FROM TRANSCRIPT] (User: = person you advise, Counterparty: = other party):\n{accumulated_transcript}\n")
+    parts.append("END BACKGROUND INTEL")
+    return "".join(parts)
 
 
 def build_single_context_intel_text(
@@ -769,7 +931,7 @@ def build_single_context_intel_text(
     transcript_text: str,
 ) -> str:
     return (
-        "[LISTENER_INTEL]\n"
+        "BACKGROUND INTEL\n"
         f"Negotiation Type: {context.get('negotiation_type') or 'unknown'}\n"
         f"Item: {context.get('item') or 'unknown'}\n"
         f"Counterparty Goal: {context.get('counterparty_goal') or 'unknown'}\n"
@@ -784,26 +946,82 @@ def build_single_context_intel_text(
         f"Key Moments: {_join_text(context.get('key_moments', []), ', ')}\n"
         f"Leverage Points: {_join_text(context.get('leverage_points', []), ', ')}\n"
         f"Transcript:\n{transcript_text}\n"
-        "[/LISTENER_INTEL]"
+        "END BACKGROUND INTEL"
     )
 
 
 def build_critical_event_block(*, event_type: str, detail: object, transcript_text: str) -> str:
     return (
-        "[LISTENER_INTEL: CRITICAL]\n"
+        "BACKGROUND INTEL (critical)\n"
         f"Event: {event_type}\n"
         f"Detail: {detail}\n"
         f"Recent Transcript: {transcript_text}\n"
-        "[/LISTENER_INTEL]"
+        "END BACKGROUND INTEL"
     )
 
 
 def build_perfect_listener_transcription_prompt(speaker: str) -> str:
     return (
-        f"Transcribe the speech in this audio clip from speaker '{speaker}'. "
-        "Return ONLY the spoken words verbatim. "
-        "No labels, no timestamps, no formatting, no commentary."
+        f"Write out the exact words spoken by '{speaker}' in this audio recording. "
+        "Return ONLY the spoken text verbatim — no labels, no timestamps, "
+        "no commentary, no formatting."
     )
+
+
+def build_person_research_prompt(*, person_name: str, company: str | None = None) -> str:
+    """Auto-triggered when a counterparty's name is detected in the transcript.
+    Uses Google Search to find professional background, seniority, and negotiation leverage.
+    """
+    company_ctx = f" at {company}" if company else ""
+    return f"""Research this person for real-time negotiation intelligence:
+Person: {person_name}{company_ctx}
+
+Search LinkedIn, company website, news articles, professional databases.
+Return ONLY a valid JSON object:
+{{
+  "full_name": "{person_name}",
+  "title": "current job title or null",
+  "seniority": "C-level|VP|Director|Manager|Individual|unknown",
+  "decision_maker": true or false,
+  "department": "Sales|Procurement|Legal|Finance|Operations|other|unknown",
+  "background": "2 sentences on their professional history",
+  "years_at_company": "approximate years or null",
+  "negotiation_style": "likely style based on role and background (e.g., 'data-driven', 'relationship-focused', 'aggressive')",
+  "pain_points": "likely pressures or goals given their role (e.g., 'hitting quarterly targets', 'reducing vendor costs')",
+  "leverage": "one specific thing about this person that gives us an advantage",
+  "recent_activity": "recent news, posts, or notable actions if found",
+  "sources_found": ["list of URLs or sources checked"]
+}}
+"""
+
+
+def build_company_research_prompt(*, company_name: str, context: str | None = None) -> str:
+    """Auto-triggered when a counterparty's company is detected in the transcript.
+    Uses Google Search for company intelligence to inform negotiation strategy.
+    """
+    ctx_line = f"\nNegotiation context: {context}" if context else ""
+    return f"""Research this company for real-time negotiation intelligence:
+Company: {company_name}{ctx_line}
+
+Search company website, LinkedIn, news, financial databases, Glassdoor, press releases.
+Return ONLY a valid JSON object:
+{{
+  "company_name": "{company_name}",
+  "industry": "industry sector",
+  "size": "startup|small|mid-market|enterprise|unknown (employee count if found)",
+  "revenue_range": "approximate annual revenue range or null",
+  "founded": "year founded or null",
+  "headquarters": "city, country or null",
+  "financial_health": "strong|stable|struggling|unknown — based on news/funding",
+  "recent_news": "most relevant recent development (funding, layoffs, acquisition, contract wins)",
+  "procurement_style": "how they typically buy/negotiate — fast/slow, relationship-driven, price-focused",
+  "urgency_signals": "any signals they are under pressure (Q4, budget cuts, new CEO, competitor threat)",
+  "key_leverage_points": ["2-3 specific leverage points we can use against them"],
+  "known_pain_points": ["business challenges they likely face right now"],
+  "competitive_position": "market leader|challenger|niche|declining — brief explanation",
+  "sources_found": ["list of URLs or sources checked"]
+}}
+"""
 
 
 def build_response_correction_prompt(violation_messages: Iterable[str]) -> str:

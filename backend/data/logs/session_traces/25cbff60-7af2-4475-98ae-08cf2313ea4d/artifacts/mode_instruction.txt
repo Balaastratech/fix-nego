@@ -1,0 +1,1 @@
+The user's question is arriving now. If they want exact words to say or a specific action to take, give one short directive sentence. If they want analysis, facts, or evaluation, give 2-3 clear sentences. Start directly with your answer. Never label or preface your response.

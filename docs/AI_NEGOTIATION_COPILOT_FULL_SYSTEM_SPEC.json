@@ -1,0 +1,464 @@
+{
+  "meta": {
+    "title": "AI Negotiation Copilot Full System Spec",
+    "version": "v1-agent-spec",
+    "source_repo": "D:\\Balaastra\\hackothon\\project code",
+    "purpose": "Structured end-to-end product specification for human and AI implementation"
+  },
+  "product": {
+    "name": "AI Negotiation Copilot",
+    "category": "real-time negotiation copilot",
+    "primary_goal": "Help one user negotiate better in a live conversation by listening, understanding deal state, tracking numbers and terms, and delivering private tactical guidance fast enough to use in real time.",
+    "non_goal": "This is not primarily a generic meeting assistant, generic transcription app, or post-call summary tool."
+  },
+  "hard_rules": {
+    "ai_never_speaks_automatically": true,
+    "ai_speaks_only_on_explicit_user_request": true,
+    "single_user_only": true,
+    "single_counterparty_only": true,
+    "browser_vision_enabled": false,
+    "desktop_virtual_meeting_vision_enabled": true,
+    "post_session_output": "summary_only",
+    "persist_raw_audio_by_default": false,
+    "persist_raw_video_by_default": false
+  },
+  "modes": [
+    {
+      "id": "in_person_web",
+      "label": "In Person Web",
+      "surface": "browser",
+      "use_cases": [
+        "face-to-face negotiation",
+        "in-room negotiation",
+        "same-device live conversation"
+      ],
+      "inputs": [
+        "browser microphone audio",
+        "optional negotiation context text",
+        "manual speaker controls",
+        "optional voice enrollment when enabled"
+      ],
+      "uses_vision": false,
+      "reliable_current_path": [
+        "privacy consent",
+        "optional enrollment",
+        "manual speaker buttons",
+        "start session",
+        "start copilot/listener",
+        "select advice or command mode",
+        "press and hold to ask AI"
+      ],
+      "must_not_do": [
+        "auto-speak",
+        "screen analysis",
+        "virtual meeting system audio capture"
+      ]
+    },
+    {
+      "id": "virtual_companion_desktop",
+      "label": "Virtual Meeting Companion",
+      "surface": "Windows desktop sidecar",
+      "use_cases": [
+        "Zoom meetings",
+        "Google Meet meetings",
+        "Microsoft Teams meetings",
+        "browser-based virtual meetings",
+        "native desktop meeting apps"
+      ],
+      "inputs": [
+        "local microphone audio",
+        "remote meeting system audio",
+        "selected meeting window metadata",
+        "optional frame or screen analysis"
+      ],
+      "uses_vision": true,
+      "must_do": [
+        "run beside the real meeting app",
+        "privately advise the user",
+        "persist transcript, research, advice timeline, and session state",
+        "recover from reconnects and source rebinding gracefully"
+      ],
+      "must_not_do": [
+        "join as a meeting bot in v1",
+        "auto-speak",
+        "store raw meeting media by default"
+      ]
+    }
+  ],
+  "user_outcome": {
+    "primary": [
+      "know the live price position",
+      "know the live term position",
+      "understand concessions and objections",
+      "identify leverage and risk",
+      "get private tactical help fast",
+      "decide what to say next"
+    ],
+    "experience_standard": [
+      "calm",
+      "clear",
+      "private",
+      "fast",
+      "confidence-aware",
+      "never silently failing"
+    ]
+  },
+  "system_understanding": {
+    "must_track": [
+      "current speaker",
+      "negotiated item or deal",
+      "quoted prices",
+      "price path over time",
+      "important terms",
+      "concessions",
+      "objections",
+      "user target or cap when available",
+      "walk-away point when available",
+      "counterparty intent signals",
+      "risks",
+      "leverage",
+      "negotiation momentum"
+    ]
+  },
+  "outputs": {
+    "live_outputs": [
+      "transcript",
+      "speaker labels",
+      "negotiation state",
+      "strategy guidance",
+      "research panel",
+      "AI state indicators",
+      "degraded state indicators"
+    ],
+    "transcript": {
+      "requirements": [
+        "live updates",
+        "speaker labels",
+        "source labels where relevant",
+        "confidence-aware behavior",
+        "no false precision"
+      ]
+    },
+    "negotiation_state": {
+      "fields": [
+        "item",
+        "negotiation_type",
+        "latest_price",
+        "previous_prices",
+        "user_offer",
+        "counterparty_offer",
+        "target_price_if_known",
+        "walk_away_if_known",
+        "important_terms",
+        "unresolved_terms",
+        "objections",
+        "concessions",
+        "stage",
+        "momentum"
+      ]
+    },
+    "strategy": {
+      "must_answer": [
+        "what changed",
+        "what matters now",
+        "what to say next",
+        "what not to say",
+        "what to hold firm on",
+        "what can be traded",
+        "whether to push, hold, reframe, trade, or close"
+      ]
+    },
+    "research": {
+      "types": [
+        "comparable prices",
+        "benchmarks",
+        "supporting evidence",
+        "negotiation-relevant context"
+      ],
+      "rule": "Research should support the negotiation and must not block first tactical guidance."
+    },
+    "post_session_summary": {
+      "type": "summary_only",
+      "includes": [
+        "what negotiation happened",
+        "key numbers mentioned",
+        "key terms discussed",
+        "concession path",
+        "major turning points",
+        "final position if reached",
+        "whether the user improved the outcome",
+        "brief recap of AI advice given during the session"
+      ]
+    }
+  },
+  "ai_response_modes": [
+    {
+      "id": "advice",
+      "description": "Brief reasoning plus recommended action",
+      "requirements": [
+        "short",
+        "specific",
+        "grounded in live deal state",
+        "immediately usable"
+      ]
+    },
+    {
+      "id": "command",
+      "description": "Single tactical line the user can say next",
+      "requirements": [
+        "one tight sentence or very short script",
+        "concrete",
+        "context-aware",
+        "safe to use live"
+      ]
+    }
+  ],
+  "voice_behavior": {
+    "automatic_speaking_allowed": false,
+    "automatic_audio_interruptions_allowed": false,
+    "spoken_output_allowed_only_when": "user explicitly asks",
+    "allowed_without_speaking": [
+      "detect key moments",
+      "prepare guidance",
+      "show text alerts",
+      "update strategy panel"
+    ]
+  },
+  "workflows": {
+    "in_person_web": [
+      "open browser app",
+      "grant privacy consent",
+      "optional voice enrollment",
+      "enter optional context",
+      "start session",
+      "capture browser mic",
+      "create backend session state",
+      "use manual speaker labeling in reliable path",
+      "receive live transcript",
+      "extract numbers, terms, leverage, and momentum",
+      "trigger research when enough structure exists",
+      "show transcript, state, strategy, and research",
+      "select advice or command mode",
+      "press and hold to ask AI",
+      "receive text and optional spoken response because user asked",
+      "end session",
+      "persist transcript, state, research, advice timeline, and summary"
+    ],
+    "virtual_companion_desktop": [
+      "open Windows desktop companion",
+      "select Virtual Meeting Companion",
+      "run device and backend checks",
+      "select active meeting source",
+      "select listening output",
+      "select meeting route output if needed",
+      "start local mic capture",
+      "start remote meeting audio capture",
+      "optionally start frame or screen analysis",
+      "start virtual_companion_desktop backend session",
+      "receive live transcript, state, and research",
+      "explicitly ask AI for help when needed",
+      "receive private guidance",
+      "survive reconnects and source rebinding when possible",
+      "end session explicitly",
+      "persist session data and summary"
+    ]
+  },
+  "ux_requirements": {
+    "browser": [
+      "consent gate",
+      "clear start and end controls",
+      "manual speaker controls",
+      "live transcript",
+      "live negotiation state",
+      "research panel",
+      "response mode selector",
+      "clear press-and-hold ask-AI control",
+      "AI state indicators",
+      "degraded state notices"
+    ],
+    "desktop": [
+      "startup mode selector",
+      "source selector",
+      "mic selector",
+      "system-audio status",
+      "capture-helper status",
+      "listening-output selector",
+      "quality preset selector",
+      "transcript panel",
+      "advice panel",
+      "research panel",
+      "session history panel",
+      "privacy indicator",
+      "reconnect indicator",
+      "degraded-mode banner",
+      "source-loss warning",
+      "speaker-vs-headset quality warning"
+    ]
+  },
+  "vision": {
+    "browser_mode": {
+      "enabled": false
+    },
+    "desktop_mode": {
+      "enabled": true,
+      "goals": [
+        "inspect selected meeting window",
+        "read pricing or contract details on shared screen",
+        "read listing, product, proposal, or package information",
+        "produce derived observations that help negotiation"
+      ],
+      "must_not": [
+        "persist raw continuous video by default",
+        "do people analytics",
+        "be required for the main negotiation flow"
+      ],
+      "priority_rule": "Audio reliability remains more important than vision."
+    }
+  },
+  "audio_capture": {
+    "browser_mode": [
+      "mic capture only",
+      "low-latency PCM",
+      "reliable turn handling",
+      "manual speaker labeling as dependable path"
+    ],
+    "desktop_mode": [
+      "local mic capture",
+      "remote meeting audio capture",
+      "optional frame capture",
+      "optional helper fallback",
+      "clear source binding",
+      "low-latency normalized PCM"
+    ],
+    "quality_tiers": {
+      "headset_mode": "best quality",
+      "speaker_mode": "supported but lower certainty"
+    }
+  },
+  "latency_targets": {
+    "first_activity_feedback_ms": 300,
+    "first_partial_transcript_seconds": {
+      "min": 0.5,
+      "max": 1.0
+    },
+    "finalized_turn_seconds_after_speech_start": {
+      "min": 3.0,
+      "max": 4.0
+    },
+    "listener_injection_seconds_after_speech_start": {
+      "min": 4.0,
+      "max": 5.0
+    },
+    "total_useful_pipeline_seconds_max": 6.0,
+    "ask_ai_response_start_seconds_target": 2.0,
+    "notes": [
+      "Research may complete later.",
+      "First tactical guidance must not wait for research completion."
+    ]
+  },
+  "reliability": {
+    "required_degraded_states": [
+      "advisor_reconnecting",
+      "stt_reconnecting",
+      "capture_degraded",
+      "source_missing",
+      "manual_only"
+    ],
+    "failure_handling": [
+      "backend disconnect should reconnect and restore session",
+      "renderer crash should allow reopen and restore",
+      "source loss should prompt rebinding",
+      "mic loss should trigger retry or reselect",
+      "system-audio failure should offer fallback path",
+      "vision failure should disable vision only",
+      "speaker-ID weakness should fall back to safer labeling behavior"
+    ]
+  },
+  "speaker_handling": {
+    "browser_mode": {
+      "reliable_current_path": "manual speaker buttons",
+      "labels": [
+        "Me",
+        "Counterparty"
+      ],
+      "rule": "Automatic speaker paths may exist but browser mode must not rely on them as the only dependable path today."
+    },
+    "desktop_mode": {
+      "rule": "Desktop mode should be source-aware.",
+      "defaults": [
+        "local mic turns default to user",
+        "remote meeting audio defaults to counterparty when clear",
+        "uncertain remote speech becomes remote_unknown"
+      ],
+      "must_not": [
+        "force uncertain turns into false confident labels"
+      ]
+    }
+  },
+  "persistence": {
+    "persist": [
+      "sessions",
+      "transcript turns",
+      "research events",
+      "advisor events",
+      "state snapshots",
+      "source metadata",
+      "quality transitions",
+      "degraded-mode transitions",
+      "final summary"
+    ],
+    "do_not_persist_by_default": [
+      "raw audio",
+      "raw continuous video"
+    ],
+    "must_support": [
+      "reconnect restore",
+      "past-session reopening",
+      "transcript review",
+      "strategy review",
+      "research review",
+      "summary review"
+    ]
+  },
+  "privacy_and_security": {
+    "requirements": [
+      "explicit consent before live monitoring",
+      "visible capture indicator at all times",
+      "explicit session start",
+      "explicit session end",
+      "minimal stored data",
+      "no raw media storage by default",
+      "clear labeling of what is being captured",
+      "secure desktop architecture with isolated renderer and validated IPC"
+    ]
+  },
+  "success_criteria": [
+    "system hears the important parts in time",
+    "system tracks real price path accurately",
+    "system tracks important terms accurately",
+    "system identifies leverage and risk usefully",
+    "user can privately ask for help",
+    "AI answers fast enough to matter",
+    "guidance is specific and usable",
+    "final summary accurately reflects the session"
+  ],
+  "failure_criteria": [
+    "transcript arrives too late to be useful",
+    "advice is generic or not grounded in numbers and terms",
+    "system speaks without user request",
+    "system silently loses source binding or capture",
+    "system overclaims speaker certainty",
+    "system hides degraded operation"
+  ],
+  "implementation_contract": {
+    "shared_backend_intelligence_layer": true,
+    "browser_mode_for_in_person": true,
+    "windows_desktop_sidecar_for_virtual_meetings": true,
+    "no_automatic_ai_speech": true,
+    "single_user_plus_single_counterparty_only": true,
+    "no_browser_vision": true,
+    "desktop_only_screen_analysis_when_useful": true,
+    "summary_only_post_session_output": true,
+    "core_value": "fast, confidence-aware, user-triggered tactical negotiation help"
+  }
+}

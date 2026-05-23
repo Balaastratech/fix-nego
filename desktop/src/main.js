@@ -1,16 +1,28 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawn } = require("child_process");
 const { app, BrowserWindow, desktopCapturer, ipcMain, screen, session } = require("electron");
 
 const runtimeRoot = path.join(os.tmpdir(), "balaastra-negotiation-companion");
 fs.mkdirSync(path.join(runtimeRoot, "user-data"), { recursive: true });
 fs.mkdirSync(path.join(runtimeRoot, "session-data"), { recursive: true });
-fs.mkdirSync(path.join(runtimeRoot, "cache"), { recursive: true });
+// Use a fresh cache dir each run to avoid "Unable to move the cache: Access is denied"
+// errors on Windows when a previous Electron process still has the old cache locked.
+const cacheDir = path.join(runtimeRoot, "cache");
+try { fs.rmSync(cacheDir, { recursive: true, force: true }); } catch (_) {}
+fs.mkdirSync(cacheDir, { recursive: true });
 app.setPath("userData", path.join(runtimeRoot, "user-data"));
 app.setPath("sessionData", path.join(runtimeRoot, "session-data"));
-app.commandLine.appendSwitch("disk-cache-dir", path.join(runtimeRoot, "cache"));
+app.commandLine.appendSwitch("disk-cache-dir", cacheDir);
+// Suppress GPU shader disk-cache errors ("Gpu Cache Creation failed: -2")
+app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+// Use a smaller in-memory cache — avoids cache-move access-denied errors on Windows
+app.commandLine.appendSwitch("disk-cache-size", "1");
+// Disable renderer background throttling and native Windows window occlusion tracking to prevent screen capture freezing
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+app.commandLine.appendSwitch("disable-background-timer-throttling");
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion,AllowWgcScreenCapturer,AllowWgcWindowCapturer,WebRtcAllowWgcScreenCapturer,WebRtcAllowWgcWindowCapturer");
+
 
 const companionState = {
   meetingBinding: {
@@ -50,7 +62,6 @@ const companionState = {
 
 let overlayWindow = null;
 let fullWindow = null;
-let globalHoldProcess = null;
 let overlayPresentation = "idle";
 
 function inferPlatform(title) {
@@ -190,6 +201,7 @@ function createOverlayWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
   overlayWindow.loadFile(path.join(__dirname, "renderer", "overlay.html"));
@@ -212,6 +224,7 @@ function createFullWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
   fullWindow.loadFile(path.join(__dirname, "renderer", "full.html"));
@@ -234,67 +247,42 @@ function openFullWindow() {
   fullWindow.focus();
 }
 
-function sendGlobalHoldEvent(active, source = "keyboard") {
-  if (!overlayWindow || overlayWindow.isDestroyed()) {
-    return;
-  }
-  overlayWindow.webContents.send("companion:globalHoldState", { active, source });
-}
-
-function startGlobalHoldListener() {
-  if (globalHoldProcess) {
-    return;
-  }
-
-  const scriptPath = path.join(__dirname, "..", "scripts", "global-hold-listener.ps1");
-  globalHoldProcess = spawn(
-    "powershell.exe",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
-    {
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    }
-  );
-
-  let stdoutBuffer = "";
-  globalHoldProcess.stdout.on("data", (chunk) => {
-    stdoutBuffer += chunk.toString();
-    const lines = stdoutBuffer.split(/\r?\n/);
-    stdoutBuffer = lines.pop() || "";
-    for (const line of lines) {
-      const trimmed = line.trim().toLowerCase();
-      // Space key: immediate activation
-      if (trimmed === "space_down" || trimmed === "down") {
-        sendGlobalHoldEvent(true, "keyboard");
-      } else if (trimmed === "space_up" || trimmed === "up") {
-        sendGlobalHoldEvent(false, "keyboard");
-      // Mouse: 3-second delayed activation
-      } else if (trimmed === "mouse_hold_start") {
-        sendGlobalHoldEvent(true, "mouse");
-      } else if (trimmed === "mouse_up") {
-        sendGlobalHoldEvent(false, "mouse");
-      }
-    }
-  });
-
-  globalHoldProcess.on("exit", () => {
-    globalHoldProcess = null;
-  });
-}
-
-function stopGlobalHoldListener() {
-  if (!globalHoldProcess) {
-    return;
-  }
-  try {
-    globalHoldProcess.kill();
-  } catch (_error) {
-    // Best effort only.
-  }
-  globalHoldProcess = null;
-}
-
 ipcMain.handle("companion:listMeetingTargets", async () => listMeetingTargets());
+
+// Screen/window picker — returns sources with 320×180 thumbnails as base64 PNG.
+// Screens are listed first (stable WGC surface); windows are secondary.
+// The renderer shows these as a clickable grid so the user can confirm what they're capturing.
+ipcMain.handle("companion:getScreenSources", async () => {
+  try {
+    const [screens, windows] = await Promise.all([
+      desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: 320, height: 180 },
+        fetchWindowIcons: false,
+      }),
+      desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize: { width: 320, height: 180 },
+        fetchWindowIcons: false,
+      }),
+    ]);
+    const mapSource = (s, kind) => ({
+      id: s.id,
+      name: s.name,
+      kind,                               // "screen" | "window"
+      thumbnail: s.thumbnail.toDataURL(), // base64 PNG, ready for <img src>
+    });
+    return [
+      ...screens.map((s) => mapSource(s, "screen")),
+      ...windows
+        .filter((s) => s.name && !isNoiseWindowTitle(s.name))
+        .map((s) => mapSource(s, "window")),
+    ];
+  } catch (err) {
+    console.error("[IPC] getScreenSources error:", err.message);
+    return [];
+  }
+});
 
 ipcMain.handle("companion:bindMeetingTarget", async (_event, binding) => {
   companionState.meetingBinding = {
@@ -302,7 +290,7 @@ ipcMain.handle("companion:bindMeetingTarget", async (_event, binding) => {
     ...binding,
     is_bound: true,
   };
-  companionState.selectedDesktopSourceId = binding?.target_id || null;
+  companionState.selectedDesktopSourceId = binding?.source_id || binding?.target_id || null;
   return companionState.meetingBinding;
 });
 
@@ -312,7 +300,7 @@ ipcMain.handle("companion:rebindMeetingTarget", async (_event, binding) => {
     ...binding,
     is_bound: true,
   };
-  companionState.selectedDesktopSourceId = binding?.target_id || null;
+  companionState.selectedDesktopSourceId = binding?.source_id || binding?.target_id || null;
   return companionState.meetingBinding;
 });
 
@@ -468,7 +456,7 @@ app.whenReady().then(() => {
 
       desktopCapturer
         .getSources({
-          types: ["window"],
+          types: ["screen", "window"],
           thumbnailSize: { width: 0, height: 0 },
           fetchWindowIcons: false,
         })
@@ -476,6 +464,12 @@ app.whenReady().then(() => {
           const selected = sources.find(
             (source) => source.id === companionState.selectedDesktopSourceId
           );
+          if (!selected) {
+            console.warn(
+              "[DisplayMedia] Selected source not found:",
+              companionState.selectedDesktopSourceId
+            );
+          }
           once(selected ? { video: selected, audio: "loopback" } : {});
         })
         .catch(() => once({}));
@@ -485,7 +479,6 @@ app.whenReady().then(() => {
 
   createOverlayWindow();
   createFullWindow();
-  startGlobalHoldListener();
 
   app.on("activate", () => {
     if (!overlayWindow || overlayWindow.isDestroyed()) {
@@ -495,10 +488,6 @@ app.whenReady().then(() => {
       createFullWindow();
     }
   });
-});
-
-app.on("before-quit", () => {
-  stopGlobalHoldListener();
 });
 
 app.on("window-all-closed", () => {

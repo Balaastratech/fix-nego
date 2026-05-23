@@ -322,7 +322,7 @@ function renderPrivateThread() {
   if (!state.privateEntries.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "Hold the orb or hold F8 to ask AI privately.";
+    empty.textContent = "Hold the orb to ask AI privately.";
     elements.privateThread.appendChild(empty);
     renderMiniThread();
     return;
@@ -708,6 +708,9 @@ async function startMeetingCapture() {
     audio: createPcmCapture(stream, "REMOTE_APP_PCM", { flushMs: 1400 }),
     frameTimer: window.setInterval(() => {
       const video = elements.meetingVideo;
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
       if (!video.videoWidth || !video.videoHeight) {
         return;
       }
@@ -944,14 +947,6 @@ bridge.onWindowModeChanged((payload) => {
   state.prefs.windowMode = mode;
   savePrefs();
   updateOverlayState();
-});
-
-bridge.onGlobalHoldState((payload) => {
-  if (payload?.active) {
-    void setHoldState(true, payload.source || "keyboard");
-  } else {
-    void setHoldState(false, payload?.source || "keyboard");
-  }
 });
 
 window.addEventListener("load", async () => {

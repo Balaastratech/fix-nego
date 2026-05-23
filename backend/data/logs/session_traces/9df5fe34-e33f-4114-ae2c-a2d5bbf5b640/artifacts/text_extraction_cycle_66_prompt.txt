@@ -1,0 +1,34 @@
+Analyze this labeled negotiation transcript and extract context.
+Return strict JSON only - no markdown, no extra text.
+{
+  "item": "specific name of what is being negotiated. null only if completely unclear.",
+  "negotiation_type": "one of: buying_goods | selling_goods | renting | salary | service | contract | other | unknown - from the USER's perspective.",
+  "buyer_offer": null,
+  "counterparty_price": null,
+  "user_price": null,
+  "user_target_price": null,
+  "user_walk_away_price": null,
+  "counterparty_goal": "one sentence - what counterparty wants beyond price. null if unknown.",
+  "key_moments": [],
+  "leverage_points": [],
+  "counterparty_sentiment": "positive|neutral|negative|unknown",
+  "research_query": "precise search query for current market value. null if item too generic.",
+  "research_needed": false,
+  "research_gap": null,
+  "transcript_snippet": "verbatim excerpt of the most important exchange (max 400 chars)",
+  "counterparty_person_name": "full name of the counterparty person if mentioned (e.g. 'John Smith'). null if not mentioned.",
+  "counterparty_company": "company/organisation name if mentioned (e.g. 'Microsoft', 'ABC Corp'). null if not mentioned.",
+  "meeting_legal_terms": ["any legal or contract terms mentioned, e.g. 'NDA', 'SLA', 'force majeure'"]
+}
+
+ATTRIBUTION RULES:
+- Lines starting with "User [" or "User:" = statements by the USER
+- Lines starting with "Counterparty [" or "Counterparty:" = statements by the COUNTERPARTY
+- Price stated in a User line -> user_price (and buyer_offer if user is buying)
+- Price stated in a Counterparty line -> counterparty_price
+- NEVER assign the same price to both buyer_offer and counterparty_price unless they agreed
+
+Transcript:
+User [0:33]: You hear me? Can you hear me?
+User [1:00]: The fuck I'm seeing half transcript.
+Counterparty [1:36]: Once you confirm can hear you, proceed by asking for their opening offer.

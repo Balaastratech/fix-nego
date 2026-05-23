@@ -2,7 +2,6 @@ import React from 'react';
 import { NegotiationState } from '../../lib/types';
 import { NegotiationState as ButtonTriggeredState, ValidationError } from '../../hooks/useNegotiationState';
 import { PrivacyConsent } from './PrivacyConsent';
-import { VideoCapture } from './VideoCapture';
 import { TranscriptPanel } from './TranscriptPanel';
 import { ControlBar } from './ControlBar';
 import { AIStateIndicator } from './AIStateIndicator';
@@ -18,18 +17,13 @@ interface NegotiationDashboardProps {
   validationErrors: ValidationError[];
   onConsent: () => void;
   onToggleAudio: () => void;
-  onToggleVision: () => void;
-  onVisionFrame?: (base64Jpeg: string, isLiveMode: boolean) => void;
   onStartNegotiation: () => void;
   onEndNegotiation: () => void;
   onStartCopilot: () => void;
-  onGetAdvice: () => void;
-  onGetCommand: () => void;
   onUserAddressingAI: (active: boolean) => void;
   isAILoading: boolean;
   onSpeakerSelected?: (speaker: 'user' | 'counterparty') => void;
   currentSpeaker?: 'user' | 'counterparty' | null;
-  responseMode?: 'advice' | 'command' | null;
   responseLanguage?: string | null;
   onResponseLanguageChange?: (language: string) => void;
   aiLiveTranscription?: string | null;
@@ -37,20 +31,18 @@ interface NegotiationDashboardProps {
   speakerMode?: 'auto' | 'manual';
   onSpeakerModeChange?: (mode: 'auto' | 'manual') => void;
   sessionResearchHistory?: Array<Record<string, any>>;
-  sessionVisionHistory?: Array<Record<string, any>>;
 }
 
 export function NegotiationDashboard({
   state, negotiationState, validationErrors,
-  onConsent, onToggleAudio, onToggleVision,
-  onVisionFrame,
+  onConsent, onToggleAudio,
   onStartNegotiation, onEndNegotiation, onStartCopilot,
-  onGetAdvice, onGetCommand, onUserAddressingAI,
+  onUserAddressingAI,
   isAILoading, onSpeakerSelected, currentSpeaker,
-  responseMode, aiLiveTranscription, liveTranscript = [],
+  aiLiveTranscription, liveTranscript = [],
   responseLanguage, onResponseLanguageChange,
   speakerMode = 'manual', onSpeakerModeChange,
-  sessionResearchHistory = [], sessionVisionHistory = [],
+  sessionResearchHistory = [],
 }: NegotiationDashboardProps) {
   const [isAddressingAI, setIsAddressingAI] = React.useState(false);
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -105,21 +97,48 @@ export function NegotiationDashboard({
         {/* Left Column */}
         <div className="w-[55%] flex flex-col gap-4 min-w-0">
 
-          {/* Camera + Speaker selector */}
+          {/* Browser audio pipeline + speaker selector */}
           <div className="shrink-0 flex gap-3 h-52">
 
-            {/* Camera */}
+            {/* Audio pipeline */}
             <div className="flex-1 rounded-2xl overflow-hidden"
               style={{
+                background: 'rgba(255,255,255,0.06)',
+                backdropFilter: 'blur(40px) saturate(200%)',
                 border: '1px solid rgba(255,255,255,0.12)',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
               }}>
-              <VideoCapture
-                isActive={state.isVisionActive}
-                onToggle={onToggleVision}
-                onFrameCapture={onVisionFrame}
-                isLiveActive={isAddressingAI}
-              />
+              <div className="h-full flex flex-col justify-between p-5">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: '#f5c518' }}>
+                    Browser Audio Copilot
+                  </div>
+                  <div className="mt-2 text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.92)' }}>
+                    Mic-only real-time capture
+                  </div>
+                  <div className="mt-2 text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.62)' }}>
+                    No browser camera. Fast partial transcript first, corrected final transcript after speech ends.
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.78)' }}>
+                    <div className="font-semibold" style={{ color: '#f5c518' }}>Capture</div>
+                    <div>{state.isAudioActive ? 'Live mic streaming' : 'Waiting for session start'}</div>
+                  </div>
+                  <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.78)' }}>
+                    <div className="font-semibold" style={{ color: '#f5c518' }}>Speaker Mode</div>
+                    <div>{speakerMode === 'auto' ? 'SpeechBrain auto labeling' : 'Manual fallback'}</div>
+                  </div>
+                  <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.78)' }}>
+                    <div className="font-semibold" style={{ color: '#f5c518' }}>Transcript</div>
+                    <div>Partial under 1s target</div>
+                  </div>
+                  <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.78)' }}>
+                    <div className="font-semibold" style={{ color: '#f5c518' }}>Recovery</div>
+                    <div>{state.persistenceReady ? 'Session restore ready' : 'Starting session store'}</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Speaker selector — frosted glass card */}
@@ -247,7 +266,7 @@ export function NegotiationDashboard({
                   Session History
                 </div>
                 <div className="mt-1 text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                  Research and vision events now persist and resume with the session.
+                  Research events now persist and resume with the session.
                 </div>
               </div>
 
@@ -275,29 +294,6 @@ export function NegotiationDashboard({
                 )}
               </div>
 
-              <div className="flex flex-col gap-2">
-                <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  Vision
-                </div>
-                {sessionVisionHistory.length === 0 ? (
-                  <div className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                    No vision events yet.
-                  </div>
-                ) : (
-                  sessionVisionHistory.slice(-5).reverse().map((event, index) => (
-                    <div
-                      key={`vision-${event.timestamp || index}`}
-                      className="rounded-xl px-3 py-2 text-xs"
-                      style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.82)' }}
-                    >
-                      <div className="font-semibold" style={{ color: '#f5c518' }}>
-                        {event.event || 'Vision event'}
-                      </div>
-                      <div>{event.observation || event.message || `Frame size: ${event.size || 'n/a'}`}</div>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -314,22 +310,17 @@ export function NegotiationDashboard({
         <div className="relative flex items-center justify-center p-4">
           <ControlBar
             isAudioActive={state.isAudioActive}
-            isVisionActive={state.isVisionActive}
             isNegotiating={state.isNegotiating}
             onToggleAudio={onToggleAudio}
-            onToggleVision={onToggleVision}
             onStartNegotiation={onStartNegotiation}
             onEndNegotiation={onEndNegotiation}
           />
           <div className="absolute right-6 top-1/2 -translate-y-1/2">
             <AskAIButton
               onStartCopilot={onStartCopilot}
-              onGetAdvice={onGetAdvice}
-              onGetCommand={onGetCommand}
               isLoading={isAILoading}
               isDisabled={!state.isNegotiating}
               copilotActive={state.copilotActive}
-              responseMode={responseMode}
             />
           </div>
         </div>

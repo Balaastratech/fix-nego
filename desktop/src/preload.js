@@ -18,6 +18,7 @@ async function enumerateAudioDevices() {
 
 contextBridge.exposeInMainWorld("companionBridge", {
   listMeetingTargets: () => ipcRenderer.invoke("companion:listMeetingTargets"),
+  getScreenSources: () => ipcRenderer.invoke("companion:getScreenSources"),
   bindMeetingTarget: (binding) => ipcRenderer.invoke("companion:bindMeetingTarget", binding),
   rebindMeetingTarget: (binding) => ipcRenderer.invoke("companion:rebindMeetingTarget", binding),
   listAudioDevices: () => enumerateAudioDevices(),
@@ -33,11 +34,6 @@ contextBridge.exposeInMainWorld("companionBridge", {
   setOverlayPresentation: (mode) => ipcRenderer.invoke("companion:setOverlayPresentation", mode),
   getOverlayContrast: () => ipcRenderer.invoke("companion:getOverlayContrast"),
   moveOverlayWindow: (position) => ipcRenderer.invoke("companion:moveOverlayWindow", position),
-  onGlobalHoldState: (handler) => {
-    const listener = (_event, payload) => handler(payload);
-    ipcRenderer.on("companion:globalHoldState", listener);
-    return () => ipcRenderer.removeListener("companion:globalHoldState", listener);
-  },
   onOverlayPresentation: (handler) => {
     const listener = (_event, payload) => handler(payload);
     ipcRenderer.on("companion:overlayPresentation", listener);

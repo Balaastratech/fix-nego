@@ -10,6 +10,7 @@ from fastapi import WebSocket
 from app.config import settings
 from app.models.negotiation import NegotiationSession
 from app.services.session_store import session_store
+from app.utils.session_trace import close_session_trace, get_session_trace
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,14 @@ class ConnectionManager:
         session_store.persist_session(session, ended=False)
 
         if preserve_runtime and session.state.value == "ACTIVE" and session.session_resumable:
+            trace = get_session_trace(session_id)
+            if trace:
+                trace.record(
+                    category="session",
+                    name="session_suspended",
+                    summary="Session runtime preserved for reconnect grace period",
+                    data={"state": session.state.value},
+                )
             cleanup_task = asyncio.create_task(self._cleanup_after_grace(session_id, session))
             self.suspended_sessions[session_id] = {
                 "session": session,
@@ -94,7 +103,31 @@ class ConnectionManager:
                 setattr(session, task_attr, None)
 
         session_store.persist_session(session, ended=session.state.value == "IDLE")
-        logger.info("Session summary", extra={"session_id": session.session_id, **getattr(session, "session_metrics", {})})
+        # Copy direct attributes into session_metrics so session_ended footer is accurate.
+        # vision_pro_call_count is stored as a direct attribute on the model, not in the dict.
+        metrics = getattr(session, "session_metrics", {})
+        metrics["vision_pro_call_count"] = getattr(session, "vision_pro_call_count", 0)
+        trace = get_session_trace(session.session_id)
+        if trace:
+            trace.record(
+                category="session",
+                name="session_finalized",
+                summary="Session cleanup finalized and report generation starting",
+                data={
+                    "state": session.state.value,
+                    "metrics": metrics,
+                },
+            )
+        logger.info("Session summary", extra={"session_id": session.session_id, **metrics})
+        from app.utils.session_logger import close_session_logger
+        from app.utils.session_logger import get_session_logger as _gsl
+        _sl = _gsl(session.session_id)
+        if _sl:
+            _sl.session_ended(stats=metrics)
+        close_session_logger(session.session_id)
+        report_path = close_session_trace(session.session_id)
+        if report_path is not None:
+            session.trace_report_path = str(report_path)
 
     async def _close_gemini_session(self, session: NegotiationSession) -> None:
         if session.live_session is None:

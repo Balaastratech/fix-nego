@@ -42,6 +42,8 @@ from app.ai_assets import (
     TEXT_EXTRACTION_PROMPT,
     build_audio_extraction_prompt,
     build_market_research_prompt,
+    build_person_research_prompt,
+    build_company_research_prompt,
 )
 from app.config import settings
 from app.services.bounded_async import GlobalLimiter, run_with_retries
@@ -51,6 +53,7 @@ from app.services.session_store import session_store
 from app.services.utterance_types import FinalizedUtterance
 from app.utils.conversation_audit import log_conversation_event
 from app.utils.speaker_debug import log_speaker_debug
+from app.utils.session_trace import get_session_trace
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -136,7 +139,11 @@ class ListenerAgent:
         self._critical_events_since_research: int = 0
         # Last research_gap searched â€” prevents re-searching the same uncertainty
         self._last_research_gap: str = ""
-        
+        self._last_researched_person: str = ""
+        self._last_researched_company: str = ""
+        self._person_research_task = None
+        self._company_research_task = None
+
         # Queue for critical events detected before copilot is activated
         self._pre_activation_critical_events: list[dict] = []
 
@@ -608,10 +615,17 @@ class ListenerAgent:
                 "type": "TRANSCRIPT_UPDATE",
                 "payload": transcript_entry,
             })
-            logger.info(
-                f"ðŸ“¤ TRANSCRIPT_UPDATE sent: speaker={utterance.speaker}, "
-                f"text='{text[:50]}...', confidence={utterance.speaker_confidence if utterance.speaker_confidence is not None else 'N/A'}"
-            )
+            logger.info("TRANSCRIPT_UPDATE: speaker=%s text=%r", utterance.speaker, text[:50])
+            from app.utils.session_logger import get_session_logger as _gsl
+            _sl = _gsl(self.session.session_id)
+            if _sl:
+                _sl.transcript(
+                    speaker=utterance.speaker,
+                    text=text,
+                    confidence=utterance.transcription_confidence,
+                    duration_ms=utterance.duration_ms,
+                    source="microphone" if utterance.speaker == "user" else "meeting audio",
+                )
         except Exception as exc:
             logger.warning(f"[ListenerAgent] TRANSCRIPT_UPDATE send failed: {exc}")
         log_conversation_event(
@@ -652,6 +666,16 @@ class ListenerAgent:
         confidence = utterance.transcription_confidence
         if not text:
             return
+
+        from app.utils.session_logger import get_session_logger as _gsl
+        _sl = _gsl(self.session.session_id)
+        if _sl:
+            _sl.audio_extraction_result(
+                utterance_id=utterance.utterance_id,
+                speaker=utterance.speaker, text=text,
+                diarized_turns=utterance.metadata.get("diarized_turns") or [],
+                duration_ms=utterance.duration_ms,
+            )
 
         diarized_turns = utterance.metadata.get("diarized_turns") or [{
             "diarized_speaker_id": utterance.speaker or "unknown",  # Use the already-classified speaker
@@ -819,6 +843,37 @@ class ListenerAgent:
             return
 
         prompt = TEXT_EXTRACTION_PROMPT + transcript_slice
+        trace = get_session_trace(self.session.session_id)
+        extraction_artifacts: list[str] = []
+        if trace:
+            extraction_artifacts.append(
+                trace.write_text_artifact(
+                    f"text_extraction_cycle_{self._cycle_count}_transcript",
+                    transcript_slice,
+                    ext=".txt",
+                )
+            )
+            extraction_artifacts.append(
+                trace.write_text_artifact(
+                    f"text_extraction_cycle_{self._cycle_count}_prompt",
+                    prompt,
+                    ext=".txt",
+                )
+            )
+            trace.record(
+                category="extraction",
+                name="text_extraction_triggered",
+                summary="Transcript accumulation triggered a text extraction cycle",
+                data={
+                    "cycle": self._cycle_count,
+                    "transcript_chars": len(transcript_slice),
+                    "transcript_hash": transcript_hash,
+                },
+                artifacts=extraction_artifacts,
+                related_event_ids=[
+                    ref for ref in [self.session.trace_refs.get("last_transcript_event_id")] if ref
+                ],
+            )
 
         def do_extract():
             return self._client.models.generate_content(
@@ -840,6 +895,33 @@ class ListenerAgent:
                 return
             context = json.loads(raw)
             self._last_extracted_transcript_hash = transcript_hash
+            from app.utils.session_logger import get_session_logger as _gsl
+            _sl = _gsl(self.session.session_id)
+            if _sl: _sl.text_extraction_result(cycle=self._cycle_count, extracted=context)
+            if trace:
+                result_artifacts = list(extraction_artifacts)
+                result_artifacts.append(
+                    trace.write_json_artifact(
+                        f"text_extraction_cycle_{self._cycle_count}_result",
+                        context,
+                        ext=".json",
+                    )
+                )
+                event = trace.record(
+                    category="extraction",
+                    name="text_extraction_completed",
+                    summary="Text extraction cycle completed",
+                    data={
+                        "cycle": self._cycle_count,
+                        "keys": sorted(context.keys()),
+                    },
+                    artifacts=result_artifacts,
+                    related_event_ids=[
+                        ref for ref in [self.session.trace_refs.get("last_transcript_event_id")] if ref
+                    ],
+                )
+                trace.remember("last_extraction_event_id", event["event_id"])
+                self.session.trace_refs["last_extraction_event_id"] = event["event_id"]
         except Exception as exc:
             logger.warning(f"[ListenerAgent] Text extraction failed: {exc}")
             return
@@ -919,6 +1001,31 @@ class ListenerAgent:
             if moment_text and any(kw in moment_text for kw in _URGENCY_KEYWORDS):
                 critical_events.append({"event_type": "URGENCY_DETECTED", "detail": {"moment": moment}})
                 break
+        trace = get_session_trace(self.session.session_id)
+        if trace:
+            artifacts = [
+                trace.write_json_artifact(
+                    f"context_postprocess_cycle_{self._cycle_count}",
+                    context,
+                    ext=".json",
+                )
+            ]
+            event = trace.record(
+                category="context",
+                name="context_post_processed",
+                summary="Extracted context merged into live session state",
+                data={
+                    "cycle": self._cycle_count,
+                    "critical_event_count": len(critical_events),
+                    "critical_events": critical_events,
+                },
+                artifacts=artifacts,
+                related_event_ids=[
+                    ref for ref in [self.session.trace_refs.get("last_extraction_event_id")] if ref
+                ],
+            )
+            trace.remember("last_context_event_id", event["event_id"])
+            self.session.trace_refs["last_context_event_id"] = event["event_id"]
 
         _PRESSURE_MARKERS = (
             "scarc", "limited", "only one", "last chance", "take it or leave",
@@ -990,7 +1097,26 @@ class ListenerAgent:
                     else "critical_pressure"
                 )
                 effective_query = research_gap if gap_is_new else new_query
-                logger.info(f"ðŸ”¬ Research triggered: {effective_query}")
+                logger.info("Research triggered: %s", effective_query)
+                from app.utils.session_logger import get_session_logger as _gsl
+                _sl = _gsl(self.session.session_id)
+                if _sl: _sl.research_triggered(trigger=reason, query=effective_query)
+                if trace:
+                    event = trace.record(
+                        category="research",
+                        name="research_triggered",
+                        summary="Context evaluation triggered market research",
+                        data={
+                            "trigger_reason": reason,
+                            "query": effective_query,
+                            "research_gap": research_gap if gap_is_new else None,
+                        },
+                        related_event_ids=[
+                            ref for ref in [self.session.trace_refs.get("last_context_event_id")] if ref
+                        ],
+                    )
+                    trace.remember("last_research_trigger_event_id", event["event_id"])
+                    self.session.trace_refs["last_research_trigger_event_id"] = event["event_id"]
                 self._last_research_timestamp = current_time
                 self._last_researched_item = current_item
                 self._last_researched_type = current_type
@@ -1004,6 +1130,26 @@ class ListenerAgent:
                         research_gap if gap_is_new else None,
                     ),
                     name=f"listener-research-{self.session_id[:8]}",
+                )
+
+        # Auto person + company research
+        new_person = context.get("counterparty_person_name") or ""
+        new_company = context.get("counterparty_company") or ""
+        if new_person and new_person != self._last_researched_person:
+            if self._person_research_task is None or self._person_research_task.done():
+                logger.info("[ListenerAgent] Auto person research: %s", new_person)
+                self._last_researched_person = new_person
+                self._person_research_task = self._create_background_task(
+                    self._run_person_research(new_person, new_company or None),
+                    name=f"person-research-{self.session_id[:8]}",
+                )
+        if new_company and new_company != self._last_researched_company:
+            if self._company_research_task is None or self._company_research_task.done():
+                logger.info("[ListenerAgent] Auto company research: %s", new_company)
+                self._last_researched_company = new_company
+                self._company_research_task = self._create_background_task(
+                    self._run_company_research(new_company, context.get("item")),
+                    name=f"company-research-{self.session_id[:8]}",
                 )
 
     # ------------------------------------------------------------------
@@ -1136,6 +1282,16 @@ Rules:
                 negotiation_type=negotiation_type,
                 trigger_reason=trigger_reason,
             )
+            trace = get_session_trace(self.session.session_id)
+            research_artifacts: list[str] = []
+            if trace:
+                research_artifacts.append(
+                    trace.write_text_artifact(
+                        f"market_research_prompt_{self.session.session_metrics['research_requests']}",
+                        research_prompt,
+                        ext=".txt",
+                    )
+                )
 
             logger.info(
                 "Running market research",
@@ -1188,7 +1344,33 @@ Rules:
                 market_data = {}
             else:
                 market_data = json.loads(raw)
-            logger.info(f"âœ… Research complete: {market_data.get('item', 'N/A')}")
+            logger.info("Research complete: %s", market_data.get('item', 'N/A'))
+            from app.utils.session_logger import get_session_logger as _gsl
+            _sl = _gsl(self.session.session_id)
+            if _sl: _sl.research_complete(query=research_query, data=market_data)
+            if trace:
+                research_artifacts.append(
+                    trace.write_json_artifact(
+                        f"market_research_result_{self.session.session_metrics['research_requests']}",
+                        market_data,
+                        ext=".json",
+                    )
+                )
+                event = trace.record(
+                    category="research",
+                    name="research_completed",
+                    summary="Market research completed",
+                    data={"query": research_query, "trigger_reason": trigger_reason},
+                    artifacts=research_artifacts,
+                    related_event_ids=[
+                        ref for ref in [
+                            self.session.trace_refs.get("last_research_trigger_event_id"),
+                            self.session.trace_refs.get("last_context_event_id"),
+                        ] if ref
+                    ],
+                )
+                trace.remember("last_research_complete_event_id", event["event_id"])
+                self.session.trace_refs["last_research_complete_event_id"] = event["event_id"]
             
             # Build a rich formatted string from the structured fields
             # so all downstream code that reads market_data as a string still works
@@ -1244,6 +1426,66 @@ Rules:
             })
         finally:
             self._research_task = None
+
+    async def _run_person_research(self, person_name, company=None):
+        """Auto-triggered when counterparty name detected in transcript."""
+        try:
+            prompt = build_person_research_prompt(person_name=person_name, company=company)
+            def do_research():
+                return self._ensure_client().models.generate_content(
+                    model=self._flash_model, contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.1,
+                        tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
+                    ),
+                )
+            import asyncio as _asyncio, json as _json
+            response = await _asyncio.get_event_loop().run_in_executor(None, do_research)
+            raw = (response.text or "").strip()
+            if raw.startswith("```"):
+                raw = "\n".join(raw.split("\n")[1:]).rstrip("`").strip()
+            result = _json.loads(raw) if raw else {}
+            self.last_context["counterparty_person_intel"] = result
+            logger.info("[ListenerAgent] Person research done: %s title=%s", person_name, result.get("title"))
+            from app.utils.session_logger import get_session_logger as _gsl
+            _sl = _gsl(self.session.session_id)
+            if _sl: _sl.person_research_complete(name=person_name, data=result)
+            await self._safe_send_json({"type": "RESEARCH_COMPLETE", "payload": {"type": "person", "name": person_name, "data": result}})
+            self._create_background_task(self._run_text_extraction_cycle(), name=f"extract-post-person-{self.session_id[:8]}")
+        except Exception as exc:
+            logger.warning("[ListenerAgent] Person research failed %s: %s", person_name, exc)
+        finally:
+            self._person_research_task = None
+
+    async def _run_company_research(self, company_name, context_hint=None):
+        """Auto-triggered when counterparty company detected in transcript."""
+        try:
+            prompt = build_company_research_prompt(company_name=company_name, context=context_hint)
+            def do_research():
+                return self._ensure_client().models.generate_content(
+                    model=self._flash_model, contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.1,
+                        tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
+                    ),
+                )
+            import asyncio as _asyncio, json as _json
+            response = await _asyncio.get_event_loop().run_in_executor(None, do_research)
+            raw = (response.text or "").strip()
+            if raw.startswith("```"):
+                raw = "\n".join(raw.split("\n")[1:]).rstrip("`").strip()
+            result = _json.loads(raw) if raw else {}
+            self.last_context["counterparty_company_intel"] = result
+            logger.info("[ListenerAgent] Company research done: %s size=%s", company_name, result.get("size"))
+            from app.utils.session_logger import get_session_logger as _gsl
+            _sl = _gsl(self.session.session_id)
+            if _sl: _sl.company_research_complete(name=company_name, data=result)
+            await self._safe_send_json({"type": "RESEARCH_COMPLETE", "payload": {"type": "company", "name": company_name, "data": result}})
+            self._create_background_task(self._run_text_extraction_cycle(), name=f"extract-post-company-{self.session_id[:8]}")
+        except Exception as exc:
+            logger.warning("[ListenerAgent] Company research failed %s: %s", company_name, exc)
+        finally:
+            self._company_research_task = None
 
     def _build_speaker_timeline_hint(self) -> str:
         """
@@ -1636,7 +1878,11 @@ PRICE RULES: Prices are numbers only (no currency symbols). IMPORTANT: Keep item
             }
             sent = await self._safe_send_json(payload)
             if sent:
-                logger.info(f"ðŸ“¤ CONTEXT_UPDATE sent (cycle {self._cycle_count})")
+                logger.info("CONTEXT_UPDATE sent cycle=%s", self._cycle_count)
+                if self._cycle_count % 5 == 1:
+                    from app.utils.session_logger import get_session_logger as _gsl
+                    _sl = _gsl(self.session.session_id)
+                    if _sl: _sl.context_extracted(context=self.last_context)
         except Exception as exc:
             logger.warning(
                 f"[ListenerAgent] Failed to send CONTEXT_UPDATE: {exc}"

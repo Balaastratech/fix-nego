@@ -28,6 +28,7 @@ from app.config import settings
 from app.services.response_validator import ResponseValidator
 from app.services.session_store import session_store
 from app.utils.conversation_audit import log_conversation_event
+from app.utils.session_trace import get_session_trace
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ def _build_live_deal_brief(transcript_text: str, user_query: str) -> str:
     )
 
 
-def build_advisor_query(state: dict, transcript: list = None, user_query: str = "Command.") -> str:
+def build_advisor_query(state: dict, transcript: list = None, user_query: str = "What should I do next?") -> str:
     """
     Builds a context-rich query for the Live AI.
 
@@ -246,19 +247,70 @@ def build_advisor_query(state: dict, transcript: list = None, user_query: str = 
     live_deal_brief = _build_live_deal_brief(transcript_text, user_query)
 
     return (
-        f"[TACTICAL REQUEST]\n"
-        f"RESPOND IN LANGUAGE: {response_language}\n"
-        "ANSWER QUALITY RULES:\n"
-        "  - Ground the answer in the latest offer, the user's target/cap, and the active non-price terms.\n"
+        "USER REQUEST PACKAGE:\n"
+        f"Respond in language: {response_language}\n"
+        "Answer quality rules:\n"
+        "  - Ground the answer in the latest offer, the user's target or cap, and the active non-price terms.\n"
         "  - Separate price concessions from term concessions.\n"
-        "  - State exactly what to protect, trade, ask, accept, or reject next.\n"
+        "  - State exactly what to protect, trade, ask, accept, reject, or explain next.\n"
         "  - Do not invent facts and do not give generic negotiation advice.\n"
         f"{snapshot}"
         f"\n{live_deal_brief}"
         f"{convo}\n\n"
-        f"MY REQUEST: {user_query}\n"
-        f"[/TACTICAL REQUEST]"
+        f"User request: {user_query}\n"
+        "END USER REQUEST PACKAGE"
     )
+
+
+def _safe_parse_vision_json(raw_text: str, session_id: str) -> dict | None:
+    """Robust JSON parser for vision responses with multiple fallback strategies.
+
+    Previously `json.loads` on truncated Gemini output caused frequent crashes.
+    Now tries three strategies in order: direct parse, regex extract, partial fields.
+    """
+    if not raw_text:
+        return None
+
+    # Strategy 1: Direct parse (works when response_mime_type forces valid JSON)
+    try:
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip(), flags=re.DOTALL).strip()
+        return json.loads(cleaned)
+    except Exception:
+        pass
+
+    # Strategy 2: Extract first complete JSON object using regex
+    try:
+        m = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+    except Exception:
+        pass
+
+    # Strategy 3: Partial field extraction — recover what we can
+    logger.warning(
+        "[Vision] JSON parse failed — using partial extraction session=%s raw=%r",
+        session_id, raw_text[:200],
+    )
+    result: dict = {}
+    for field in ["scene_type", "confidence", "scene_summary", "advice_hint",
+                  "document_text", "item", "condition"]:
+        m = re.search(rf'"{re.escape(field)}"\s*:\s*"([^"]*)"', raw_text)
+        if m:
+            result[field] = m.group(1)
+    # Try to get arrays
+    for field in ["defects_visible", "prices_visible", "terms_visible"]:
+        m = re.search(rf'"{re.escape(field)}"\s*:\s*(\[[^\]]*\])', raw_text)
+        if m:
+            try:
+                result[field] = json.loads(m.group(1))
+            except Exception:
+                result[field] = []
+    # Only return if we got at least something useful
+    if result.get("scene_type") or result.get("document_text"):
+        return result
+
+    logger.warning("[Vision] Complete JSON extraction failed session=%s", session_id)
+    return None
 
 
 async def analyze_vision_frames(
@@ -294,6 +346,25 @@ async def analyze_vision_frames(
         session_context=session_context or "negotiation in progress",
         transcript_hint=transcript_hint or "no transcript available",
     )
+    trace = get_session_trace(session.session_id)
+    vision_artifacts: list[str] = []
+    if trace:
+        vision_artifacts.append(trace.write_text_artifact("vision_prompt", prompt_text, ext=".txt"))
+        vision_artifacts.append(
+            trace.write_json_artifact(
+                "vision_request_context",
+                {
+                    "transcript_hint": transcript_hint,
+                    "session_context": session_context,
+                    "frame_count": len(frames),
+                },
+                ext=".json",
+            )
+        )
+        for index, frame_bytes in enumerate(frames, start=1):
+            vision_artifacts.append(
+                trace.write_binary_artifact(f"vision_frame_{index}", frame_bytes, ext=".jpg")
+            )
 
     parts: list = [types.Part(text=prompt_text)]
     for frame_bytes in frames:
@@ -301,11 +372,12 @@ async def analyze_vision_frames(
             inline_data=types.Blob(data=frame_bytes, mime_type="image/jpeg")
         ))
 
-    # Flash doesn't need a thinking_budget — it's fast by design.
-    # Keep config minimal for lowest latency.
+    # response_mime_type="application/json" forces Gemini to return valid JSON — no truncation.
+    # Previously the model sometimes returned unterminated JSON strings causing parse failures.
     config_kwargs: dict = {
-        "temperature": 0.1,          # low temp for deterministic extraction
-        "max_output_tokens": 1024,   # structured JSON is short
+        "temperature": 0.1,
+        "max_output_tokens": 1500,          # slightly higher for documents with long text
+        "response_mime_type": "application/json",  # KEY FIX: forces complete, valid JSON
     }
 
     try:
@@ -330,18 +402,9 @@ async def analyze_vision_frames(
     if not raw_text:
         return None
 
-    # Parse the JSON response
-    try:
-        # Strip markdown fences if Pro wrapped it anyway
-        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip(), flags=re.DOTALL).strip()
-        obs = json.loads(cleaned)
-    except Exception as exc:
-        logger.warning(
-            "[Vision] Failed to parse Pro vision JSON session=%s error=%s raw=%r",
-            session.session_id,
-            exc,
-            raw_text[:300],
-        )
+    # Parse the JSON response with robust fallback extraction
+    obs = _safe_parse_vision_json(raw_text, session.session_id)
+    if obs is None:
         return None
 
     obs["timestamp"] = time.time()
@@ -355,13 +418,68 @@ async def analyze_vision_frames(
         (obs.get("advice_hint") or "")[:120],
     )
     session.vision_pro_call_count += 1
+    if trace:
+        vision_artifacts.append(trace.write_json_artifact("vision_result", obs, ext=".json"))
+        event = trace.record(
+            category="vision",
+            name="vision_analysis_completed",
+            summary="Vision model analyzed the current frame set",
+            data={
+                "scene_type": obs.get("scene_type"),
+                "confidence": obs.get("confidence"),
+                "frame_count": len(frames),
+                "document_text_chars": len(obs.get("document_text") or ""),
+            },
+            artifacts=vision_artifacts,
+            related_event_ids=[
+                ref for ref in [
+                    session.trace_refs.get("last_context_event_id"),
+                    session.trace_refs.get("last_transcript_event_id"),
+                ] if ref
+            ],
+        )
+        trace.remember("last_vision_analysis_event_id", event["event_id"])
+        session.trace_refs["last_vision_analysis_event_id"] = event["event_id"]
+
+    # Log to session file
+    from app.utils.session_logger import get_session_logger as _gsl
+    _sl = _gsl(session.session_id)
+    if _sl:
+        _sl.vision_analyzed(
+            scene_type=obs.get("scene_type", "unknown"),
+            confidence=str(obs.get("confidence", "unknown")),
+            item=obs.get("item"),
+            doc_text=obs.get("document_text"),
+            advice_hint=obs.get("advice_hint"),
+            prices=obs.get("prices_visible"),
+            terms=obs.get("terms_visible"),
+            defects=obs.get("defects_visible"),
+            body_language=obs.get("body_language"),
+            contract_analysis=obs.get("contract_analysis"),
+        )
+
+    # Auto-accumulate document pages — no user action needed.
+    # When vision detects a document (shared screen, printed contract, etc.),
+    # each page is captured as it appears and accumulated for context summary.
+    if obs.get("scene_type") == "document" and obs.get("document_text"):
+        if not hasattr(session, "document_pages"):
+            session.document_pages = []
+        session.document_pages.append({
+            "timestamp": time.time(),
+            "text": obs["document_text"],
+            "prices": obs.get("prices_visible", []),
+            "terms": obs.get("terms_visible", []),
+            "contract_analysis": obs.get("contract_analysis", {}),
+        })
+        session.document_pages = session.document_pages[-20:]  # keep last 20 pages
+
     return obs
 
 
 async def generate_tactical_advice(
     session: NegotiationSession,
     user_query: str,
-    response_mode: str = "command",
+    response_mode: str = "auto",
 ) -> str | None:
     """
     Pre-compute the exact tactical answer using gemini-2.5-pro BEFORE the live
@@ -438,7 +556,7 @@ async def generate_tactical_advice(
     prompt = (
         f"{intel}\n\n"
         f"{mode_block}\n\n"
-        f"[USER'S EXACT QUESTION]: {user_query}\n\n"
+        f"USER QUESTION: {user_query}\n\n"
         f"{advisor_query}"
     )
 
@@ -701,9 +819,40 @@ async def handle_function_call(
 # Global dictionary to accumulate text per session for the current turn
 _session_text_accumulators = {}
 
+_CONTROL_TEXT_MARKERS = (
+    "[SYSTEM:",
+    "[USER'S EXACT QUESTION]",
+    "[USER QUESTION]",
+    "[LISTENER_INTEL",
+    "[TACTICAL REQUEST",
+    "[ADVISOR_OUTPUT",
+    "COMMAND MODE ACTIVE",
+    "ADVICE MODE ACTIVE",
+    "BACKGROUND INTEL",
+    "END BACKGROUND INTEL",
+    "USER REQUEST PACKAGE",
+    "END USER REQUEST PACKAGE",
+    "PREPARED ANSWER",
+    "ADVICE MODE.",
+    "COMMAND MODE.",
+    "ADVICE MODE",
+    "COMMAND MODE",
+)
+
+
+def _sanitize_ai_response_fragment(text: str) -> str:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return ""
+    upper_cleaned = cleaned.upper()
+    for marker in _CONTROL_TEXT_MARKERS:
+        if marker.upper() in upper_cleaned:
+            return ""
+    return cleaned
+
 
 def _append_ai_response_text(session: NegotiationSession | None, text: str) -> None:
-    cleaned = (text or "").strip()
+    cleaned = _sanitize_ai_response_fragment(text)
     if session is None or not cleaned:
         return
     if not hasattr(session, "current_ai_response") or session.current_ai_response is None:
@@ -716,10 +865,10 @@ def _append_ai_response_text(session: NegotiationSession | None, text: str) -> N
 
 
 def _consume_completed_ai_response(session: NegotiationSession | None, session_id: str) -> str:
-    text_parts = _session_text_accumulators.pop(session_id, "").strip()
+    text_parts = _sanitize_ai_response_fragment(_session_text_accumulators.pop(session_id, "").strip())
     response_text = ""
     if session is not None and hasattr(session, "current_ai_response") and session.current_ai_response:
-        response_text = (session.current_ai_response or "").strip()
+        response_text = _sanitize_ai_response_fragment((session.current_ai_response or "").strip())
         session.current_ai_response = ""
     if response_text and text_parts:
         if text_parts in response_text:
@@ -765,6 +914,7 @@ async def handle_gemini_text(websocket: WebSocket, session_id: str, text: str) -
     # Remove all XML tags from text
     remaining_text = STRATEGY_PATTERN.sub('', text)
     remaining_text = STATE_UPDATE_PATTERN.sub('', remaining_text).strip()
+    remaining_text = _sanitize_ai_response_fragment(remaining_text)
     
     # Accumulate the remaining text for this session's turn
     if remaining_text:
@@ -1099,8 +1249,6 @@ class GeminiClient:
                         continue
 
                     if sc.model_turn:
-                        # AI has started speaking. Set the speaker state to prevent the
-                        # Listener from analyzing the AI's own audio output.
                         if session:
                             session.ai_is_speaking = True
                             session.current_speaker = "ai"
@@ -1111,6 +1259,10 @@ class GeminiClient:
                                     pcm_bytes = base64.b64decode(part.inline_data.data)
                                 else:
                                     pcm_bytes = part.inline_data.data
+                                # Mark that AI audio is physically playing in the earphone.
+                                # Cleared only when frontend sends AI_PLAYBACK_DONE.
+                                if session and not getattr(session, "ai_audio_playing", False):
+                                    session.ai_audio_playing = True
                                 await websocket.send_bytes(pcm_bytes)
                             elif part.text:
                                 await handle_gemini_text(websocket, session_id, part.text)
@@ -1184,6 +1336,10 @@ class GeminiClient:
                         
                         if session:
                             session.last_user_transcript = sc.input_transcription.text
+                            if getattr(session, "direct_query_in_flight", False):
+                                current_ask_capture = dict(getattr(session, "current_ask_capture", {}) or {})
+                                current_ask_capture["gemini_input_transcription"] = True
+                                session.current_ask_capture = current_ask_capture
 
                         # Send user transcripts immediately for separate display
                         # This ensures each question appears separately in the UI
@@ -1202,25 +1358,31 @@ class GeminiClient:
                     # Handle AI output transcription separately (outside input_transcription block)
                     output_transcription = getattr(sc, 'output_transcription', None) or getattr(sc, 'output_audio_transcription', None)
                     if output_transcription and output_transcription.text:
-                        ai_text = output_transcription.text
-                        response_mode = getattr(session, 'response_mode', 'command')
-                        
-                        logger.info(f"[DEBUG] AI response chunk received. Mode: {response_mode}, Text: '{ai_text[:50]}...'")
+                        ai_text = _sanitize_ai_response_fragment(output_transcription.text)
+                        if not ai_text:
+                            logger.warning(
+                                "[GeminiClient] Dropped control-text output transcription fragment [%s]",
+                                session_id,
+                            )
+                        else:
+                            response_mode = getattr(session, 'response_mode', 'auto')
+                            
+                            logger.info(f"[DEBUG] AI response chunk received. Mode: {response_mode}, Text: '{ai_text[:50]}...'")
 
-                        # Always accumulate the full response for potential validation
-                        if not hasattr(session, 'current_ai_response'):
-                            session.current_ai_response = ""
-                        session.current_ai_response += " " + ai_text if session.current_ai_response else ai_text
+                            # Always accumulate the full response for potential validation
+                            if not hasattr(session, 'current_ai_response'):
+                                session.current_ai_response = ""
+                            session.current_ai_response += " " + ai_text if session.current_ai_response else ai_text
 
-                        # AI_TRANSCRIPTION_DISPLAY disabled
+                            # AI_TRANSCRIPTION_DISPLAY disabled
 
-                        # Set AI speaking state
-                        if not getattr(session, 'ai_is_speaking', False):
-                            session.ai_is_speaking = True
-                            await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
-                        
-                        session.current_speaker = "ai"
-                        session.speaker_last_updated = time.time()
+                            # Set AI speaking state
+                            if not getattr(session, 'ai_is_speaking', False):
+                                session.ai_is_speaking = True
+                                await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
+                            
+                            session.current_speaker = "ai"
+                            session.speaker_last_updated = time.time()
 
 
                     # Check for turn_complete - this signals the end of this receive() iteration
@@ -1228,100 +1390,90 @@ class GeminiClient:
                         logger.info(f"AI turn complete [session={session_id}]")
                         
                         # VALIDATE AI RESPONSE BEFORE COMPLETING TURN
-                        # Skip validation if response_mode is "advice"
-                        response_mode = getattr(session, 'response_mode', 'command')
+                        response_mode = getattr(session, 'response_mode', 'auto')
                         
                         full_response = _consume_completed_ai_response(session, session_id)
                         if full_response:
+                            if session is not None:
+                                if not hasattr(session, "recent_ai_responses"):
+                                    session.recent_ai_responses = []
+                                session.recent_ai_responses.append(full_response)
+                                session.recent_ai_responses = session.recent_ai_responses[-5:]
                             response_context = "ask_ai" if getattr(session, "direct_query_in_flight", False) else "advisor"
                             
-                            # Only validate in "command" mode, skip for "advice" mode
-                            if response_mode == "command":
-                                validation_result = ResponseValidator.validate_response(full_response)
-                                
-                                if not validation_result["valid"]:
-                                    logger.warning(
-                                        f"AI response violated rules: {validation_result['violations']} [{session_id}]"
-                                    )
-                                    logger.warning(f"Violating response: '{full_response}' [{session_id}]")
-                                    
-                                    # Send correction if critical violations
-                                    if ResponseValidator.should_send_correction(validation_result["violations"]):
-                                        correction = validation_result["correction_prompt"]
-                                        logger.info(f"Sending correction to AI: '{correction}' [{session_id}]")
-                                        
-                                        # Send correction immediately
-                                        try:
-                                            await live_session.send(input=correction, end_of_turn=True)
-                                            
-                                            # Notify frontend about correction
-                                            await websocket.send_json({
-                                                "type": "AI_CORRECTION_SENT",
-                                                "payload": {
-                                                    "violations": validation_result["violations"],
-                                                    "correction": correction
-                                                }
-                                            })
-                                        except Exception as e:
-                                            logger.error(f"Failed to send correction: {e} [{session_id}]")
-                                else:
-                                    logger.info(f"✅ AI response validated successfully [{session_id}]")
-                                    # Send the validated response to the frontend
-                                    ai_event = {
-                                        "speaker": "ai",
-                                        "text": full_response,
-                                        "timestamp": int(time.time() * 1000),
-                                        "response_mode": response_mode,
-                                        "context": response_context,
-                                    }
-                                    log_conversation_event(
-                                        session_id=session.session_id,
-                                        event="ai_response",
-                                        speaker="ai",
-                                        text=full_response,
-                                        timestamp_ms=ai_event["timestamp"],
-                                        context=response_context,
-                                        response_mode=response_mode,
-                                    )
-                                    await websocket.send_json({
-                                        "type": "TRANSCRIPT_UPDATE",
-                                        "payload": ai_event
-                                    })
-                                    if session:
-                                        session.advisor_history.append(ai_event)
-                                        session.advisor_history = session.advisor_history[-settings.RESEARCH_HISTORY_LIMIT:]
-                                        session_store.record_advisor_event(session.session_id, "response", ai_event)
-                                        session_store.persist_session(session, ended=False)
-                            else: # This is advice mode
-                                logger.info(f"Advice mode - skipping validation, sending transcript [{session_id}]")
-                                ai_event = {
-                                    "speaker": "ai",
-                                    "text": full_response,
-                                    "timestamp": int(time.time() * 1000),
-                                    "response_mode": response_mode,
-                                    "context": response_context,
-                                }
-                                log_conversation_event(
-                                    session_id=session.session_id,
-                                    event="ai_response",
-                                    speaker="ai",
+                            # ResponseValidator disabled in native audio mode — sending
+                            # correction text via send() causes the model to SPEAK it
+                            # aloud, creating an infinite loop of spoken system messages.
+                            logger.info("AI response [session=%s] text=%r", session_id, full_response[:80])
+                            from app.utils.session_logger import get_session_logger as _gsl
+                            _sl = _gsl(session_id)
+                            if _sl and full_response:
+                                _sl.ai_response(
                                     text=full_response,
-                                    timestamp_ms=ai_event["timestamp"],
-                                    context=response_context,
-                                    response_mode=response_mode,
+                                    mode=getattr(session, "response_mode", "auto"),
                                 )
-                                await websocket.send_json({
-                                    "type": "TRANSCRIPT_UPDATE",
-                                    "payload": ai_event
-                                })
-                                if session:
-                                    session.advisor_history.append(ai_event)
-                                    session.advisor_history = session.advisor_history[-settings.RESEARCH_HISTORY_LIMIT:]
-                                    session_store.record_advisor_event(session.session_id, "response", ai_event)
-                                    session_store.persist_session(session, ended=False)
+                            ai_event = {
+                                "speaker": "ai",
+                                "text": full_response,
+                                "timestamp": int(time.time() * 1000),
+                                "response_mode": response_mode,
+                                "context": response_context,
+                            }
+                            trace = get_session_trace(session_id)
+                            if trace:
+                                response_artifacts = [
+                                    trace.write_text_artifact("ai_response_text", full_response, ext=".txt")
+                                ]
+                                basis_refs = [
+                                    ref for ref in [
+                                        session.trace_refs.get("last_question_event_id"),
+                                        session.trace_refs.get("last_pre_query_brief_event_id"),
+                                        session.trace_refs.get("last_mode_instruction_event_id"),
+                                        session.trace_refs.get("last_vision_analysis_event_id"),
+                                        session.trace_refs.get("last_context_event_id"),
+                                        session.trace_refs.get("last_research_complete_event_id"),
+                                    ] if ref
+                                ]
+                                event = trace.record(
+                                    category="ai",
+                                    name="ai_response_completed",
+                                    summary="Gemini completed an AI response turn",
+                                    data={
+                                        "context": response_context,
+                                        "response_mode": response_mode,
+                                        "question_event_id": session.trace_refs.get("last_question_event_id"),
+                                        "pre_query_brief_event_id": session.trace_refs.get("last_pre_query_brief_event_id"),
+                                        "vision_event_id": session.trace_refs.get("last_vision_analysis_event_id"),
+                                        "context_event_id": session.trace_refs.get("last_context_event_id"),
+                                        "research_event_id": session.trace_refs.get("last_research_complete_event_id"),
+                                    },
+                                    artifacts=response_artifacts,
+                                    related_event_ids=basis_refs,
+                                )
+                                trace.remember("last_ai_response_event_id", event["event_id"])
+                                session.trace_refs["last_ai_response_event_id"] = event["event_id"]
+                            log_conversation_event(
+                                session_id=session.session_id,
+                                event="ai_response",
+                                speaker="ai",
+                                text=full_response,
+                                timestamp_ms=ai_event["timestamp"],
+                                context=response_context,
+                                response_mode=response_mode,
+                            )
+                            await websocket.send_json({
+                                "type": "TRANSCRIPT_UPDATE",
+                                "payload": ai_event
+                            })
+                            if session:
+                                session.advisor_history.append(ai_event)
+                                session.advisor_history = session.advisor_history[-settings.RESEARCH_HISTORY_LIMIT:]
+                                session_store.record_advisor_event(session.session_id, "response", ai_event)
+                                session_store.persist_session(session, ended=False)
                             
                         if session:
                             session.ai_is_speaking = False
+                            # ai_audio_playing stays True until frontend sends AI_PLAYBACK_DONE
                             # Reset speaker to last known human so Listener can resume analysis
                             if session.current_speaker == "ai":
                                 session.current_speaker = "user" # Default back to user
@@ -1330,7 +1482,39 @@ class GeminiClient:
                             # Flushing them immediately would trigger a second proactive AI turn
                             # causing the double-response bug. The listener cycle (10s) will
                             # inject fresh context on the next pass instead.
+                            was_direct_query = getattr(session, "direct_query_in_flight", False)
                             session.direct_query_in_flight = False
+                            if was_direct_query and full_response:
+                                if "can't process audio inputs" in full_response.lower():
+                                    session.session_metrics["ask_audio_input_failures"] = session.session_metrics.get("ask_audio_input_failures", 0) + 1
+                                    logger.warning(
+                                        "[GeminiClient] ask-AI audio-input fallback detected [session=%s metrics=%s]",
+                                        session_id,
+                                        getattr(session, "current_ask_capture", {}),
+                                    )
+                            if was_direct_query and getattr(session, "current_ask_capture", None):
+                                logger.info(
+                                    "[GeminiClient] ask-AI turn metrics [session=%s metrics=%s]",
+                                    session_id,
+                                    session.current_ask_capture,
+                                )
+                                session.current_ask_capture = {}
+
+                            # If this was an ask-AI turn and the AI produced no audio or text,
+                            # send a visible fallback so the user isn't left in silence.
+                            if was_direct_query and not full_response and not _consume_completed_ai_response(session, session_id):
+                                try:
+                                    await websocket.send_json({
+                                        "type": "AI_RESPONSE",
+                                        "payload": {
+                                            "speaker": "ai",
+                                            "text": "I didn't catch that clearly. Hold and ask again.",
+                                            "timestamp": int(time.time() * 1000),
+                                            "context": "ask_ai",
+                                        },
+                                    })
+                                except Exception:
+                                    pass
                             if session.pending_injections:
                                 count = len(session.pending_injections)
                                 session.pending_injections.clear()

@@ -44,6 +44,7 @@ class SessionStore:
                         language TEXT,
                         response_language TEXT,
                         context_json TEXT NOT NULL,
+                        final_summary_json TEXT NOT NULL DEFAULT '{}',
                         transcript_json TEXT NOT NULL,
                         speaker_mapping_json TEXT NOT NULL,
                         last_context_json TEXT NOT NULL,
@@ -100,6 +101,14 @@ class SessionStore:
                     );
                     """
                 )
+                columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+                }
+                if "final_summary_json" not in columns:
+                    conn.execute(
+                        "ALTER TABLE sessions ADD COLUMN final_summary_json TEXT NOT NULL DEFAULT '{}'"
+                    )
             self._initialized = True
             logger.info("SessionStore initialized", extra={"db_path": str(self.db_path)})
 
@@ -126,6 +135,7 @@ class SessionStore:
                 "label": session.selected_output_device_label,
             },
             "degraded_reasons": list(session.degraded_reasons),
+            "resume_token": session.resume_token,
         }
 
         with self._lock, sqlite3.connect(self.db_path) as conn:
@@ -133,9 +143,9 @@ class SessionStore:
                 """
                 INSERT INTO sessions (
                     session_id, state, consent_version, consent_mode, started_at, updated_at, ended_at,
-                    language, response_language, context_json, transcript_json, speaker_mapping_json,
+                    language, response_language, context_json, final_summary_json, transcript_json, speaker_mapping_json,
                     last_context_json, research_json, advisor_json, vision_json, metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     state=excluded.state,
                     consent_version=excluded.consent_version,
@@ -146,6 +156,7 @@ class SessionStore:
                     language=excluded.language,
                     response_language=excluded.response_language,
                     context_json=excluded.context_json,
+                    final_summary_json=excluded.final_summary_json,
                     transcript_json=excluded.transcript_json,
                     speaker_mapping_json=excluded.speaker_mapping_json,
                     last_context_json=excluded.last_context_json,
@@ -165,6 +176,7 @@ class SessionStore:
                     session.language,
                     session.response_language,
                     _json_dumps(context_payload),
+                    _json_dumps(session.final_summary),
                     _json_dumps(transcript),
                     _json_dumps(session.speaker_mapping),
                     _json_dumps(getattr(session.listener_agent, "last_context", {}) if session.listener_agent else {}),
@@ -290,6 +302,7 @@ class SessionStore:
             "language": session_row["language"],
             "response_language": session_row["response_language"],
             "context": json.loads(session_row["context_json"] or "{}"),
+            "final_summary": json.loads(session_row["final_summary_json"] or "{}"),
             "transcript": json.loads(session_row["transcript_json"] or "[]"),
             "speaker_mapping": json.loads(session_row["speaker_mapping_json"] or "{}"),
             "last_context": json.loads(session_row["last_context_json"] or "{}"),

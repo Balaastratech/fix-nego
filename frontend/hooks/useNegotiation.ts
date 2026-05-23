@@ -11,13 +11,42 @@ import {
     WebSocketMessage
 } from '../lib/types';
 
+const SESSION_STORAGE_KEY = 'negotiation_session_id';
+
+function normalizeTranscriptText(text: string): string {
+    return (text || '')
+        .toLowerCase()
+        .replace(/[^\w\s$]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+export function shouldCollapseHumanTranscriptEntries(previous: TranscriptEntry | undefined, next: TranscriptEntry): boolean {
+    if (!previous) return false;
+    if (previous.isPartial || next.isPartial) return false;
+    if (previous.speaker === 'ai' || next.speaker === 'ai') return false;
+    if (previous.speaker !== next.speaker) return false;
+    if ((previous.source || null) !== (next.source || null)) return false;
+    if ((previous.context || null) !== (next.context || null)) return false;
+    if (Math.abs(next.timestamp - previous.timestamp) > 5000) return false;
+
+    const prevText = normalizeTranscriptText(previous.text);
+    const nextText = normalizeTranscriptText(next.text);
+    if (!prevText || !nextText) return false;
+    if (prevText === nextText) return true;
+
+    const longer = prevText.length >= nextText.length ? prevText : nextText;
+    const shorter = prevText.length >= nextText.length ? nextText : prevText;
+    return shorter.length <= 32 && longer.includes(shorter);
+}
+
 type Action =
     | { type: 'RESET_SESSION' }
     | { type: 'SET_CONNECTED'; payload: boolean }
     | { type: 'SET_CONSENTED'; payload: boolean }
     | { type: 'SET_NEGOTIATING'; payload: boolean }
     | { type: 'SET_SESSION_ID'; payload: string }
-    | { type: 'APPEND_TRANSCRIPT'; payload: TranscriptEntry }
+    | { type: 'UPSERT_TRANSCRIPT'; payload: TranscriptEntry }
     | { type: 'SET_STRATEGY'; payload: Strategy }
     | { type: 'SET_OUTCOME'; payload: OutcomeSummary }
     | { type: 'SET_ERROR'; payload: string | null }
@@ -50,8 +79,17 @@ function negotiationReducer(state: NegotiationState, action: Action): Negotiatio
             return { ...state, isNegotiating: action.payload };
         case 'SET_SESSION_ID':
             return { ...state, sessionId: action.payload };
-        case 'APPEND_TRANSCRIPT':
+        case 'UPSERT_TRANSCRIPT':
             const newEntry = action.payload;
+            const existingIndex = state.transcript.findIndex((entry) => entry.id === newEntry.id);
+            if (existingIndex >= 0) {
+                const updatedTranscript = [...state.transcript];
+                updatedTranscript[existingIndex] = {
+                    ...updatedTranscript[existingIndex],
+                    ...newEntry,
+                };
+                return { ...state, transcript: updatedTranscript };
+            }
             const lastEntry = state.transcript[state.transcript.length - 1];
             
             // Merge only AI responses. Human turns should remain separate so repeated
@@ -75,6 +113,21 @@ function negotiationReducer(state: NegotiationState, action: Action): Negotiatio
                 return { 
                     ...state, 
                     transcript: [...state.transcript.slice(0, -1), updatedLastEntry] 
+                };
+            }
+
+            if (shouldCollapseHumanTranscriptEntries(lastEntry, newEntry)) {
+                const previousText = normalizeTranscriptText(lastEntry?.text || '');
+                const nextText = normalizeTranscriptText(newEntry.text);
+                const preferNew = nextText.length >= previousText.length;
+                return {
+                    ...state,
+                    transcript: [
+                        ...state.transcript.slice(0, -1),
+                        preferNew
+                            ? { ...lastEntry, ...newEntry }
+                            : { ...newEntry, ...lastEntry, id: lastEntry!.id },
+                    ],
                 };
             }
             
@@ -158,9 +211,18 @@ export function useNegotiation() {
 
     const connect = useCallback(async (wsUrl: string) => {
         if (!audioManagerRef.current) return;
-        lastWsUrlRef.current = wsUrl;
+        let resolvedUrl = wsUrl;
+        if (typeof window !== 'undefined') {
+            const savedSessionId = window.localStorage.getItem(SESSION_STORAGE_KEY);
+            if (savedSessionId) {
+                const url = new URL(wsUrl, window.location.href);
+                url.searchParams.set('session_id', savedSessionId);
+                resolvedUrl = url.toString();
+            }
+        }
+        lastWsUrlRef.current = resolvedUrl;
 
-        wsRef.current = new NegotiationWebSocket(wsUrl, audioManagerRef.current);
+        wsRef.current = new NegotiationWebSocket(resolvedUrl, audioManagerRef.current);
 
         wsRef.current.onMessage((msg: WebSocketMessage) => {
             switch (msg.type) {
@@ -172,6 +234,9 @@ export function useNegotiation() {
                     if ((msg.payload as any)?.session_id) {
                         const sessionId = (msg.payload as any).session_id;
                         dispatch({ type: 'SET_SESSION_ID', payload: sessionId });
+                        if (typeof window !== 'undefined') {
+                            window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+                        }
                     }
                     break;
                 case 'CONSENT_ACKNOWLEDGED':
@@ -231,6 +296,12 @@ export function useNegotiation() {
                 case 'AI_SPEAKING':
                     dispatch({ type: 'SET_AI_STATE', payload: 'speaking' });
                     break;
+                case 'SESSION_RESTORED':
+                    window.dispatchEvent(new CustomEvent('negotiation-session-restored', {
+                        detail: msg.payload
+                    }));
+                    break;
+                case 'TRANSCRIPT_PARTIAL':
                 case 'TRANSCRIPT_UPDATE':
                     const transcriptPayload = msg.payload as any;
                     const normalizedEntry: TranscriptEntry = {
@@ -238,6 +309,7 @@ export function useNegotiation() {
                         speaker: (transcriptPayload.speaker || 'unknown').toLowerCase() as 'user' | 'counterparty' | 'ai' | 'unknown',
                         text: transcriptPayload.text || '',
                         timestamp: transcriptPayload.timestamp || Date.now(),
+                        isPartial: Boolean(transcriptPayload.is_partial ?? transcriptPayload.isPartial),
                         confidence: transcriptPayload.confidence,
                         context: transcriptPayload.context,
                         transcriptionConfidence: transcriptPayload.transcription_confidence,
@@ -245,10 +317,12 @@ export function useNegotiation() {
                         eligibleForResearch: transcriptPayload.eligible_for_research,
                         source: transcriptPayload.source,
                     };
-                    dispatch({ type: 'APPEND_TRANSCRIPT', payload: normalizedEntry });
-                    window.dispatchEvent(new CustomEvent('negotiation-transcript', {
-                        detail: { speaker: normalizedEntry.speaker, text: normalizedEntry.text }
-                    }));
+                    dispatch({ type: 'UPSERT_TRANSCRIPT', payload: normalizedEntry });
+                    if (!normalizedEntry.isPartial) {
+                        window.dispatchEvent(new CustomEvent('negotiation-transcript', {
+                            detail: { speaker: normalizedEntry.speaker, text: normalizedEntry.text }
+                        }));
+                    }
                     break;
                 case 'STRATEGY_UPDATE':
                     dispatch({ type: 'SET_STRATEGY', payload: msg.payload as Strategy });
@@ -256,7 +330,7 @@ export function useNegotiation() {
                 case 'AI_RESPONSE':
                     const aiPayload = msg.payload as any;
                     dispatch({
-                        type: 'APPEND_TRANSCRIPT',
+                        type: 'UPSERT_TRANSCRIPT',
                         payload: {
                             id: `ai_${Date.now()}`,
                             speaker: 'ai',
@@ -336,6 +410,9 @@ export function useNegotiation() {
                     dispatch({ type: 'SET_DEGRADED_MODE', payload: (msg.payload as any)?.mode || null });
                     break;
                 case 'OUTCOME_SUMMARY':
+                    if (typeof window !== 'undefined') {
+                        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+                    }
                     dispatch({ type: 'SET_OUTCOME', payload: msg.payload as OutcomeSummary });
                     dispatch({ type: 'SET_NEGOTIATING', payload: false });
                     dispatch({ type: 'SET_CONSENTED', payload: false });

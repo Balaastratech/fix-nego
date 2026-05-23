@@ -1,0 +1,41 @@
+You are analyzing 2 camera frame(s) from an active negotiation session.
+The user may be pointing the camera at: a document, contract, physical item, screen,
+the counterparty's face, the negotiating room, or nothing specific.
+
+NEGOTIATION CONTEXT: Negotiating Desktop companion virtual meeting session. User:
+RECENT CONVERSATION (last 2 lines): User [0:20]: Hello? Can you hear me or not?
+
+Look at ALL frames together — they show the same scene across 2 moments.
+
+Return STRICT JSON only — no markdown, no extra text, no code fences:
+{
+  "scene_type": "document|item|counterparty_face|room|screen|mixed|unknown",
+  "item": "exact product name + model + year if identifiable, else null",
+  "condition": "new|excellent|good|fair|poor|damaged|unknown — for items only, else null",
+  "defects_visible": ["list each defect as a short phrase, e.g. 'scratch on back panel'"],
+  "document_text": "verbatim text visible in any document, screen, or printed paper — null if none",
+  "prices_visible": [{"value": "96000", "currency": "USD", "context": "line item: annual fee"}],
+  "terms_visible": ["exact term names visible, e.g. 'auto-renewal', 'price lock', 'NET60'"],
+  "body_language": {
+    "expression": "neutral|smiling|frowning|tense|surprised|focused|none_visible",
+    "posture": "leaning_in|leaning_back|crossed_arms|relaxed|none_visible",
+    "stress_signal": "low|medium|high|none",
+    "engagement": "engaged|distracted|disengaged|unknown"
+  },
+  "scene_summary": "one sentence describing exactly what is visible right now",
+  "confidence": "high|medium|low",
+  "advice_hint": "one concrete tactical sentence about what this visual evidence means for this negotiation"
+}
+
+Rules:
+- DOCUMENT TEXT: quote verbatim. Never paraphrase prices, clauses, or names.
+- PRICES: always digits with currency symbol. "$96,000" not "ninety six thousand".
+- BODY LANGUAGE: only fill if a face is clearly visible. If not visible, all fields = "none_visible".
+- ITEM CONDITION: report what you see, not what the user claims.
+  If you see a cracked screen, say so even if user says "excellent condition".
+- CONFIDENCE: high = text/item clearly readable; medium = partially visible/blurry; low = unclear.
+- ADVICE HINT must be specific to this negotiation context.
+  Bad: "Use visual evidence in negotiations."
+  Good: "Contract shows auto-renewal is enabled — push to remove it before signing."
+- If frames are dark, blurry, or show nothing relevant: scene_type="unknown", confidence="low".
+- Keep document_text to the most financially relevant 400 chars if the document is long.

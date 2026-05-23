@@ -86,6 +86,12 @@
       <button id="btn-end" class="ghost-btn" style="display:none">End Session</button>
     </div>
 
+    <!-- Live status banner — shows when ready to speak -->
+    <div id="listen-banner" class="listen-banner hidden">
+      <span id="listen-dot" class="listen-dot"></span>
+      <span id="listen-label">Listening — speak naturally</span>
+    </div>
+
     <!-- Full transcript -->
     <section class="card expand-card">
       <div class="card-title">
@@ -107,7 +113,7 @@
       </div>
       <div id="private-list" class="entry-list">
         <div class="empty-state">
-          Hold <kbd>Space</kbd> or hold left mouse for 3 s to privately ask AI.
+          Hold the floating AI orb to privately ask AI.
         </div>
       </div>
     </section>
