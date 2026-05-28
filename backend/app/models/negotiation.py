@@ -13,6 +13,7 @@ class NegotiationState(str, Enum):
     IDLE = "IDLE"
     CONSENTED = "CONSENTED"
     ACTIVE = "ACTIVE"
+    PAUSED = "PAUSED"
     ENDING = "ENDING"
 
 
@@ -30,6 +31,18 @@ class NegotiationSession(BaseModel):
     context: str = ""  # negotiation context string
     language: Optional[str] = None
     response_language: Optional[str] = None
+    # Multilanguage adaptation (only consulted when settings.MULTILANG_ENABLED).
+    # language_profile: "auto_multi" | "pinned:<bcp47>" | "" (use settings default)
+    # display_language: BCP-47 the overlay wants to render transcripts in (None = same as spoken)
+    # per_source_language: maps companion source key (LOCAL_MIC_PCM / REMOTE_APP_PCM / ASK_AI_PCM)
+    #                     to a Deepgram language profile string overriding language_profile.
+    # voice_fallback_text_only: defensive — set True if response_language is outside the
+    #                           Gemini Live 97-lang set so the overlay renders a text bubble
+    #                           instead of expecting audio.
+    language_profile: Optional[str] = None
+    display_language: Optional[str] = None
+    per_source_language: dict[str, str] = Field(default_factory=dict)
+    voice_fallback_text_only: bool = False
     session_resumable: bool = True
     session_restored: bool = False
     resume_token: str = Field(default_factory=lambda: uuid.uuid4().hex)
@@ -57,6 +70,10 @@ class NegotiationSession(BaseModel):
     live_session_keepalive_task: Optional[Any] = None
     live_session_monitor_task: Optional[Any] = None
     live_reconnect_task: Optional[Any] = None
+    live_preconnect_task: Optional[Any] = None
+    live_preconnected_context: str = ""
+    live_preconnect_error: Optional[str] = None
+    live_preconnected_at: Optional[float] = None
 
     # Dual-Model: rolling audio buffer (shared between audio sender & listener)
     audio_buffer: Optional[Any] = None
@@ -66,6 +83,21 @@ class NegotiationSession(BaseModel):
 
     # Flag — True only during deliberate long-press window; gates mic audio to Live AI
     user_addressing_ai: bool = False
+    # Tracks whether we've opened a manual user-audio activity on the Live session
+    # (only used when settings.ASK_AI_NATIVE_AUDIO=True). Prevents double activity_start
+    # if hold-state messages arrive twice, and ensures activity_end always fires.
+    ask_audio_activity_open: bool = False
+    # True from the moment the user presses hold until the first AI response after
+    # release is dispatched (or a ~5s timeout fires if Gemini never responds).
+    # Used by gemini_client to classify AI responses as ask_ai vs advisor — when
+    # ASK_AI_NATIVE_AUDIO=True the audio response may arrive before direct_query_in_flight
+    # would normally be set by the text-question path. This flag covers that gap.
+    ask_window_active: bool = False
+    # Monotonically incremented on every hold press. The orphan-close safety
+    # timer captures its current value at scheduling time and only acts if the
+    # value still matches when it fires — prevents the previous cycle's stale
+    # timer from killing a brand-new ask window.
+    ask_cycle_gen: int = 0
     # Flag — True after user presses Start Copilot; persists for the whole negotiation
     copilot_active: bool = False
     
@@ -93,6 +125,7 @@ class NegotiationSession(BaseModel):
     current_ai_response: str = ""
     recent_ai_responses: list[str] = Field(default_factory=list)
     last_ai_audio_played_at: float = 0.0
+    last_ask_response_at: float = 0.0
 
     # Retained for compatibility with older clients. The active behavior is now
     # a single automatic answer policy that chooses the response shape from the
@@ -223,6 +256,19 @@ class NegotiationSession(BaseModel):
     # Total number of Pro vision calls in this session (for cost monitoring)
     vision_pro_call_count: int = 0
     vision_analysis_task: Optional[Any] = None
+    # ── Next-move cache (per-live-session, not persisted) ─────────────────
+    # Populated by app.services.next_move_cache.refresh_next_move() after
+    # _on_context_ready fires. Keys: text, model, generated_at, is_pro,
+    # context_basis_hash. Empty dict = no cache yet. Read by
+    # handle_user_addressing_ai to inject [RECOMMENDED NEXT MOVE] into the
+    # pre-query brief when fresh (≤ NEXT_MOVE_MAX_AGE_SECONDS).
+    next_move_cache: dict = Field(default_factory=dict)
+    next_move_task: Optional[Any] = None
+    next_move_last_refresh_at: float = 0.0
+    # Hold-to-ask timing — used by ai_response_completed trace event to
+    # compute the end-to-end latency from button release to spoken answer.
+    last_hold_started_ms: int = 0
+    last_hold_released_ms: int = 0
     vision_live_send_task: Optional[Any] = None
     vision_live_pending_frame_b64: Optional[str] = None
     vision_live_last_sent_at: float = 0.0

@@ -77,6 +77,18 @@ OPENCODE.md
 backend/logs/
 localhost-*.log
 
+# Data and session logs (runtime artifacts, not source code)
+backend/data/logs/
+backend/data/negotiation_sessions.db
+backend/data/negotiation_sessions.db-shm
+backend/data/negotiation_sessions.db-wal
+backend/data/eval_reports/
+backend/data/audio_eval_reports/
+data/logs/
+data/negotiation_sessions.db
+data/negotiation_sessions.db-shm
+data/negotiation_sessions.db-wal
+
 # Transcript files (may contain secrets)
 transcript.jsonl
 transcript - Copy.jsonl

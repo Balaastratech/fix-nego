@@ -35,6 +35,23 @@ class SetResponseLanguagePayload(BaseModel):
     language: str
 
 
+class SetLanguageProfilePayload(BaseModel):
+    """Payload for SET_LANGUAGE_PROFILE message.
+
+    profile: "auto_multi" (Deepgram language=multi) or "pinned"
+    pinned_code: BCP-47 code when profile=="pinned" (e.g. "gu-IN")
+    per_source: optional overrides keyed by source slug
+                ("LOCAL_MIC_PCM" | "REMOTE_APP_PCM" | "ASK_AI_PCM")
+    display_language: BCP-47 for transcript display (None == same as spoken)
+    response_language: optional explicit reply language
+    """
+    profile: Optional[str] = None
+    pinned_code: Optional[str] = None
+    per_source: Optional[dict] = None
+    display_language: Optional[str] = None
+    response_language: Optional[str] = None
+
+
 class MeetingBindingPayload(BaseModel):
     """Payload for MEETING_BINDING message."""
     target_id: Optional[str] = None

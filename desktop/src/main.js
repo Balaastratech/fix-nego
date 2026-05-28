@@ -149,21 +149,27 @@ function applyOverlayPresentation(mode) {
 
   overlayPresentation = mode || "idle";
   const current = overlayWindow.getBounds();
-  let width = 72;
-  let height = 72;
+  let width = 80;
+  let height = 80;
 
   if (overlayPresentation === "menu") {
-    width = 380;
+    width = 440;
+    height = 540;
+  } else if (overlayPresentation === "panel") {
+    width = 430;
     height = 480;
   } else if (overlayPresentation === "captions") {
-    width = 360;
-    height = 200;
+    width = 440;
+    height = 300;
+  } else if (overlayPresentation === "compact") {
+    width = 80;
+    height = 236;
   } else if (overlayPresentation === "listening") {
-    width = 300;
-    height = 100;
+    width = 440;
+    height = 200;
   } else {
-    width = 68;
-    height = 68;
+    width = 80;
+    height = 80;
   }
 
   overlayWindow.setBounds(
@@ -186,8 +192,8 @@ function createOverlayWindow() {
     ...bounds,
     minWidth: bounds.width,
     minHeight: 58,
-    maxWidth: 520,
-    maxHeight: 320,
+    maxWidth: 700,
+    maxHeight: 800,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -204,6 +210,13 @@ function createOverlayWindow() {
       backgroundThrottling: false,
     },
   });
+  
+  // Make it stay visible across all virtual desktops / workspaces:
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  
+  // Set always on top level to be screen-saver to overlap full screen apps like Zoom:
+  overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
+  
   overlayWindow.loadFile(path.join(__dirname, "renderer", "overlay.html"));
   overlayWindow.webContents.once("did-finish-load", () => {
     applyOverlayPresentation(overlayPresentation);
@@ -212,10 +225,10 @@ function createOverlayWindow() {
 
 function createFullWindow() {
   fullWindow = new BrowserWindow({
-    width: 460,
-    height: 860,
-    minWidth: 420,
-    minHeight: 640,
+    width: 1280,
+    height: 800,
+    minWidth: 960,
+    minHeight: 600,
     backgroundColor: "#0d1019",
     title: "Negotiation Companion",
     autoHideMenuBar: true,
@@ -229,6 +242,7 @@ function createFullWindow() {
   });
   fullWindow.loadFile(path.join(__dirname, "renderer", "full.html"));
   fullWindow.once("ready-to-show", () => {
+    fullWindow.maximize();
     fullWindow.show();
     fullWindow.minimize();
   });
@@ -244,6 +258,7 @@ function openFullWindow() {
   } else {
     fullWindow.show();
   }
+  fullWindow.maximize();
   fullWindow.focus();
 }
 

@@ -10,6 +10,7 @@ from fastapi import WebSocket
 from google.genai import types
 
 from app.ai_assets import (
+    build_live_system_instruction,
     build_copilot_priming_text,
     build_critical_event_block,
     build_listener_intel_block,
@@ -58,6 +59,7 @@ VALID_MESSAGES: Dict[NegotiationState, list[str]] = {
         "MEETING_BINDING",
         "CAPTURE_HEALTH",
         "HOLD_TO_ASK_STATE",
+        "PAUSE_NEGOTIATION",
         "END_NEGOTIATION",
         "STATE_UPDATE",
         "ASK_ADVICE",
@@ -67,9 +69,16 @@ VALID_MESSAGES: Dict[NegotiationState, list[str]] = {
         "START_COPILOT",
         "SET_RESPONSE_MODE",
         "SET_RESPONSE_LANGUAGE",
+        "SET_LANGUAGE_PROFILE",
         "SPEAKER_MODE_CHANGE",
         "UTTERANCE_END",
         "SIMULATED_NEGOTIATION_TURN",
+    ],
+    NegotiationState.PAUSED:    [
+        "RESUME_NEGOTIATION",
+        "END_NEGOTIATION",
+        "TRACE_CLIENT_EVENT",
+        "CAPTURE_HEALTH",
     ],
     NegotiationState.ENDING:    [],
 }
@@ -79,10 +88,127 @@ ERROR_CODES: Dict[NegotiationState, Dict[str, str]] = {
     NegotiationState.IDLE:      {"code": "NOT_CONSENTED",   "message": "Please accept privacy terms first."},
     NegotiationState.CONSENTED: {"code": "NOT_STARTED",     "message": "Start a negotiation session first."},
     NegotiationState.ACTIVE:    {"code": "ALREADY_ACTIVE",  "message": "Session already in progress."},
+    NegotiationState.PAUSED:    {"code": "SESSION_PAUSED",  "message": "Session is paused. Resume before sending live input."},
     NegotiationState.ENDING:    {"code": "SESSION_ENDING",  "message": "Session is ending, please wait."},
 }
 
 class NegotiationEngine:
+    @staticmethod
+    def start_live_preconnect(
+        session: NegotiationSession,
+        api_key: str,
+        *,
+        context: str,
+    ) -> None:
+        if ((not api_key and not settings.GOOGLE_GENAI_USE_VERTEXAI)
+                or session.live_session
+                or session.live_preconnect_task):
+            return
+
+        async def _preconnect() -> None:
+            trace = None
+            try:
+                from app.utils.session_trace import get_session_trace
+                trace = get_session_trace(session.session_id)
+                if trace:
+                    trace.record(
+                        category="ai",
+                        name="gemini_live_preconnect_started",
+                        summary="Gemini Live preconnect started before negotiation start",
+                        data={"context": context, "state": session.state.value},
+                    )
+                live_session_cm = open_live_session(
+                    api_key=api_key,
+                    context=context,
+                    response_language=(session.response_language if settings.MULTILANG_ENABLED else None),
+                )
+                live_session = await asyncio.wait_for(
+                    live_session_cm.__aenter__(),
+                    timeout=60.0,
+                )
+                if session.live_session:
+                    await live_session_cm.__aexit__(None, None, None)
+                    return
+                session.live_session_cm = live_session_cm
+                session.live_session = live_session
+                session.live_preconnected_context = context
+                session.live_preconnected_at = time.time()
+                session.live_preconnect_error = None
+                if not session.live_session_keepalive_task:
+                    session.live_session_keepalive_task = asyncio.create_task(
+                        keepalive_ping(session),
+                        name=f"gemini-preconnect-keepalive-{session.session_id[:8]}",
+                    )
+                if trace:
+                    trace.record(
+                        category="ai",
+                        name="gemini_live_preconnect_completed",
+                        summary="Gemini Live preconnect completed",
+                        data={"context": context},
+                    )
+                logger.info("Gemini Live preconnect ready [session=%s]", session.session_id)
+            except Exception as exc:
+                session.live_preconnect_error = str(exc)
+                if trace:
+                    trace.record(
+                        category="ai",
+                        name="gemini_live_preconnect_failed",
+                        summary="Gemini Live preconnect failed",
+                        data={"error": str(exc)},
+                    )
+                logger.warning("Gemini Live preconnect failed [session=%s]: %s", session.session_id, exc)
+            finally:
+                session.live_preconnect_task = None
+
+        session.api_key = api_key
+        session.live_preconnect_task = asyncio.create_task(
+            _preconnect(),
+            name=f"gemini-preconnect-{session.session_id[:8]}",
+        )
+
+    @staticmethod
+    async def _inject_start_context(session: NegotiationSession, context: str) -> None:
+        if not session.live_session or not context:
+            return
+        if session.live_preconnected_context == context:
+            return
+        updated_instruction = build_live_system_instruction(
+            context,
+            response_language=(session.response_language if settings.MULTILANG_ENABLED else None),
+        )
+        try:
+            async with session.gemini_send_lock:
+                await session.live_session.send_client_content(
+                    turns=types.Content(
+                        role="system",
+                        parts=[types.Part(text=updated_instruction)],
+                    ),
+                    turn_complete=False,
+                )
+        except Exception:
+            async with session.gemini_send_lock:
+                await session.live_session.send_client_content(
+                    turns=types.Content(
+                        role="user",
+                        parts=[types.Part(text=f"Updated negotiation context: {context}")],
+                    ),
+                    turn_complete=False,
+                )
+        session.live_preconnected_context = context
+        try:
+            from app.utils.session_trace import get_session_trace
+            trace = get_session_trace(session.session_id)
+            if trace:
+                event = trace.record(
+                    category="ai",
+                    name="live_start_context_injected",
+                    summary="Start negotiation context injected into Live session",
+                    data={"context_chars": len(context)},
+                )
+                session.trace_refs["last_start_context_event_id"] = event["event_id"]
+        except Exception:
+            pass
+
     @staticmethod
     async def validate_message(
         websocket: WebSocket,
@@ -91,12 +217,16 @@ class NegotiationEngine:
     ) -> bool:
         allowed = VALID_MESSAGES.get(session.state, [])
         # Skip logging for high-frequency messages to prevent I/O flooding
-        _high_freq = {"AUDIO_CHUNK", "VISION_FRAME", "SCREEN_FRAME", "LOCAL_MIC_PCM", "REMOTE_APP_PCM"}
+        _high_freq = {"AUDIO_CHUNK", "VISION_FRAME", "SCREEN_FRAME", "LOCAL_MIC_PCM", "REMOTE_APP_PCM", "ASK_AI_PCM"}
         if message_type not in _high_freq:
             logger.info(f"Validating message: {message_type}, state: {session.state}, allowed: {allowed}")
         if message_type not in allowed:
             # Silently drop early audio chunks to prevent log spam and frontend errors
-            if message_type in {"AUDIO_CHUNK", "LOCAL_MIC_PCM", "REMOTE_APP_PCM"} and session.state in (NegotiationState.IDLE, NegotiationState.CONSENTED):
+            if message_type in _high_freq and session.state in (
+                NegotiationState.IDLE,
+                NegotiationState.CONSENTED,
+                NegotiationState.PAUSED,
+            ):
                 return False
 
             error = ERROR_CODES.get(session.state, {"code": "INVALID_STATE", "message": "Invalid operation."})
@@ -147,6 +277,11 @@ class NegotiationEngine:
                 "recording_active": True
             }
         })
+        NegotiationEngine.start_live_preconnect(
+            session,
+            settings.GEMINI_API_KEY,
+            context="Desktop companion virtual meeting session",
+        )
     
     @staticmethod
     async def handle_enrollment_start(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
@@ -217,33 +352,57 @@ class NegotiationEngine:
                     session.session_id,
                 )
             else:
-                live_session_cm = open_live_session(api_key=api_key, context=context)
-                session.live_session_cm = live_session_cm
-                
-                # Add timeout to prevent hanging forever - increased to 60s for slower connections
-                try:
-                    logger.info(f"Attempting to establish Gemini Live connection [session={session.session_id}]")
-                    session.live_session = await asyncio.wait_for(
-                        live_session_cm.__aenter__(),
-                        timeout=60.0  # 60 second timeout (increased from 30s)
+                if session.live_preconnect_task and not session.live_session:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.shield(session.live_preconnect_task),
+                            timeout=settings.GEMINI_PRECONNECT_WAIT_SECONDS,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(
+                            "Gemini Live preconnect still pending; opening start path [session=%s]",
+                            session.session_id,
+                        )
+                        pending_preconnect = session.live_preconnect_task
+                        if pending_preconnect:
+                            pending_preconnect.cancel()
+                            session.live_preconnect_task = None
+
+                if session.live_session:
+                    logger.info("Reusing preconnected Gemini Live session [session=%s]", session.session_id)
+                    await NegotiationEngine._inject_start_context(session, context)
+                else:
+                    live_session_cm = open_live_session(
+                        api_key=api_key,
+                        context=context,
+                        response_language=(session.response_language if settings.MULTILANG_ENABLED else None),
                     )
-                    logger.info(f"Gemini Live connection established successfully [session={session.session_id}]")
-                except asyncio.TimeoutError:
-                    logger.error(f"Gemini Live session connection timed out after 60s [session={session.session_id}]")
-                    await websocket.send_json({
-                        "type": "ERROR",
-                        "payload": {"code": "CONNECTION_TIMEOUT", "message": "AI connection timed out. Please check your network and try again."}
-                    })
-                    await NegotiationEngine.transition_state(session, NegotiationState.IDLE, websocket)
-                    return
-                except Exception as e:
-                    logger.error(f"Failed to establish Gemini Live connection: {e} [session={session.session_id}]", exc_info=True)
-                    await websocket.send_json({
-                        "type": "ERROR",
-                        "payload": {"code": "CONNECTION_FAILED", "message": f"AI connection failed: {str(e)}"}
-                    })
-                    await NegotiationEngine.transition_state(session, NegotiationState.IDLE, websocket)
-                    return
+                    session.live_session_cm = live_session_cm
+
+                    # Add timeout to prevent hanging forever - increased to 60s for slower connections
+                    try:
+                        logger.info(f"Attempting to establish Gemini Live connection [session={session.session_id}]")
+                        session.live_session = await asyncio.wait_for(
+                            live_session_cm.__aenter__(),
+                            timeout=60.0  # 60 second timeout (increased from 30s)
+                        )
+                        logger.info(f"Gemini Live connection established successfully [session={session.session_id}]")
+                    except asyncio.TimeoutError:
+                        logger.error(f"Gemini Live session connection timed out after 60s [session={session.session_id}]")
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "payload": {"code": "CONNECTION_TIMEOUT", "message": "AI connection timed out. Please check your network and try again."}
+                        })
+                        await NegotiationEngine.transition_state(session, NegotiationState.IDLE, websocket)
+                        return
+                    except Exception as e:
+                        logger.error(f"Failed to establish Gemini Live connection: {e} [session={session.session_id}]", exc_info=True)
+                        await websocket.send_json({
+                            "type": "ERROR",
+                            "payload": {"code": "CONNECTION_FAILED", "message": f"AI connection failed: {str(e)}"}
+                        })
+                        await NegotiationEngine.transition_state(session, NegotiationState.IDLE, websocket)
+                        return
 
             # ── Dual-Model: initialise buffer + listener ─────────────────────
             audio_buffer = AudioBuffer(max_seconds=90)
@@ -431,6 +590,9 @@ class NegotiationEngine:
           Frames also forwarded to Gemini Live via send_realtime_input so the Live
           model can see while listening and responding.
         """
+        if session.state == NegotiationState.PAUSED:
+            return
+
         # payload["image"] can be None if key exists but value is None — use `or ""`
         image_b64 = payload.get("image") or ""
         if not image_b64:
@@ -623,6 +785,9 @@ class NegotiationEngine:
 
     @staticmethod
     async def handle_audio_chunk(session: NegotiationSession, raw_bytes: bytes) -> None:
+        if session.state == NegotiationState.PAUSED:
+            return
+
         if session.live_session or session.degraded_mode == "audio_eval_only":
             if getattr(session, "user_addressing_ai", False):
                 # ── Ask AI mode ──────────────────────────────────────────────
@@ -660,6 +825,9 @@ class NegotiationEngine:
         payload: dict,
         message_type: str,
     ) -> None:
+        if session.state == NegotiationState.PAUSED:
+            return
+
         await companion_runtime.handle_audio_payload(session, websocket, payload, message_type)
 
     @staticmethod
@@ -703,10 +871,73 @@ class NegotiationEngine:
 
     @staticmethod
     async def handle_screen_frame(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        if session.state == NegotiationState.PAUSED:
+            return
+
         screen_payload = dict(payload)
         screen_payload.setdefault("source", "meeting_window")
         screen_payload.setdefault("source_mode", session.source_mode)
         await NegotiationEngine.handle_vision_frame(session, screen_payload, websocket)
+
+    @staticmethod
+    async def handle_pause(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        if session.state == NegotiationState.PAUSED:
+            await websocket.send_json({"type": "SESSION_PAUSED", "payload": {"session_id": session.session_id}})
+            return
+
+        session.user_addressing_ai = False
+        session.ask_window_active = False
+        session.direct_query_in_flight = False
+        session.ai_is_speaking = False
+        session.ai_audio_playing = False
+        companion_runtime.update_hold_state(session, {"active": False, "muted_to_meeting": False})
+        session.vision_live_pending_frame_b64 = None
+
+        if settings.ASK_AI_NATIVE_AUDIO and session.ask_audio_activity_open and session.live_session:
+            try:
+                async with session.gemini_send_lock:
+                    await session.live_session.send_realtime_input(activity_end=types.ActivityEnd())
+            except Exception as exc:
+                logger.warning("[Pause] Failed to close ASK_AI native activity [session=%s]: %s", session.session_id, exc)
+            finally:
+                session.ask_audio_activity_open = False
+
+        if session.listener_agent:
+            await session.listener_agent.pause()
+
+        for task_attr in ("vision_live_send_task", "intel_injection_task"):
+            task = getattr(session, task_attr, None)
+            if task and not task.done():
+                task.cancel()
+            setattr(session, task_attr, None)
+
+        await NegotiationEngine.transition_state(session, NegotiationState.PAUSED, websocket)
+        await websocket.send_json({"type": "SESSION_PAUSED", "payload": {"session_id": session.session_id}})
+
+    @staticmethod
+    async def handle_resume(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        if session.state == NegotiationState.ACTIVE:
+            await websocket.send_json({"type": "SESSION_RESUMED", "payload": {"session_id": session.session_id}})
+            return
+
+        session.ai_audio_playing = False
+        session.user_addressing_ai = False
+        companion_runtime.update_hold_state(session, {"active": False, "muted_to_meeting": False})
+        if session.listener_agent:
+            await session.listener_agent.resume()
+        await NegotiationEngine.transition_state(session, NegotiationState.ACTIVE, websocket)
+        await websocket.send_json({"type": "SESSION_RESUMED", "payload": {"session_id": session.session_id}})
+
+        if (
+            session.copilot_active
+            and session.live_session is not None
+            and (session.pending_intel_context is not None or session.pending_intel_critical_events)
+            and (session.intel_injection_task is None or session.intel_injection_task.done())
+        ):
+            session.intel_injection_task = asyncio.create_task(
+                NegotiationEngine._flush_latest_intel(session),
+                name=f"intel-inject-{session.session_id[:8]}",
+            )
 
     @staticmethod
     async def handle_end(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
@@ -733,11 +964,40 @@ class NegotiationEngine:
         logger.info(f"SpeechBrain session state cleaned up [session={session.session_id}]")
         session.pending_intel_context = None
         session.pending_intel_critical_events.clear()
+        session.pending_injections.clear()
+        session.pending_live_snapshot = None
         session.vision_live_pending_frame_b64 = None
+        session.question_capture_bytes = b""
+        session.question_capture_id = None
+        session.question_capture_started_at = None
+        session.question_capture_chunk_count = 0
+        session.question_capture_last_chunk_at = None
+        session.current_ask_capture = {}
+        session.ask_audio_activity_open = False
+        session.ask_window_active = False
+        session.direct_query_in_flight = False
+        session.user_addressing_ai = False
+        session.ai_is_speaking = False
+        session.ai_audio_playing = False
+        session.companion_audio_buffers.clear()
+        session.companion_audio_started_at.clear()
+        session.companion_last_chunk_at.clear()
+        session.companion_partial_text.clear()
+        session.companion_partial_started_at.clear()
 
         if getattr(session, "live_session_cm", None):
             try:
                 await session.live_session_cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+            session.live_session = None
+            session.live_session_cm = None
+        elif getattr(session, "live_session", None):
+            try:
+                if hasattr(session.live_session, "close"):
+                    await session.live_session.close()
+                elif hasattr(session.live_session, "aio") and hasattr(session.live_session.aio, "close"):
+                    await session.live_session.aio.close()
             except Exception:
                 pass
             session.live_session = None
@@ -747,14 +1007,27 @@ class NegotiationEngine:
             "live_session_keepalive_task",
             "live_session_monitor_task",
             "live_reconnect_task",
+            "live_preconnect_task",
             "vision_live_send_task",
             "vision_analysis_task",
             "intel_injection_task",
+            "next_move_task",
         ):
             task = getattr(session, task_attr, None)
             if task:
                 task.cancel()
                 setattr(session, task_attr, None)
+
+        for task in list(session.companion_partial_tasks.values()):
+            if task and not task.done():
+                task.cancel()
+        session.companion_partial_tasks.clear()
+
+        try:
+            from app.services.deepgram_stream import DeepgramStreamSession
+            await DeepgramStreamSession.destroy(session.session_id)
+        except Exception as exc:
+            logger.warning("Deepgram stream cleanup failed [session=%s]: %s", session.session_id, exc)
 
         logger.info(
             "Session summary",
@@ -997,6 +1270,10 @@ class NegotiationEngine:
             await NegotiationEngine.handle_capture_health(session, payload, websocket)
         elif msg_type == "HOLD_TO_ASK_STATE":
             await NegotiationEngine.handle_user_addressing_ai(session, payload, websocket)
+        elif msg_type == "PAUSE_NEGOTIATION":
+            await NegotiationEngine.handle_pause(session, payload, websocket)
+        elif msg_type == "RESUME_NEGOTIATION":
+            await NegotiationEngine.handle_resume(session, payload, websocket)
         elif msg_type == "END_NEGOTIATION":
             await NegotiationEngine.handle_end(session, payload, websocket)
         elif msg_type == "STATE_UPDATE":
@@ -1022,6 +1299,8 @@ class NegotiationEngine:
             await NegotiationEngine.handle_set_response_mode(session, payload, websocket)
         elif msg_type == "SET_RESPONSE_LANGUAGE":
             await NegotiationEngine.handle_set_response_language(session, payload, websocket)
+        elif msg_type == "SET_LANGUAGE_PROFILE":
+            await NegotiationEngine.handle_set_language_profile(session, payload, websocket)
         elif msg_type == "SPEAKER_MODE_CHANGE":
             # Toggle speaker mode (auto or manual)
             await NegotiationEngine.handle_speaker_mode_change(session, payload, websocket)
@@ -1039,10 +1318,23 @@ class NegotiationEngine:
     async def handle_trace_client_event(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
         from app.utils.session_trace import get_session_trace
         trace = get_session_trace(session.session_id)
+        event_name = payload.get("event_name") or "generic_client_event"
+        # Capture hold release timestamp so ai_response_completed can compute
+        # hold→response latency. Stored on session, not persisted.
+        if event_name == "hold_released":
+            try:
+                session.last_hold_released_ms = int(time.time() * 1000)
+            except Exception:
+                pass
+        elif event_name == "hold_started":
+            try:
+                session.last_hold_started_ms = int(time.time() * 1000)
+            except Exception:
+                pass
         if trace:
             trace.record(
                 category=payload.get("surface") or "client",
-                name=payload.get("event_name") or "generic_client_event",
+                name=event_name,
                 summary=payload.get("summary") or "",
                 data=payload.get("detail") or {},
             )
@@ -1244,14 +1536,40 @@ class NegotiationEngine:
             # Also reset the negotiation segment buffer so the Ask AI audio
             # doesn't get included in the next speaker's transcript segment.
             session.current_segment_audio = b""
+            # Open the ask window early so ANY AI response that fires during or
+            # right after the hold is classified as ask_ai (private) — fixes the
+            # case where native-audio Gemini responds before the text path sets
+            # direct_query_in_flight. Reset by gemini_client after first response,
+            # or by the safety timer scheduled on release.
+            session.ask_window_active = True
+            # Bump the cycle counter so any orphan-close timer scheduled by a
+            # PREVIOUS release that hasn't fired yet will no-op when it wakes.
+            # Without this, the previous release's 8s timer kills the new ask
+            # window the moment we open it (observed in session 006183c1 log
+            # line "08:13:28 ask_window orphan timeout (8.0s) — closing").
+            session.ask_cycle_gen = (getattr(session, "ask_cycle_gen", 0) or 0) + 1
+            # CRITICAL: reset the per-question capture identifiers so EACH new
+            # ask gets a fresh transcript ID. Without this, _capture_private_ask_audio
+            # keeps the previous question's `ask_ai_<started_at_ms>` ID, and the
+            # frontend's upsertEntry() OVERWRITES the previous YOU bubble in place
+            # instead of appending a new one — observed in user's screenshot where
+            # only the latest YOU question survived among 5+ AI responses.
+            session.question_capture_id = None
+            session.question_capture_started_at = None
+            session.question_capture_chunk_count = 0
+            session.question_capture_last_chunk_at = None
 
             try:
                 response_mode = getattr(session, 'response_mode', 'command')
 
                 # Inject the latest full intel snapshot so the AI is briefed
                 # on current context before it receives the question.
-                if session.listener_agent and session.listener_agent.last_context:
-                    ctx = session.listener_agent.last_context
+                if session.live_session:
+                    ctx = (
+                        session.listener_agent.last_context
+                        if session.listener_agent and session.listener_agent.last_context
+                        else {}
+                    )
                     market_data = ctx.get("market_data")
                     market_info = "Not yet researched"
                     if isinstance(market_data, str):
@@ -1265,7 +1583,7 @@ class NegotiationEngine:
                         if leverage: market_info += f" | Leverage: {leverage}"
 
                     transcript_text = ""
-                    if session.listener_agent.accumulated_transcript:
+                    if session.listener_agent and session.listener_agent.accumulated_transcript:
                         transcript_text = session.listener_agent.accumulated_transcript[-1500:]
 
                     # Attach latest vision observation if fresh
@@ -1275,11 +1593,55 @@ class NegotiationEngine:
                         else None
                     )
 
+                    # Inject precomputed "next move" recommendation into the
+                    # brief when fresh. Returns "" when disabled, empty, or
+                    # stale → existing behavior preserved.
+                    next_move_block = ""
+                    try:
+                        from app.services.next_move_cache import format_for_brief
+                        next_move_block = format_for_brief(
+                            getattr(session, "next_move_cache", None)
+                        )
+                        if next_move_block:
+                            try:
+                                from app.utils.session_trace import get_session_trace as _gst
+                                _trace = _gst(session.session_id)
+                                if _trace:
+                                    _trace.record(
+                                        category="ask_ai",
+                                        name="next_move_cache_used",
+                                        summary="Cached next-move injected into pre-query brief",
+                                        data={
+                                            "chars": len(next_move_block),
+                                            "is_pro": bool(
+                                                (session.next_move_cache or {}).get("is_pro")
+                                            ),
+                                        },
+                                    )
+                            except Exception:
+                                pass
+                        elif getattr(session, "next_move_cache", None):
+                            try:
+                                from app.utils.session_trace import get_session_trace as _gst
+                                _trace = _gst(session.session_id)
+                                if _trace:
+                                    _trace.record(
+                                        category="ask_ai",
+                                        name="next_move_cache_stale",
+                                        summary="Next-move cache present but too old; skipped",
+                                        data={},
+                                    )
+                            except Exception:
+                                pass
+                    except Exception:
+                        logger.debug("[next_move_cache] format_for_brief failed", exc_info=True)
+
                     pre_brief = build_pre_query_brief(
                         context=ctx,
                         market_info=market_info,
                         transcript_text=transcript_text,
                         vision_observation=latest_vision,
+                        next_move_block=next_move_block or None,
                     )
 
                     async with session.gemini_send_lock:
@@ -1290,6 +1652,50 @@ class NegotiationEngine:
                             ),
                             turn_complete=False,
                         )
+                    try:
+                        from app.utils.session_trace import get_session_trace
+                        trace = get_session_trace(session.session_id)
+                        if trace:
+                            artifact_path = trace.write_text_artifact(
+                                "pre_query_brief",
+                                pre_brief,
+                                ext=".txt",
+                            )
+                            _cache = getattr(session, "next_move_cache", {}) or {}
+                            event = trace.record(
+                                category="ask_ai",
+                                name="pre_query_brief_sent",
+                                summary="Pre-query brief sent before private question",
+                                data={
+                                    "chars": len(pre_brief),
+                                    "has_context": bool(ctx),
+                                    "context_keys_present": sorted(list((ctx or {}).keys()))[:20],
+                                    "transcript_chars": len(transcript_text or ""),
+                                    "market_data_present": isinstance(
+                                        (ctx or {}).get("market_data"), (dict, str)
+                                    ),
+                                    "vision_present": latest_vision is not None,
+                                    "next_move_cache_present": bool(_cache),
+                                    "next_move_cache_age_s": (
+                                        round(time.time() - float(_cache.get("generated_at") or 0.0), 2)
+                                        if _cache.get("generated_at") else None
+                                    ),
+                                    "next_move_cache_is_pro": bool(_cache.get("is_pro")) if _cache else None,
+                                    "next_move_block_injected": bool(next_move_block),
+                                    "response_mode": getattr(session, "response_mode", None),
+                                },
+                                artifacts=[artifact_path],
+                                related_event_ids=[
+                                    ref for ref in [
+                                        session.trace_refs.get("last_context_event_id"),
+                                        session.trace_refs.get("last_vision_analysis_event_id"),
+                                        session.trace_refs.get("last_extraction_event_id"),
+                                    ] if ref
+                                ],
+                            )
+                            session.trace_refs["last_pre_query_brief_event_id"] = event["event_id"]
+                    except Exception:
+                        pass
                     logger.info(f"Pre-query intel brief sent ({len(pre_brief)} chars)")
 
                 async with session.gemini_send_lock:
@@ -1302,20 +1708,88 @@ class NegotiationEngine:
                         ),
                         turn_complete=False,
                     )
+
+                # ── ASK_AI native audio: open the user-audio activity ─────────
+                # With automatic_activity_detection=disabled in our LiveConnectConfig,
+                # we MUST send activity_start before any send_realtime_input(audio=)
+                # calls. _capture_private_ask_audio gates its sends on
+                # session.ask_audio_activity_open so it only streams once we're open.
+                # Reversible: when ASK_AI_NATIVE_AUDIO is False this block is a no-op.
+                if settings.ASK_AI_NATIVE_AUDIO and not session.ask_audio_activity_open:
+                    try:
+                        async with session.gemini_send_lock:
+                            await session.live_session.send_realtime_input(
+                                activity_start=types.ActivityStart()
+                            )
+                        session.ask_audio_activity_open = True
+                        logger.info(
+                            "[AskNativeAudio] activity_start sent [session=%s]",
+                            session.session_id,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "[AskNativeAudio] activity_start failed [session=%s]: %s — "
+                            "falling back to text-only flow",
+                            session.session_id, exc,
+                        )
+                        session.ask_audio_activity_open = False
+                try:
+                    from app.utils.session_trace import get_session_trace
+                    trace = get_session_trace(session.session_id)
+                    if trace:
+                        event = trace.record(
+                            category="ask_ai",
+                            name="mode_instruction_sent",
+                            summary="Response style instruction sent before private question",
+                            data={"response_mode": response_mode, "chars": len(mode_instruction)},
+                        )
+                        session.trace_refs["last_mode_instruction_event_id"] = event["event_id"]
+                except Exception:
+                    pass
                 logger.debug(f"Pre-brief + mode instruction sent ({response_mode}). Capturing question audio.")
             except Exception as e:
                 logger.warning(f"Pre-brief send failed (session may be reconnecting): {e}")
 
         # When user releases button (ON -> OFF)
         if not active and was_active and session.live_session:
-            # Capture real-time streaming transcript fallback if batch transcription is missing/unclear
-            fallback_text = session.companion_partial_text.get("ask_ai", "").strip()
-            # Clean up ask_ai partials and cancel any running background transcription task immediately to prevent late partials
+            session.ignore_local_mic_until = max(
+                float(getattr(session, "ignore_local_mic_until", 0.0) or 0.0),
+                time.time() + settings.ASK_AI_LOCAL_MIC_SUPPRESS_GRACE_SECONDS,
+            )
+            # ── ASK_AI native audio: close the user-audio activity FIRST ──────
+            # Done before the partial-text cleanup so Gemini sees the end-of-turn
+            # marker as soon as possible after the user stops talking. The text
+            # question still follows below as belt-and-suspenders.
+            if settings.ASK_AI_NATIVE_AUDIO and session.ask_audio_activity_open:
+                try:
+                    async with session.gemini_send_lock:
+                        await session.live_session.send_realtime_input(
+                            activity_end=types.ActivityEnd()
+                        )
+                    logger.info(
+                        "[AskNativeAudio] activity_end sent [session=%s]",
+                        session.session_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[AskNativeAudio] activity_end failed [session=%s]: %s",
+                        session.session_id, exc,
+                    )
+                finally:
+                    # Always clear the flag so a future hold can re-open cleanly.
+                    session.ask_audio_activity_open = False
+
+            ask_capture_snapshot = dict(getattr(session, "current_ask_capture", {}) or {})
+            gemini_input_text = (ask_capture_snapshot.get("gemini_input_text") or "").strip()
+            # Native Gemini input transcription is the same audio path that the AI
+            # answered, so it is more trustworthy than the display-only batch path.
+            fallback_text = gemini_input_text or session.companion_partial_text.get("ask_ai", "").strip()
+            # Clean up stale cached partial text, but do NOT cancel an in-flight
+            # partial task. A late partial can still rescue a bad native Gemini
+            # transcript by upgrading the same ask row after release.
             session.companion_partial_text.pop("ask_ai", None)
             session.companion_partial_started_at.pop("ask_ai", None)
-            partial_task = session.companion_partial_tasks.pop("ask_ai", None)
-            if partial_task and not partial_task.done():
-                partial_task.cancel()
+            session.companion_partial_tasks.pop("ask_ai", None)
 
             # Take captured audio and send the question as text to Live AI.
             # Text-based questions ensure the AI answers what was actually asked,
@@ -1333,18 +1807,76 @@ class NegotiationEngine:
                 sess=session,
             ):
                 try:
-                    q_text = ""
-                    if q_audio and len(q_audio) >= 3200 and listener:
-                        q_text = await asyncio.get_event_loop().run_in_executor(
-                            None, lambda: listener._fast_transcribe(q_audio)
-                        )
-                        q_text = (q_text or "").strip()
-
-                    if not q_text and fallback_q_text:
-                        q_text = fallback_q_text
+                    q_text = (fallback_q_text or "").strip()
+                    q_text_source = "partial"
+                    if gemini_input_text and q_text == gemini_input_text:
+                        q_text_source = "gemini_live_input"
+                    if q_text:
                         logger.info(f"[Engine] Audio transcription empty, falling back to real-time partial: '{q_text}'")
+                    elif (
+                        q_audio
+                        and len(q_audio) >= 3200
+                        and listener
+                        and not settings.ASK_AI_NATIVE_AUDIO
+                    ):
+                        try:
+                            q_text = await asyncio.wait_for(
+                                asyncio.get_event_loop().run_in_executor(
+                                    None, lambda: listener._fast_transcribe(q_audio)
+                                ),
+                                timeout=settings.ASK_AI_BATCH_TRANSCRIBE_TIMEOUT_SECONDS,
+                            )
+                            q_text = (q_text or "").strip()
+                            if q_text:
+                                q_text_source = "batch_transcription"
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                "[Engine] Ask-AI batch transcription timed out [session=%s audio_bytes=%s timeout_s=%.2f]; using local retry if no partial exists",
+                                sess.session_id,
+                                len(q_audio),
+                                settings.ASK_AI_BATCH_TRANSCRIBE_TIMEOUT_SECONDS,
+                            )
+                            try:
+                                from app.utils.session_trace import get_session_trace
+                                trace = get_session_trace(sess.session_id)
+                                if trace:
+                                    trace.record(
+                                        category="ask_ai",
+                                        name="question_transcription_timeout",
+                                        summary="Private ask transcription timed out before question text was ready",
+                                        data={
+                                            "audio_bytes": len(q_audio),
+                                            "timeout_seconds": settings.ASK_AI_BATCH_TRANSCRIBE_TIMEOUT_SECONDS,
+                                            "had_partial_text": bool(fallback_q_text),
+                                        },
+                                    )
+                            except Exception:
+                                pass
 
                     if not q_text:
+                        latest_capture = dict(getattr(sess, "current_ask_capture", {}) or {})
+                        q_text = (latest_capture.get("gemini_input_text") or "").strip()
+                        if q_text:
+                            q_text_source = "gemini_live_input"
+                    if not q_text and settings.ASK_AI_NATIVE_AUDIO:
+                        logger.info(
+                            "[Engine] Native ask audio released without display transcript yet; Gemini audio path owns the turn [session=%s]",
+                            sess.session_id,
+                        )
+                        return
+
+                    if not q_text:
+                        native_answer_already_arrived = (
+                            settings.ASK_AI_NATIVE_AUDIO
+                            and not getattr(sess, "ask_window_active", False)
+                            and time.time() - float(getattr(sess, "last_ask_response_at", 0.0) or 0.0) < 10.0
+                        )
+                        if native_answer_already_arrived:
+                            logger.info(
+                                "[Engine] Suppressed late empty ask transcription fallback because native audio already produced an answer [session=%s]",
+                                sess.session_id,
+                            )
+                            return
                         # No audio transcript and no fallback partial text. 
                         # Short-circuit and notify the user to try again.
                         try:
@@ -1365,16 +1897,32 @@ class NegotiationEngine:
                     # Show what the user asked in the sidebar transcript
                     if q_text:
                         try:
+                            question_entry_id = None
+                            capture = getattr(sess, "current_ask_capture", {}) or {}
+                            started_at_ms = capture.get("started_at_ms")
+                            if started_at_ms:
+                                question_entry_id = f"ask_ai_{started_at_ms}"
                             await ws.send_json({
                                 "type": "TRANSCRIPT_UPDATE",
                                 "payload": {
-                                    "id": f"q_{int(time.time() * 1000)}",
+                                    "id": question_entry_id or f"q_{int(time.time() * 1000)}",
                                     "speaker": "user",
                                     "text": q_text,
                                     "timestamp": int(time.time() * 1000),
                                     "context": "ask_ai",  # routes to AI Advisor panel, not Conversation panel
                                 },
                             })
+                            # In native-audio mode the release-time partial is allowed
+                            # to show immediately, but it is not authoritative. If
+                            # Gemini native input transcription arrives for the same
+                            # ask id a moment later, gemini_client is allowed to
+                            # overwrite this row in place.
+                            capture["frontend_question_final_sent"] = True
+                            capture["frontend_question_text"] = q_text
+                            capture["frontend_question_source"] = q_text_source
+                            if question_entry_id:
+                                capture["entry_id"] = question_entry_id
+                            sess.current_ask_capture = capture
                         except Exception:
                             pass
                         log_conversation_event(
@@ -1399,6 +1947,34 @@ class NegotiationEngine:
 
                     # Build the question message for Live AI
                     if q_text:
+                        try:
+                            from app.utils.session_trace import get_session_trace
+                            trace = get_session_trace(sess.session_id)
+                            if trace:
+                                # Classify ask shape so the report shows
+                                # whether the cache injection path is in play.
+                                try:
+                                    from app.services.next_move_cache import classify_ask as _cls
+                                    _ask_shape = _cls(q_text)
+                                except Exception:
+                                    _ask_shape = "unknown"
+                                event = trace.record(
+                                    category="ask_ai",
+                                    name="question_text_ready",
+                                    summary="Private ask question text prepared",
+                                    data={
+                                        "question_text": q_text,
+                                        "question_chars": len(q_text),
+                                        "source": q_text_source,
+                                        "ask_shape": _ask_shape,
+                                        "ask_entry_id": question_entry_id,
+                                        "native_audio": settings.ASK_AI_NATIVE_AUDIO,
+                                        "response_mode": getattr(sess, "response_mode", None),
+                                    },
+                                )
+                                sess.trace_refs["last_question_event_id"] = event["event_id"]
+                        except Exception:
+                            pass
                         question_msg = (
                             f"[USER'S EXACT QUESTION]: {q_text}\n"
                             "Answer this specific question directly. "
@@ -1414,19 +1990,57 @@ class NegotiationEngine:
                         )
                         logger.info("[Engine] Question audio unclear, sending fallback prompt")
 
-                    async with lock:
-                        sess.direct_query_in_flight = True
-                        await live_session.send_client_content(
-                            turns=types.Content(
-                                role="user",
-                                parts=[types.Part(text=question_msg)],
-                            ),
-                            turn_complete=True,
+                    # When ASK_AI_NATIVE_AUDIO is on, Gemini already heard the
+                    # question via send_realtime_input(audio=…) and may have already
+                    # produced a response. Sending the redundant text turn here causes
+                    # Live to emit an empty turn → the "I didn't catch that clearly"
+                    # fallback at gemini_client.py:1590 fires spuriously. So when the
+                    # flag is on we skip the text send entirely; the ask_window_active
+                    # flag handles classification, and a safety timer (set by the
+                    # release-handler below) closes the window if Gemini never replies.
+                    if settings.ASK_AI_NATIVE_AUDIO:
+                        logger.info(
+                            "[Engine] ASK_AI_NATIVE_AUDIO=True — audio already streamed, "
+                            "skipping redundant text-question send (q_text=%r)",
+                            q_text[:80],
                         )
+                    else:
+                        async with lock:
+                            sess.direct_query_in_flight = True
+                            await live_session.send_client_content(
+                                turns=types.Content(
+                                    role="user",
+                                    parts=[types.Part(text=question_msg)],
+                                ),
+                                turn_complete=True,
+                            )
                 except Exception as e:
                     logger.warning(f"[Engine] Question handling failed: {e}")
 
             asyncio.create_task(_handle_question(question_audio, fallback_text))
+
+            # Safety: if Gemini never responds (audio rejected, transient error),
+            # close the ask window after a grace period so the next non-ask AI
+            # turn is classified correctly. The normal close happens in
+            # gemini_client.py right after an ai_response_completed.
+            #
+            # IMPORTANT: capture ask_cycle_gen at scheduling time. If the user
+            # presses hold again BEFORE this timer fires, ask_cycle_gen is bumped
+            # by the press handler and this timer becomes a no-op — preventing
+            # the previous cycle's stale timer from killing the new ask window.
+            my_gen = getattr(session, "ask_cycle_gen", 0)
+            async def _close_ask_window_if_orphaned(sess=session, gen=my_gen, grace_s: float = 8.0):
+                await asyncio.sleep(grace_s)
+                if gen != getattr(sess, "ask_cycle_gen", 0):
+                    # A newer ask cycle has started; we are stale, do nothing.
+                    return
+                if getattr(sess, "ask_window_active", False):
+                    logger.info(
+                        "[Engine] ask_window orphan timeout (%.1fs, gen=%d) — closing [session=%s]",
+                        grace_s, gen, sess.session_id,
+                    )
+                    sess.ask_window_active = False
+            asyncio.create_task(_close_ask_window_if_orphaned())
 
     @staticmethod
     async def handle_start_copilot(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
@@ -1564,6 +2178,141 @@ class NegotiationEngine:
         })
 
     @staticmethod
+    async def handle_set_language_profile(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        """Update the session's language profile and trigger a clean Deepgram reconnect.
+
+        Reversible: when settings.MULTILANG_ENABLED is False the new fields are
+        stored but ignored by every downstream code path. Bouncing the Deepgram
+        clients is cheap (~200ms) and the per-source send queue is preserved so
+        no audio is lost.
+        """
+        from app.services.deepgram_stream import DeepgramStreamSession
+
+        if not settings.MULTILANG_ENABLED:
+            # Still accept and persist the request — flipping the flag on later
+            # will pick up the stored preference — but don't disturb the active
+            # stream. Acknowledge so the UI can render the chip.
+            await websocket.send_json({
+                "type": "LANGUAGE_UPDATE",
+                "payload": {
+                    "language": session.language,
+                    "response_language": session.response_language,
+                    "language_profile": session.language_profile,
+                    "display_language": session.display_language,
+                    "multilang_enabled": False,
+                    "note": "MULTILANG_ENABLED is False — preference saved but inactive.",
+                },
+            })
+            # Persist the preference even when inactive so a future flip honors it.
+            profile_in = payload.get("profile")
+            pinned_in = payload.get("pinned_code")
+            if profile_in == "pinned" and pinned_in:
+                session.language_profile = f"pinned:{pinned_in}"
+            elif profile_in:
+                session.language_profile = profile_in
+            if payload.get("display_language") is not None:
+                session.display_language = payload.get("display_language") or None
+            if payload.get("per_source"):
+                session.per_source_language = dict(payload["per_source"])
+            try:
+                session_store.persist_session(session, ended=False)
+            except Exception:
+                logger.debug("persist_session failed after SET_LANGUAGE_PROFILE (inactive)", exc_info=True)
+            return
+
+        profile_in = (payload.get("profile") or "").strip()
+        pinned_in = (payload.get("pinned_code") or "").strip()
+        if profile_in == "pinned":
+            if not pinned_in:
+                logger.warning("SET_LANGUAGE_PROFILE with profile=pinned but no pinned_code; ignoring")
+                return
+            session.language_profile = f"pinned:{pinned_in}"
+        elif profile_in == "auto_multi":
+            session.language_profile = "auto_multi"
+        elif profile_in:
+            # Free-form: treat as pinned BCP-47 (e.g. "gu-IN")
+            session.language_profile = f"pinned:{profile_in}"
+        # else: leave language_profile untouched
+
+        if payload.get("display_language") is not None:
+            session.display_language = payload.get("display_language") or None
+
+        per_source = payload.get("per_source")
+        if isinstance(per_source, dict):
+            cleaned = {k.upper(): str(v) for k, v in per_source.items() if v}
+            session.per_source_language = cleaned
+
+        # Mirror the spoken language to response_language UNLESS the user
+        # explicitly picked a different reply language. The frontend only sends
+        # response_language when "AI Reply" dropdown ≠ "Same as transcribe", so
+        # by default the AI now answers in whatever language the user pinned
+        # for transcription — fixes the "I pinned Gujarati but AI replies in
+        # English" bug from session 006183c1.
+        explicit_reply = payload.get("response_language")
+        if explicit_reply:
+            session.response_language = explicit_reply
+        elif profile_in == "pinned" and pinned_in:
+            session.response_language = pinned_in
+        # When auto_multi: leave response_language alone (None lets native-audio
+        # auto-detect across 97 langs).
+
+        # Force Deepgram clients for this session to rebuild on the next push so
+        # the new language profile takes effect within ~one chunk.
+        dg = DeepgramStreamSession.get(session.session_id)
+        if dg is not None:
+            try:
+                await dg.reset_all()
+            except Exception:
+                logger.warning("Failed to reset Deepgram streams after profile change", exc_info=True)
+
+        # Refresh the Live system instruction so the model picks up the new
+        # response_language without waiting for the next hold-press. Live API
+        # doesn't formally support mid-session system_instruction updates, but
+        # injecting as a role="system" content reliably steers the model.
+        # NOTE: cannot use _inject_start_context() — it short-circuits when the
+        # context string is unchanged (language-only changes would no-op).
+        if session.live_session and session.response_language:
+            try:
+                refreshed_instruction = build_live_system_instruction(
+                    session.context or "",
+                    response_language=session.response_language,
+                )
+                async with session.gemini_send_lock:
+                    await session.live_session.send_client_content(
+                        turns=types.Content(
+                            role="system",
+                            parts=[types.Part(text=refreshed_instruction)],
+                        ),
+                        turn_complete=False,
+                    )
+                logger.info(
+                    "[SET_LANGUAGE_PROFILE] Live instruction refreshed → respond in %s",
+                    session.response_language,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Live system-instruction refresh after language change failed: %s",
+                    exc,
+                )
+
+        try:
+            session_store.persist_session(session, ended=False)
+        except Exception:
+            logger.debug("persist_session failed after SET_LANGUAGE_PROFILE", exc_info=True)
+
+        await websocket.send_json({
+            "type": "LANGUAGE_UPDATE",
+            "payload": {
+                "language": session.language,
+                "response_language": session.response_language,
+                "language_profile": session.language_profile,
+                "display_language": session.display_language,
+                "per_source_language": session.per_source_language,
+                "multilang_enabled": True,
+            },
+        })
+
+    @staticmethod
     async def handle_speaker_mode_change(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
         """
         Handle SPEAKER_MODE_CHANGE message from frontend.
@@ -1631,6 +2380,9 @@ class NegotiationEngine:
         session.pending_intel_context = dict(context or {})
         if critical_events:
             session.pending_intel_critical_events.extend(critical_events)
+
+        if session.state == NegotiationState.PAUSED:
+            return
 
         if session.intel_injection_task is None or session.intel_injection_task.done():
             session.intel_injection_task = asyncio.create_task(
@@ -1760,6 +2512,7 @@ class NegotiationEngine:
             while (
                 session.copilot_active
                 and session.live_session is not None
+                and session.state == NegotiationState.ACTIVE
                 and (session.pending_intel_context is not None or session.pending_intel_critical_events)
             ):
                 if (
@@ -1791,7 +2544,7 @@ class NegotiationEngine:
         context: dict,
         critical_events: list,
     ) -> None:
-        if session.live_session is None:
+        if session.live_session is None or session.state == NegotiationState.PAUSED:
             return
 
         accumulated_transcript = ""
@@ -1898,6 +2651,9 @@ class NegotiationEngine:
         Called when AI completes a turn (turn_complete) to deliver all missed
         context updates to the AI.
         """
+        if session.state == NegotiationState.PAUSED:
+            return
+
         if session.pending_intel_context is not None or session.pending_intel_critical_events:
             logger.info("Flushing coalesced intel injection [session=%s]", session.session_id)
             if session.intel_injection_task is None or session.intel_injection_task.done():
@@ -1982,7 +2738,11 @@ class NegotiationEngine:
         # ── 2. Open a fresh session ──────────────────────────────────────────
         try:
             api_key = getattr(session, 'api_key', None) or settings.GEMINI_API_KEY
-            new_cm = open_live_session(api_key=api_key, context=session.context)
+            new_cm = open_live_session(
+                api_key=api_key,
+                context=session.context,
+                response_language=(session.response_language if settings.MULTILANG_ENABLED else None),
+            )
             session.live_session_cm = new_cm
             session.live_session = await new_cm.__aenter__()
 
@@ -1990,6 +2750,10 @@ class NegotiationEngine:
             session.ai_is_speaking = False
             session.direct_query_in_flight = False
             session.pending_injections.clear()
+            # Any user-audio activity from the prior Live session is dead now;
+            # clear the flag so the next hold can open a fresh activity.
+            session.ask_audio_activity_open = False
+            session.ask_window_active = False
             session.pending_intel_context = None
             session.pending_intel_critical_events.clear()
 
@@ -2211,6 +2975,9 @@ class NegotiationEngine:
         Flushes any pending intel injections that were queued while the AI was speaking.
         Called from gemini_client when a turn is complete or interrupted.
         """
+        if session.state == NegotiationState.PAUSED:
+            return
+
         if session.pending_intel_context is not None or session.pending_intel_critical_events:
             logger.info("Flushing coalesced intel injection [session=%s]", session.session_id)
             if session.intel_injection_task is None or session.intel_injection_task.done():
@@ -2324,12 +3091,41 @@ class NegotiationEngine:
                     timeout=settings.ADVICE_GENERATION_TIMEOUT_SECONDS,
                 )
             except asyncio.TimeoutError:
+                try:
+                    from app.utils.trace_helpers import safe_record as _safe_rec
+                    _safe_rec(
+                        session.session_id,
+                        category="ask_ai",
+                        name="pro_advice_failed",
+                        summary="Pro pre-flight wait timed out (handler-level)",
+                        data={
+                            "reason": "handler_timeout",
+                            "timeout_s": settings.ADVICE_GENERATION_TIMEOUT_SECONDS,
+                            "user_query_preview": (user_query_text or "")[:400],
+                        },
+                    )
+                except Exception:
+                    pass
                 logger.warning(
                     "Pro advice generation timed out after %.2fs; falling back to live-model reasoning [session=%s]",
                     settings.ADVICE_GENERATION_TIMEOUT_SECONDS,
                     session.session_id,
                 )
             except Exception as pro_exc:
+                try:
+                    from app.utils.trace_helpers import safe_record as _safe_rec
+                    _safe_rec(
+                        session.session_id,
+                        category="ask_ai",
+                        name="pro_advice_failed",
+                        summary="Pro pre-flight wait raised at handler",
+                        data={
+                            "reason": "handler_exception",
+                            "error": f"{type(pro_exc).__name__}: {pro_exc}",
+                        },
+                    )
+                except Exception:
+                    pass
                 logger.warning(
                     "Pro advice generation raised exception; falling back to live-model reasoning: %s",
                     pro_exc,

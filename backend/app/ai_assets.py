@@ -14,7 +14,11 @@ DEFAULT_GOOGLE_STT_LANGUAGE_CODES = "en-US,hi-IN,es-US"
 # noise, and are useless in real B2B scenarios where vocabulary is unpredictable.
 # STT adapts dynamically from the session item/brand detected in conversation.
 DEFAULT_GOOGLE_STT_HINT_BOOST = 0.0  # 0.0 = boost disabled; kept for config compatibility
-DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES = "en-US,hi-IN,es-US"
+# Gujarati (gu-IN) added so the multilang flag can pin to it without tripping
+# the startup probe in main.py that rejects sessions whose requested STT codes
+# aren't in this allow-list. Safe when MULTILANG_ENABLED=False — Deepgram path
+# still uses DEEPGRAM_STREAM_LANGUAGE.
+DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES = "en-US,hi-IN,gu-IN,es-US"
 
 LIVE_RESPONSE_MODALITIES = ["AUDIO"]
 LIVE_VOICE_NAME = "Aoede"
@@ -108,6 +112,7 @@ Rules:
 
 LISTENER_UTTERANCE_TRANSCRIPTION_PROMPT = (
     "Write out the exact words spoken in this audio recording. "
+    "Preserve the original spoken language and script; do not translate. "
     "Return ONLY the spoken text verbatim — no labels, no timestamps, "
     "no commentary, no formatting."
 )
@@ -585,7 +590,7 @@ STYLE RULES:
 """
 
 
-def build_live_system_instruction(context: str) -> str:
+def build_live_system_instruction(context: str, response_language: str | None = None) -> str:
     # Preserve the detailed ADVISOR_SYSTEM_PROMPT for quality, but sanitize the
     # live-spoken mode labels that Gemini native-audio has been echoing aloud.
     live_safe_prompt = (
@@ -595,10 +600,25 @@ def build_live_system_instruction(context: str) -> str:
         .replace("COMMAND MODE", "DIRECTIVE SHAPE")
         .replace("ADVICE MODE", "ANALYSIS SHAPE")
     )
+    # When response_language is provided (multilang feature flag on, callers
+    # populate it from session.response_language), tell the model to answer in
+    # that language. Otherwise keep the legacy English-only rule verbatim so
+    # current sessions behave identically.
+    if response_language and response_language.lower() not in ("", "en", "en-us", "en-gb", "en-in"):
+        language_rule = (
+            f"- Respond in {response_language}. Mirror the user's register and idioms. "
+            "If a key negotiation term has no clean equivalent, keep it in English in parentheses.\n"
+        )
+    else:
+        language_rule = (
+            "- Respond only in steady English unless the user explicitly asks for another language.\n"
+        )
     return (
         f"{live_safe_prompt}\n\n"
         "VOICE CONSISTENCY RULES:\n"
         "- Keep one steady speaking persona across the entire session.\n"
+        f"{language_rule}"
+        "- Use neutral, even delivery; do not adapt accent, pitch, cadence, or emotion to match the user.\n"
         "- Do not switch character, accent, gender presentation, or delivery style between turns.\n"
         "- Do not imitate the counterparty or perform voices.\n\n"
         f"{TACTICAL_RESPONSE_LANGUAGE_RULE}\n\n"
@@ -774,6 +794,7 @@ def build_pre_query_brief(
     market_info: str,
     transcript_text: str,
     vision_observation: dict | None = None,
+    next_move_block: str | None = None,
 ) -> str:
     vision_block = build_vision_intel_block(vision_observation)
     # Extract only what the user explicitly stated about their item
@@ -799,6 +820,7 @@ def build_pre_query_brief(
         f"Leverage: {_join_text(context.get('leverage_points', []), '; ') or 'none'}\n"
         f"Market research (price benchmarks for typical variants — NOT the user's item specs): {market_info}\n"
         + (f"\n{vision_block}" if vision_block else "")
+        + (f"\n{next_move_block}" if next_move_block else "")
         + f"\nCONVERSATION SO FAR (only what was actually said):\n{transcript_text}\n"
         "Use this as private background context only. Do not answer this brief by itself. "
         "Answer only the user's next question."

@@ -37,11 +37,168 @@
       </div>
     </div>
 
-    <!-- Meeting picker card -->
+    <!-- Row 1: Top Cards Row (Audio Routing, Audio Mix, Language side-by-side) -->
+    <div class="row-top">
+      <!-- Device status card -->
+      <section class="card" id="card-devices">
+        <div class="card-title">
+          <span class="card-icon">⚙</span>
+          Audio Routing
+        </div>
+        <div class="device-grid">
+          <div class="device-row">
+            <span class="device-label">Your mic</span>
+            <span id="label-mic" class="device-value">Auto-detecting…</span>
+            <span id="dot-mic" class="device-dot"></span>
+          </div>
+          <div class="device-row">
+            <span class="device-label">Meeting mic (VB-CABLE)</span>
+            <span id="label-vbcable" class="device-value">Detecting…</span>
+            <span id="dot-vbcable" class="device-dot"></span>
+          </div>
+          <div class="device-row">
+            <span class="device-label">AI reply output</span>
+            <span id="label-output" class="device-value">Detecting…</span>
+            <span id="dot-output" class="device-dot"></span>
+          </div>
+        </div>
+        <div id="vbcable-hint" class="hint-box" style="display:none">
+          ⚠ VB-CABLE not detected. Set your meeting app microphone to <strong>CABLE Output</strong>.
+        </div>
+      </section>
+
+      <!-- Audio Mix card -->
+      <section class="card mix-card" id="card-mix">
+        <div class="card-title mix-card-title">
+          <span class="card-icon mix-card-icon">🎚</span>
+          <span>Audio Mix</span>
+          <span id="mix-pill" class="mix-pill">100%</span>
+        </div>
+        <p class="card-hint">
+          Slider controls the AI reply volume in your headphones. Counterparty (Zoom) volume is managed by your OS — drop it from the Windows Volume Mixer if needed. Settings reset to 100% each session.
+        </p>
+        <div class="mix-row">
+          <label class="mix-row-label" for="full-mix-volume">
+            AI volume
+            <span class="mix-row-hint">how loud the AI replies in your ear</span>
+          </label>
+          <div class="mix-slider-wrap">
+            <input type="range" id="full-mix-volume" class="mix-slider-full" min="0" max="200" step="5" value="100" />
+            <span id="full-mix-volume-label" class="mix-value-full">100%</span>
+          </div>
+        </div>
+        <div class="mix-row mix-row-toggle">
+          <label class="mix-row-label" for="full-mix-duck">
+            Auto-duck on counterparty speech
+            <span class="mix-row-hint">drops AI to 80% of slider value while the other side speaks, restores after 2s silence</span>
+          </label>
+          <button id="full-mix-duck" type="button" class="mix-toggle on" role="switch" aria-checked="true">
+            <span class="mix-toggle-knob"></span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Language card -->
+      <section class="card lang-card" id="card-language">
+        <div class="card-title lang-card-title">
+          <span class="card-icon lang-card-icon">🌐</span>
+          <span>Language</span>
+          <span id="lang-pill" class="lang-pill" title="Active transcribe language">AUTO</span>
+        </div>
+
+        <!-- Active config summary, updates live -->
+        <div class="lang-summary" id="lang-summary">
+          <span class="lang-summary-item"><span class="lang-summary-key">Listening</span><span class="lang-summary-val" id="lang-sum-transcribe">Auto detect</span></span>
+          <span class="lang-summary-sep">→</span>
+          <span class="lang-summary-item"><span class="lang-summary-key">AI replies in</span><span class="lang-summary-val" id="lang-sum-reply">Same</span></span>
+          <span class="lang-summary-sep">·</span>
+          <span class="lang-summary-item"><span class="lang-summary-key">Shown as</span><span class="lang-summary-val" id="lang-sum-display">Same</span></span>
+        </div>
+
+        <div class="lang-grid">
+          <div class="lang-field">
+            <label class="lang-field-label" for="full-lang-spoken">
+              Transcribe
+              <span class="lang-field-hint">what the listener hears from BOTH speakers · Auto covers 10 langs; pin for the rest</span>
+            </label>
+            <select id="full-lang-spoken" class="lang-select-full">
+              <optgroup label="Auto (10 langs: en/es/fr/de/hi/it/ja/nl/ru/pt)">
+                <option value="auto_multi">Auto · detect spoken language</option>
+              </optgroup>
+              <optgroup label="Pin one language (required for Gujarati / Tamil / etc.)">
+                <option value="pinned:en-US">English</option>
+                <option value="pinned:hi-IN">Hindi</option>
+                <option value="pinned:gu-IN">Gujarati</option>
+                <option value="pinned:es-US">Spanish</option>
+                <option value="pinned:fr-FR">French</option>
+                <option value="pinned:de-DE">German</option>
+                <option value="pinned:it-IT">Italian</option>
+                <option value="pinned:ja-JP">Japanese</option>
+                <option value="pinned:zh-CN">Chinese</option>
+                <option value="pinned:ar">Arabic</option>
+                <option value="pinned:ru">Russian</option>
+                <option value="pinned:pt-BR">Portuguese</option>
+                <option value="pinned:ta-IN">Tamil</option>
+                <option value="pinned:te-IN">Telugu</option>
+                <option value="pinned:bn">Bengali</option>
+                <option value="pinned:mr">Marathi</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="lang-field">
+            <label class="lang-field-label" for="full-lang-reply">
+              AI reply
+              <span class="lang-field-hint">language the AI speaks back in</span>
+            </label>
+            <select id="full-lang-reply" class="lang-select-full">
+              <option value="">Same as transcribe</option>
+              <option value="en-US">English</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="gu-IN">Gujarati</option>
+              <option value="es-US">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="de-DE">German</option>
+              <option value="it-IT">Italian</option>
+              <option value="ja-JP">Japanese</option>
+              <option value="zh-CN">Chinese</option>
+              <option value="ar">Arabic</option>
+              <option value="ru">Russian</option>
+              <option value="pt-BR">Portuguese</option>
+              <option value="ta-IN">Tamil</option>
+              <option value="te-IN">Telugu</option>
+            </select>
+          </div>
+
+          <div class="lang-field">
+            <label class="lang-field-label" for="full-lang-display">
+              Show as
+              <span class="lang-field-hint">on-screen translation only · model still sees original</span>
+            </label>
+            <select id="full-lang-display" class="lang-select-full">
+              <option value="">Same as transcribe</option>
+              <option value="en-US">English</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="gu-IN">Gujarati</option>
+              <option value="es-US">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="ja-JP">Japanese</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="lang-footer">
+          <span id="full-lang-status" class="lang-status-line"></span>
+          <button id="full-lang-apply" class="lang-apply-btn" type="button">Apply</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Row 2: Meeting picker card (Properly sized for widescreen) -->
     <section class="card" id="card-picker">
       <div class="card-title">
         <span class="card-icon">⊞</span>
-        Meeting Window
+        Meeting Window Selection
       </div>
       <p class="card-hint">
         Select your meeting app window. Mic routing, VB-CABLE, and output device are configured automatically.
@@ -49,42 +206,15 @@
       <div id="meeting-list" class="target-list">
         <div class="empty-state">Looking for meeting windows…</div>
       </div>
-      <button id="btn-refresh" class="ghost-btn small-btn">↺ Refresh</button>
-    </section>
-
-    <!-- Device status card -->
-    <section class="card" id="card-devices">
-      <div class="card-title">
-        <span class="card-icon">⚙</span>
-        Audio Routing
-      </div>
-      <div class="device-grid">
-        <div class="device-row">
-          <span class="device-label">Your mic</span>
-          <span id="label-mic" class="device-value">Auto-detecting…</span>
-          <span id="dot-mic" class="device-dot"></span>
-        </div>
-        <div class="device-row">
-          <span class="device-label">Meeting mic (VB-CABLE)</span>
-          <span id="label-vbcable" class="device-value">Detecting…</span>
-          <span id="dot-vbcable" class="device-dot"></span>
-        </div>
-        <div class="device-row">
-          <span class="device-label">AI reply output</span>
-          <span id="label-output" class="device-value">Detecting…</span>
-          <span id="dot-output" class="device-dot"></span>
-        </div>
-      </div>
-      <div id="vbcable-hint" class="hint-box" style="display:none">
-        ⚠ VB-CABLE not detected. Set your meeting app microphone to <strong>CABLE Output</strong>.
+      
+      <div class="picker-footer">
+        <button id="btn-refresh" class="ghost-btn small-btn">↺ Refresh</button>
+        <button id="btn-start" class="accent-btn small-btn" disabled>Start Session</button>
+        <button id="btn-pause" class="ghost-btn small-btn" style="display:none">Pause</button>
+        <button id="btn-resume" class="accent-btn small-btn" style="display:none">Resume</button>
+        <button id="btn-end" class="ghost-btn small-btn" style="display:none">End Session</button>
       </div>
     </section>
-
-    <!-- Controls -->
-    <div class="controls-row">
-      <button id="btn-start" class="accent-btn" disabled>Start Session</button>
-      <button id="btn-end" class="ghost-btn" style="display:none">End Session</button>
-    </div>
 
     <!-- Live status banner — shows when ready to speak -->
     <div id="listen-banner" class="listen-banner hidden">
@@ -92,31 +222,51 @@
       <span id="listen-label">Listening — speak naturally</span>
     </div>
 
-    <!-- Full transcript -->
-    <section class="card expand-card">
-      <div class="card-title">
-        <span class="card-icon">◈</span>
-        Full Transcript
-        <span id="transcript-count" class="count-badge">0</span>
-      </div>
-      <div id="transcript-list" class="entry-list">
-        <div class="empty-state">Transcript appears once the session starts.</div>
-      </div>
-    </section>
-
-    <!-- Private AI asks -->
-    <section class="card">
-      <div class="card-title">
-        <span class="card-icon">◉</span>
-        Private AI Asks
-        <span id="private-count" class="count-badge">0</span>
-      </div>
-      <div id="private-list" class="entry-list">
-        <div class="empty-state">
-          Hold the floating AI orb to privately ask AI.
+    <!-- Row 4: Bottom Details Row (Full Transcript, Private AI Asks, Research Intel) -->
+    <div class="row-bottom">
+      <!-- Full transcript -->
+      <section class="card expand-card" id="card-transcript">
+        <div class="card-title">
+          <span class="card-icon">◈</span>
+          Full Transcript
+          <span id="transcript-count" class="count-badge">0</span>
         </div>
-      </div>
-    </section>
+        <div id="transcript-list" class="entry-list">
+          <div class="empty-state">Transcript appears once the session starts.</div>
+        </div>
+      </section>
+
+      <!-- Private AI asks -->
+      <section class="card" id="card-private">
+        <div class="card-title">
+          <span class="card-icon">◉</span>
+          Private AI Asks
+          <span id="private-count" class="count-badge">0</span>
+        </div>
+        <div id="private-list" class="entry-list">
+          <div class="empty-state">
+            Hold the floating AI orb to privately ask AI.
+          </div>
+        </div>
+      </section>
+
+      <!-- Research Intelligence panel -->
+      <section class="card research-card" id="card-research">
+        <div class="card-title research-card-title">
+          <span class="card-icon research-card-icon">🔍</span>
+          <span>Research Intel</span>
+          <span id="research-status-pill" class="research-pill research-pill-idle">Idle</span>
+          <span id="research-count" class="count-badge">0</span>
+        </div>
+        <div id="research-status-bar" class="research-status-bar" style="display:none">
+          <span class="research-spinner"></span>
+          <span id="research-query-label" class="research-query-label"></span>
+        </div>
+        <div id="research-list" class="research-list">
+          <div class="empty-state">Market research will appear automatically during negotiation.</div>
+        </div>
+      </section>
+    </div>
 
   </div>
   <script src="./full.js"></script>

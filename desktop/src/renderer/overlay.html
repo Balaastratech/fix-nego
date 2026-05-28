@@ -29,6 +29,67 @@
         <div class="menu-header">Select meeting window</div>
       </div>
 
+      <!-- Audio mix strip (compact). Collapsible vertical volume strip. -->
+      <div id="mix-strip" class="mix-strip" title="AI volume">
+        <button id="mix-icon-btn" class="mix-icon-btn" type="button" aria-label="Toggle AI volume controls">🔊</button>
+        <div id="mix-controls-wrap" class="mix-controls-wrap">
+          <input type="range" id="mix-volume" class="mix-slider" min="0" max="200" step="5" value="100" aria-label="AI volume" orient="vertical" />
+          <span id="mix-volume-label" class="mix-value">100%</span>
+          <button id="mix-duck" type="button" class="mix-duck on" title="Auto-duck AI when counterparty speaks">DUCK</button>
+        </div>
+      </div>
+
+      <!-- Multilanguage chip + popup (reversible — hidden if backend reports MULTILANG_ENABLED=false). -->
+      <button id="lang-chip" class="lang-chip" type="button" title="Language settings">
+        <span id="lang-chip-label">EN</span>
+      </button>
+      <div id="lang-menu" class="lang-menu hidden" role="dialog" aria-label="Language settings">
+        <div class="menu-header">Language</div>
+        <p class="lang-help">Controls what the listener transcribes for both speakers and what the AI replies in.</p>
+        <label class="lang-row">
+          <span class="lang-label">Transcribe</span>
+          <select id="lang-spoken" class="lang-select">
+            <option value="auto_multi">Auto code-switch (10 langs)</option>
+            <option value="pinned:en-US">English (en-US)</option>
+            <option value="pinned:hi-IN">Hindi (hi-IN)</option>
+            <option value="pinned:gu-IN">Gujarati (gu-IN)</option>
+            <option value="pinned:es-US">Spanish (es-US)</option>
+            <option value="pinned:fr-FR">French (fr-FR)</option>
+            <option value="pinned:de-DE">German (de-DE)</option>
+            <option value="pinned:ja-JP">Japanese (ja-JP)</option>
+            <option value="pinned:zh-CN">Chinese (zh-CN)</option>
+            <option value="pinned:ar">Arabic (ar)</option>
+          </select>
+        </label>
+        <label class="lang-row">
+          <span class="lang-label">AI reply</span>
+          <select id="lang-reply" class="lang-select">
+            <option value="">Same as transcribe</option>
+            <option value="en-US">English</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="gu-IN">Gujarati</option>
+            <option value="es-US">Spanish</option>
+            <option value="fr-FR">French</option>
+            <option value="de-DE">German</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="zh-CN">Chinese</option>
+          </select>
+        </label>
+        <label class="lang-row">
+          <span class="lang-label">Show as</span>
+          <select id="lang-display" class="lang-select">
+            <option value="">Same as transcribe</option>
+            <option value="en-US">English</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="gu-IN">Gujarati</option>
+          </select>
+        </label>
+        <div class="lang-row lang-actions">
+          <span id="lang-status" class="lang-status"></span>
+          <button id="lang-apply" type="button">Apply</button>
+        </div>
+      </div>
+
     </div>
 
     <!-- Private AI conversation panel -->

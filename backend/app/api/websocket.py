@@ -8,6 +8,7 @@ from app.models.negotiation import NegotiationSession, NegotiationState
 from app.services.negotiation_engine import NegotiationEngine
 from app.services.session_store import session_store
 from app.utils.session_trace import create_session_trace, get_session_trace
+from app.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ def _restore_session_from_bundle(session: NegotiationSession, bundle: dict) -> N
     session.consent_mode = bundle.get("consent_mode")
     session.language = bundle.get("language")
     session.response_language = bundle.get("response_language")
+    # Multilanguage (no-op when MULTILANG_ENABLED=False — values just sit on the session)
+    session.language_profile = bundle.get("language_profile")
+    session.display_language = bundle.get("display_language")
+    session.per_source_language = bundle.get("per_source_language") or {}
     session.user_context = context.get("user_context") or {}
     session.degraded_mode = context.get("degraded_mode")
     session.source_mode = context.get("source_mode") or session.source_mode
@@ -95,11 +100,18 @@ async def websocket_endpoint(websocket: WebSocket):
             "session_id": session_id,
             "server_time": 0,
             "restored": restored,
+            "state": session.state.value,
             "resume_token": session.resume_token,
             "trace_jsonl_path": session.trace_jsonl_path,
             "trace_report_path": session.trace_report_path,
+            "ready_to_start": True,
         }
     })
+    NegotiationEngine.start_live_preconnect(
+        session,
+        settings.GEMINI_API_KEY,
+        context="Desktop companion virtual meeting session",
+    )
     if restored:
         trace.record(
             category="session",
@@ -168,6 +180,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             logger.debug("No enrollment service active")
                         else:
                             logger.debug(f"Enrollment not capturing ({enrollment_state})")
+                    elif session.state == NegotiationState.PAUSED:
+                        continue
                     else:
                         # Send error to frontend to stop sending audio
                         await websocket.send_json({

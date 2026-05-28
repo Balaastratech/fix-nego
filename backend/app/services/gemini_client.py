@@ -380,8 +380,36 @@ async def analyze_vision_frames(
         "response_mime_type": "application/json",  # KEY FIX: forces complete, valid JSON
     }
 
+    from app.utils.trace_helpers import (
+        TraceTimer, model_block, model_route, text_preview,
+        extract_token_usage, finish_reason, safe_record,
+    )
+    vision_model_block = model_block(
+        model_name,
+        route=model_route(),
+        purpose="vision_analysis",
+        temperature=0.1,
+        max_tokens=1500,
+    )
+
+    _vision_response = None
+    _vision_exc: Exception | None = None
+    _vision_t0 = time.perf_counter()
+    safe_record(
+        session.session_id,
+        category="vision",
+        name="vision_analysis_started",
+        summary="Vision model invoked on current frame set",
+        data={
+            "model": vision_model_block,
+            "frame_count": len(frames),
+            "prompt_chars": len(prompt_text),
+            "transcript_hint_preview": text_preview(transcript_hint, 160),
+        },
+        artifacts=vision_artifacts,
+    )
     try:
-        response = await asyncio.get_event_loop().run_in_executor(
+        _vision_response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: client.models.generate_content(
                 model=model_name,
@@ -390,21 +418,65 @@ async def analyze_vision_frames(
             ),
         )
     except Exception as exc:
+        _vision_exc = exc
         logger.warning(
             "[Vision] Pro analyze_vision_frames failed model=%s session=%s error=%s",
             model_name,
             session.session_id,
             exc,
         )
+
+    _vision_latency_ms = int((time.perf_counter() - _vision_t0) * 1000)
+    if _vision_exc is not None:
+        safe_record(
+            session.session_id,
+            category="vision",
+            name="vision_analysis_failed",
+            summary="Vision call raised",
+            data={
+                "model": vision_model_block,
+                "latency_ms": _vision_latency_ms,
+                "error": f"{type(_vision_exc).__name__}: {_vision_exc}",
+            },
+            artifacts=vision_artifacts,
+        )
         return None
 
+    response = _vision_response
     raw_text = (getattr(response, "text", None) or "").strip()
     if not raw_text:
+        safe_record(
+            session.session_id,
+            category="vision",
+            name="vision_analysis_failed",
+            summary="Vision call returned empty text",
+            data={
+                "model": vision_model_block,
+                "latency_ms": _vision_latency_ms,
+                "reason": "empty_response",
+                "tokens": extract_token_usage(response),
+                "finish_reason": finish_reason(response),
+            },
+            artifacts=vision_artifacts,
+        )
         return None
 
     # Parse the JSON response with robust fallback extraction
     obs = _safe_parse_vision_json(raw_text, session.session_id)
     if obs is None:
+        safe_record(
+            session.session_id,
+            category="vision",
+            name="vision_analysis_failed",
+            summary="Vision JSON parse failed",
+            data={
+                "model": vision_model_block,
+                "latency_ms": _vision_latency_ms,
+                "reason": "json_parse_failed",
+                "raw_preview": text_preview(raw_text, 400),
+            },
+            artifacts=vision_artifacts,
+        )
         return None
 
     obs["timestamp"] = time.time()
@@ -420,15 +492,39 @@ async def analyze_vision_frames(
     session.vision_pro_call_count += 1
     if trace:
         vision_artifacts.append(trace.write_json_artifact("vision_result", obs, ext=".json"))
+        body = obs.get("body_language") or {}
+        prices = obs.get("prices_visible") or []
+        terms = obs.get("terms_visible") or []
+        defects = obs.get("defects_visible") or []
         event = trace.record(
             category="vision",
             name="vision_analysis_completed",
             summary="Vision model analyzed the current frame set",
             data={
+                "model": vision_model_block,
+                "latency_ms": _vision_latency_ms,
+                "tokens": extract_token_usage(response),
+                "finish_reason": finish_reason(response),
                 "scene_type": obs.get("scene_type"),
                 "confidence": obs.get("confidence"),
+                "item": obs.get("item"),
+                "condition": obs.get("condition"),
                 "frame_count": len(frames),
+                "scene_summary": text_preview(obs.get("scene_summary"), 240),
+                "advice_hint": text_preview(obs.get("advice_hint"), 400),
                 "document_text_chars": len(obs.get("document_text") or ""),
+                "document_text_preview": text_preview(obs.get("document_text"), 400),
+                "prices_visible_count": len(prices) if isinstance(prices, list) else 0,
+                "prices_visible": prices[:10] if isinstance(prices, list) else prices,
+                "terms_visible_count": len(terms) if isinstance(terms, list) else 0,
+                "terms_visible": terms[:10] if isinstance(terms, list) else terms,
+                "defects_visible_count": len(defects) if isinstance(defects, list) else 0,
+                "defects_visible": defects[:10] if isinstance(defects, list) else defects,
+                "body_expression": body.get("expression") if isinstance(body, dict) else None,
+                "body_posture": body.get("posture") if isinstance(body, dict) else None,
+                "body_stress_signal": body.get("stress_signal") if isinstance(body, dict) else None,
+                "body_engagement": body.get("engagement") if isinstance(body, dict) else None,
+                "vision_pro_call_count": session.vision_pro_call_count,
             },
             artifacts=vision_artifacts,
             related_event_ids=[
@@ -545,18 +641,54 @@ async def generate_tactical_advice(
     )
 
     mode_block = build_mode_activation_instruction(response_mode)
+
+    # Pro tactical advice is most accurate on English-structured prompts. When
+    # multilang is on AND the user is speaking a non-English language, translate
+    # the transcript window + user query to English BEFORE building the prompt,
+    # then translate the response back at the end. Skipped (zero-cost) when the
+    # flag is off or when src/dst are both English.
+    translate_for_pro = False
+    pro_transcript = transcript_text
+    pro_user_query = user_query
+    if (
+        settings.MULTILANG_ENABLED
+        and session.language
+        and session.language.split("-")[0].lower() != "en"
+    ):
+        translate_for_pro = True
+        try:
+            from app.services.translation import translate_text
+            pro_user_query, pro_transcript = await asyncio.gather(
+                translate_text(user_query, session.language, "en-US"),
+                translate_text(transcript_text or "", session.language, "en-US"),
+            )
+        except Exception as exc:
+            logger.warning("[Pro advice] pre-translate failed (%s); using originals", exc)
+            translate_for_pro = False
+            pro_transcript = transcript_text
+            pro_user_query = user_query
+
     advisor_query = build_advisor_query(
         state=state_for_query,
-        transcript=transcript_text,
-        user_query=user_query,
+        transcript=pro_transcript,
+        user_query=pro_user_query,
     )
 
-    system_instruction = build_live_system_instruction(session.context or "")
+    # Force English in the prompt instruction when translating, so Pro's raw
+    # output is English (we'll translate back below). Otherwise honor the
+    # user's selected response language as before.
+    instruction_language = "en-US" if translate_for_pro else (
+        session.response_language if settings.MULTILANG_ENABLED else None
+    )
+    system_instruction = build_live_system_instruction(
+        session.context or "",
+        response_language=instruction_language,
+    )
 
     prompt = (
         f"{intel}\n\n"
         f"{mode_block}\n\n"
-        f"USER QUESTION: {user_query}\n\n"
+        f"USER QUESTION: {pro_user_query}\n\n"
         f"{advisor_query}"
     )
 
@@ -605,6 +737,33 @@ async def generate_tactical_advice(
     if thinking_config is not None:
         config_kwargs["thinking_config"] = thinking_config
 
+    from app.utils.trace_helpers import (
+        model_block as _mb, model_route as _mr, text_preview as _tp,
+        extract_token_usage as _tok, finish_reason as _fr, safe_record as _rec,
+    )
+    pro_model_block = _mb(
+        model_name,
+        route=_mr(),
+        purpose="ask_ai_pro_preflight",
+        timeout_s=settings.ADVICE_GENERATION_TIMEOUT_SECONDS,
+        temperature=settings.ADVICE_GENERATION_TEMPERATURE,
+        max_tokens=max(settings.ADVICE_GENERATION_MAX_TOKENS, 4096),
+    )
+    _pro_t0 = time.perf_counter()
+    _rec(
+        session.session_id,
+        category="ask_ai",
+        name="pro_advice_started",
+        summary="Pro pre-flight advisor reasoning started",
+        data={
+            "model": pro_model_block,
+            "user_query_preview": _tp(pro_user_query, 400),
+            "prompt_chars": len(prompt),
+            "transcript_chars": len(pro_transcript or ""),
+            "translated_to_english": bool(translate_for_pro),
+            "response_mode": response_mode,
+        },
+    )
     try:
         # Use the async generate_content endpoint (Pro is text/multimodal, not Live)
         response = await asyncio.get_event_loop().run_in_executor(
@@ -616,6 +775,17 @@ async def generate_tactical_advice(
             ),
         )
     except Exception as exc:
+        _rec(
+            session.session_id,
+            category="ask_ai",
+            name="pro_advice_failed",
+            summary="Pro pre-flight raised an exception",
+            data={
+                "model": pro_model_block,
+                "latency_ms": int((time.perf_counter() - _pro_t0) * 1000),
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
         logger.warning(
             "[Pro advice generation] failed model=%s session=%s error=%s",
             model_name,
@@ -685,6 +855,19 @@ async def generate_tactical_advice(
         )
 
     if not text:
+        _rec(
+            session.session_id,
+            category="ask_ai",
+            name="pro_advice_failed",
+            summary="Pro pre-flight returned empty text",
+            data={
+                "model": pro_model_block,
+                "latency_ms": int((time.perf_counter() - _pro_t0) * 1000),
+                "reason": "empty_response",
+                "finish_reason": finish_reason,
+                "tokens": _tok(response),
+            },
+        )
         logger.warning(
             "[Pro advice generation] empty response model=%s session=%s finish=%s thoughts_tokens=%s",
             model_name,
@@ -706,6 +889,48 @@ async def generate_tactical_advice(
         thoughts_token_count,
         text[:200],
     )
+
+    # Translate the English Pro answer back into the user's response language.
+    # Only fires when we pre-translated the input (so dst is non-English).
+    if translate_for_pro:
+        target = session.response_language or session.language or "en-US"
+        if target.split("-")[0].lower() != "en":
+            try:
+                from app.services.translation import translate_text
+                text = await translate_text(text, "en-US", target)
+            except Exception as exc:
+                logger.warning("[Pro advice] post-translate failed (%s); returning English", exc)
+
+    # Persist the full Pro advice text as an artifact + completed event.
+    try:
+        from app.utils.session_trace import get_session_trace
+        _adv_artifacts: list[str] = []
+        _t = get_session_trace(session.session_id)
+        if _t and text:
+            _adv_artifacts.append(_t.write_text_artifact("pro_advice_text", text, ext=".txt"))
+    except Exception:
+        _adv_artifacts = []
+    _rec(
+        session.session_id,
+        category="ask_ai",
+        name="pro_advice_completed",
+        summary="Pro pre-flight produced advisor output",
+        data={
+            "model": pro_model_block,
+            "latency_ms": int((time.perf_counter() - _pro_t0) * 1000),
+            "tokens": _tok(response),
+            "finish_reason": finish_reason,
+            "truncated": bool(finish_reason and "MAX_TOKENS" in (finish_reason or "").upper()),
+            "advice_text": _tp(text, 800),
+            "advice_chars": len(text or ""),
+            "translated_back_to": (
+                session.response_language or session.language or "en-US"
+                if translate_for_pro else None
+            ),
+        },
+        artifacts=_adv_artifacts,
+    )
+
     return text
 
 
@@ -878,6 +1103,27 @@ def _consume_completed_ai_response(session: NegotiationSession | None, session_i
         return f"{response_text} {text_parts}".strip()
     return response_text or text_parts
 
+def _current_ask_entry_id(session: NegotiationSession | None) -> str | None:
+    if session is None:
+        return None
+    capture = dict(getattr(session, "current_ask_capture", {}) or {})
+    started_at_ms = capture.get("started_at_ms")
+    if started_at_ms:
+        return f"ask_ai_{started_at_ms}"
+    question_capture_id = getattr(session, "question_capture_id", None)
+    if question_capture_id:
+        return str(question_capture_id)
+    hold_started_ms = getattr(session, "last_hold_started_ms", None)
+    if hold_started_ms:
+        return f"ask_ai_{int(hold_started_ms)}"
+    return None
+
+def _current_ask_response_entry_id(session: NegotiationSession | None) -> str | None:
+    ask_entry_id = _current_ask_entry_id(session)
+    if not ask_entry_id:
+        return None
+    return f"{ask_entry_id}_response"
+
 async def handle_gemini_text(websocket: WebSocket, session_id: str, text: str) -> None:
     """Handle text responses from Gemini, extracting strategy/state updates and accumulating coaching text."""
     logger.debug("Handling Gemini text", extra={"session_id": session_id, "text": text})
@@ -1027,7 +1273,13 @@ You are an invisible advisor. The negotiating parties cannot hear you unless the
 class GeminiClient:
     @staticmethod
     @asynccontextmanager
-    async def open_live_session(api_key: str, context: str, model: str = GEMINI_MODEL_PRIMARY):
+    async def open_live_session(
+        api_key: str,
+        context: str,
+        model: str = GEMINI_MODEL_PRIMARY,
+        *,
+        response_language: str | None = None,
+    ):
         if settings.GOOGLE_APPLICATION_CREDENTIALS:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
         if settings.GOOGLE_CLOUD_PROJECT:
@@ -1045,7 +1297,12 @@ class GeminiClient:
                 http_options=types.HttpOptions(api_version='v1alpha'),
             )
         
-        full_system_instruction = build_live_system_instruction(context)
+        # When MULTILANG_ENABLED=False, response_language is ignored downstream
+        # and the legacy English-only line is emitted — identical to old behavior.
+        effective_response_language = response_language if settings.MULTILANG_ENABLED else None
+        full_system_instruction = build_live_system_instruction(
+            context, response_language=effective_response_language
+        )
 
         logger.info(
             "Opening Gemini Live session with system instruction",
@@ -1071,9 +1328,26 @@ class GeminiClient:
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=LIVE_VOICE_NAME
+                        voice_name=settings.GEMINI_LIVE_VOICE_NAME or LIVE_VOICE_NAME
                     )
-                )
+                ),
+                # Language handling:
+                # • Native-audio models auto-detect across the 97-language Live set
+                #   (per ai.google.dev/gemini-api/docs/live-api/capabilities) so we
+                #   omit language_code entirely.
+                # • For non-native models we must specify language_code. When
+                #   MULTILANG_ENABLED is on, pick it from response_language so the
+                #   half-cascade voice matches the user; otherwise keep the legacy
+                #   GEMINI_LIVE_LANGUAGE_CODE.
+                language_code=(
+                    None
+                    if "native-audio" in model
+                    else (
+                        (effective_response_language or settings.GEMINI_LIVE_LANGUAGE_CODE)
+                        if settings.MULTILANG_ENABLED
+                        else settings.GEMINI_LIVE_LANGUAGE_CODE
+                    )
+                ),
             ),
 
             # Generation config — optimized for constraint following
@@ -1088,6 +1362,9 @@ class GeminiClient:
             # Transcriptions
             input_audio_transcription=types.AudioTranscriptionConfig(),
             output_audio_transcription=types.AudioTranscriptionConfig(),
+            enable_affective_dialog=bool(
+                settings.GEMINI_LIVE_ENABLE_AFFECTIVE_DIALOG or settings.ENABLE_AFFECTIVE_DIALOG
+            ),
 
             # FIX: Removed GoogleSearch tool - Listener Agent does the market research
             # and injects market_data into Live AI via LISTENER_INTEL messages.
@@ -1270,6 +1547,27 @@ class GeminiClient:
                                 if session and not getattr(session, 'ai_is_speaking', False):
                                     session.ai_is_speaking = True
                                     await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
+                                
+                                # Send real-time partial transcript for private AI advice (Ask AI)
+                                response_context = "ask_ai" if (
+                                    session and (
+                                        getattr(session, "direct_query_in_flight", False)
+                                        or getattr(session, "ask_window_active", False)
+                                    )
+                                ) else "advisor"
+                                if response_context == "ask_ai" and session and getattr(session, "current_ai_response", None):
+                                    await websocket.send_json({
+                                        "type": "TRANSCRIPT_PARTIAL",
+                                        "payload": {
+                                            "id": _current_ask_response_entry_id(session),
+                                            "speaker": "ai",
+                                            "text": session.current_ai_response,
+                                            "timestamp": int(time.time() * 1000),
+                                            "context": "ask_ai",
+                                            "is_partial": True,
+                                            "source": "gemini_live_output",
+                                        }
+                                    })
                             elif hasattr(part, 'function_call') and part.function_call:
                                 # Handle function call from Gemini
                                 function_name = part.function_call.name
@@ -1305,24 +1603,51 @@ class GeminiClient:
                     if sc.input_transcription and sc.input_transcription.text:
                         # Add 20ms grace period for speaker classification to complete (optimized)
                         await asyncio.sleep(0.02)
-                        
-                        # Single active path: manual current speaker for direct-to-AI turns.
+
+                        input_text = sc.input_transcription.text
+                        ask_context_active = bool(
+                            session
+                            and (
+                                getattr(session, "direct_query_in_flight", False)
+                                or getattr(session, "ask_window_active", False)
+                                or (
+                                    settings.ASK_AI_NATIVE_AUDIO
+                                    and getattr(session, "current_ask_capture", None)
+                                )
+                            )
+                        )
+
+                        # Single active path: manual current speaker for public turns.
+                        # Native ASK_AI input transcriptions are private user questions,
+                        # even if current_speaker was temporarily "ai" from output chunks.
                         speaker = "user"
-                        if session and hasattr(session, 'current_speaker') and session.current_speaker:
+                        if (
+                            session
+                            and not ask_context_active
+                            and hasattr(session, 'current_speaker')
+                            and session.current_speaker
+                        ):
                             speaker = session.current_speaker
-                        
+
                         # Create transcript payload
                         transcript_payload = {
                             "speaker": speaker,
-                            "text": sc.input_transcription.text,
+                            "text": input_text,
                             "timestamp": int(time.time() * 1000)
                         }
+                        if ask_context_active:
+                            transcript_payload["context"] = "ask_ai"
+                            transcript_payload["source"] = "gemini_live_input"
+                            capture = dict(getattr(session, "current_ask_capture", {}) or {})
+                            started_at_ms = capture.get("started_at_ms")
+                            if started_at_ms:
+                                transcript_payload["id"] = f"ask_ai_{started_at_ms}"
                         
                         # Enhanced logging for speaker labeling verification
                         logger.info("=" * 70)
                         logger.info("📝 TRANSCRIPT RECEIVED FROM GEMINI")
                         logger.info("=" * 70)
-                        logger.info(f"Text: '{sc.input_transcription.text}'")
+                        logger.info(f"Text: '{input_text}'")
                         logger.info(f"Speaker Label: {speaker.upper()}")
                         logger.info(f"Timestamp: {transcript_payload['timestamp']}")
                         logger.info(f"Session: {session_id}")
@@ -1335,25 +1660,108 @@ class GeminiClient:
                         logger.info("=" * 70)
                         
                         if session:
-                            session.last_user_transcript = sc.input_transcription.text
-                            if getattr(session, "direct_query_in_flight", False):
+                            session.last_user_transcript = input_text
+                            if ask_context_active:
                                 current_ask_capture = dict(getattr(session, "current_ask_capture", {}) or {})
                                 current_ask_capture["gemini_input_transcription"] = True
+                                current_ask_capture["gemini_input_text"] = input_text
+                                if transcript_payload.get("id"):
+                                    current_ask_capture["entry_id"] = transcript_payload["id"]
                                 session.current_ask_capture = current_ask_capture
+                                try:
+                                    trace = get_session_trace(session_id)
+                                    if trace:
+                                        try:
+                                            from app.services.next_move_cache import classify_ask as _cls2
+                                            _ask_shape2 = _cls2(input_text)
+                                        except Exception:
+                                            _ask_shape2 = "unknown"
+                                        event = trace.record(
+                                            category="ask_ai",
+                                            name="question_text_ready",
+                                            summary="Private ask question text prepared from Gemini native audio input transcription",
+                                            data={
+                                                "question_text": input_text,
+                                                "question_chars": len(input_text),
+                                                "source": "gemini_live_input",
+                                                "ask_shape": _ask_shape2,
+                                                "ask_entry_id": transcript_payload.get("id"),
+                                                "native_audio": True,
+                                            },
+                                        )
+                                        session.trace_refs["last_question_event_id"] = event["event_id"]
+                                except Exception:
+                                    pass
 
-                        # Send user transcripts immediately for separate display
-                        # This ensures each question appears separately in the UI
-                        logger.info(f"✅ Sending transcript to FRONTEND (speaker={speaker.upper()}) [{session_id}]")
-                        await websocket.send_json({
-                            "type": "TRANSCRIPT_UPDATE",
-                            "payload": transcript_payload
-                        })
+                        # Gemini's native-audio input_transcription has poor quality
+                        # for non-Latin scripts (observed: Gujarati comes back as
+                        # romanized Hinglish like "Fars, abalu utalage che..."). When
+                        # ASK_AI_NATIVE_AUDIO is on AND we're in ask context, Deepgram
+                        # has already published a better-quality transcript for the
+                        # same audio (pinned to gu-IN / hi-IN / etc., emits native
+                        # script). Publishing Gemini's transcript here UPSERTS the
+                        # same entry ID and OVERWRITES Deepgram's clean text with
+                        # garbage. Solution: keep Gemini's transcript server-side
+                        # (already stored above on current_ask_capture for audit /
+                        # context) but skip the frontend publish — Deepgram already
+                        # owns the YOU bubble for this ask.
+                        suppress_for_native_ask = bool(
+                            ask_context_active
+                            and settings.ASK_AI_NATIVE_AUDIO
+                            and settings.ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION
+                        )
+                        existing_question_source = (
+                            current_ask_capture.get("frontend_question_source")
+                            if session else None
+                        )
+                        existing_question_entry_id = (
+                            current_ask_capture.get("entry_id")
+                            if session else None
+                        )
+                        incoming_question_entry_id = transcript_payload.get("id")
+                        publish_missing_native_ask = bool(
+                            suppress_for_native_ask
+                            and ask_context_active
+                            and not current_ask_capture.get("frontend_question_final_sent", False)
+                        ) if session else False
+                        publish_upgrade_native_ask = bool(
+                            suppress_for_native_ask
+                            and ask_context_active
+                            and current_ask_capture.get("frontend_question_final_sent", False)
+                            and existing_question_source == "partial"
+                            and (
+                                not incoming_question_entry_id
+                                or not existing_question_entry_id
+                                or incoming_question_entry_id == existing_question_entry_id
+                            )
+                        ) if session else False
+                        if suppress_for_native_ask and not publish_missing_native_ask and not publish_upgrade_native_ask:
+                            logger.info(
+                                "🛑 Skipping Gemini input_transcription publish for ASK (Deepgram owns YOU display): %r",
+                                input_text[:80],
+                            )
+                        else:
+                            if (publish_missing_native_ask or publish_upgrade_native_ask) and session:
+                                current_ask_capture["frontend_question_final_sent"] = True
+                                current_ask_capture["frontend_question_text"] = input_text
+                                current_ask_capture["frontend_question_source"] = "gemini_live_input"
+                                if incoming_question_entry_id:
+                                    current_ask_capture["entry_id"] = incoming_question_entry_id
+                                session.current_ask_capture = current_ask_capture
+                            # Send user transcripts immediately for separate display
+                            # This ensures each question appears separately in the UI
+                            logger.info(f"✅ Sending transcript to FRONTEND (speaker={speaker.upper()}) [{session_id}]")
+                            await websocket.send_json({
+                                "type": "TRANSCRIPT_UPDATE",
+                                "payload": transcript_payload
+                            })
                         
-                        # User is speaking, so AI is listening
-                        await websocket.send_json({
-                            "type": "AI_LISTENING",
-                            "payload": {}
-                        })
+                        if not ask_context_active:
+                            # User is speaking in the public lane, so AI is listening.
+                            await websocket.send_json({
+                                "type": "AI_LISTENING",
+                                "payload": {}
+                            })
 
                     # Handle AI output transcription separately (outside input_transcription block)
                     output_transcription = getattr(sc, 'output_transcription', None) or getattr(sc, 'output_audio_transcription', None)
@@ -1373,6 +1781,27 @@ class GeminiClient:
                             if not hasattr(session, 'current_ai_response'):
                                 session.current_ai_response = ""
                             session.current_ai_response += " " + ai_text if session.current_ai_response else ai_text
+
+                            # Send real-time partial transcript for private AI advice (Ask AI)
+                            response_context = "ask_ai" if (
+                                session and (
+                                    getattr(session, "direct_query_in_flight", False)
+                                    or getattr(session, "ask_window_active", False)
+                                )
+                            ) else "advisor"
+                            if response_context == "ask_ai" and session and getattr(session, "current_ai_response", None):
+                                await websocket.send_json({
+                                    "type": "TRANSCRIPT_PARTIAL",
+                                    "payload": {
+                                        "id": _current_ask_response_entry_id(session),
+                                        "speaker": "ai",
+                                        "text": session.current_ai_response,
+                                        "timestamp": int(time.time() * 1000),
+                                        "context": "ask_ai",
+                                        "is_partial": True,
+                                        "source": "gemini_live_output",
+                                    }
+                                })
 
                             # AI_TRANSCRIPTION_DISPLAY disabled
 
@@ -1399,7 +1828,14 @@ class GeminiClient:
                                     session.recent_ai_responses = []
                                 session.recent_ai_responses.append(full_response)
                                 session.recent_ai_responses = session.recent_ai_responses[-5:]
-                            response_context = "ask_ai" if getattr(session, "direct_query_in_flight", False) else "advisor"
+                            # Classify as ask_ai if EITHER the legacy text path is mid-flight
+                            # OR the native-audio ask window is open. The latter covers the case
+                            # where Gemini responds to streamed audio BEFORE the text question
+                            # (and direct_query_in_flight) would have been set.
+                            response_context = "ask_ai" if (
+                                getattr(session, "direct_query_in_flight", False)
+                                or getattr(session, "ask_window_active", False)
+                            ) else "advisor"
                             
                             # ResponseValidator disabled in native audio mode — sending
                             # correction text via send() causes the model to SPEAK it
@@ -1413,11 +1849,13 @@ class GeminiClient:
                                     mode=getattr(session, "response_mode", "auto"),
                                 )
                             ai_event = {
+                                "id": _current_ask_response_entry_id(session) if response_context == "ask_ai" else None,
                                 "speaker": "ai",
                                 "text": full_response,
                                 "timestamp": int(time.time() * 1000),
                                 "response_mode": response_mode,
                                 "context": response_context,
+                                "source": "gemini_live_output" if response_context == "ask_ai" else None,
                             }
                             trace = get_session_trace(session_id)
                             if trace:
@@ -1434,6 +1872,16 @@ class GeminiClient:
                                         session.trace_refs.get("last_research_complete_event_id"),
                                     ] if ref
                                 ]
+                                from app.utils.trace_helpers import (
+                                    model_block as _mb_live, model_route as _mr_live,
+                                    text_preview as _tp_live,
+                                )
+                                # Compute hold→response latency if we can.
+                                _hold_release_ms = getattr(session, "last_hold_released_ms", None)
+                                _now_ms = int(time.time() * 1000)
+                                _hold_to_response_ms = (
+                                    (_now_ms - _hold_release_ms) if _hold_release_ms else None
+                                )
                                 event = trace.record(
                                     category="ai",
                                     name="ai_response_completed",
@@ -1441,6 +1889,14 @@ class GeminiClient:
                                     data={
                                         "context": response_context,
                                         "response_mode": response_mode,
+                                        "model": _mb_live(
+                                            str(GEMINI_MODEL_PRIMARY),
+                                            route=_mr_live(),
+                                            purpose="live_audio_response",
+                                        ),
+                                        "response_text": _tp_live(full_response, 1000),
+                                        "response_chars": len(full_response or ""),
+                                        "hold_to_response_ms": _hold_to_response_ms,
                                         "question_event_id": session.trace_refs.get("last_question_event_id"),
                                         "pre_query_brief_event_id": session.trace_refs.get("last_pre_query_brief_event_id"),
                                         "vision_event_id": session.trace_refs.get("last_vision_analysis_event_id"),
@@ -1483,7 +1939,16 @@ class GeminiClient:
                             # causing the double-response bug. The listener cycle (10s) will
                             # inject fresh context on the next pass instead.
                             was_direct_query = getattr(session, "direct_query_in_flight", False)
+                            was_ask_window = getattr(session, "ask_window_active", False)
+                            # Treat either signal as "this was an ask turn" for the cleanup
+                            # bookkeeping below (silence-fallback suppression, metrics).
+                            was_direct_query = was_direct_query or was_ask_window
                             session.direct_query_in_flight = False
+                            # Close the ask window so the NEXT ai turn (intel, advisor, etc.)
+                            # is correctly classified as "advisor" again.
+                            session.ask_window_active = False
+                            if was_direct_query and full_response:
+                                session.last_ask_response_at = time.time()
                             if was_direct_query and full_response:
                                 if "can't process audio inputs" in full_response.lower():
                                     session.session_metrics["ask_audio_input_failures"] = session.session_metrics.get("ask_audio_input_failures", 0) + 1
@@ -1641,11 +2106,16 @@ class GeminiClient:
         
         This function sends a minimal message every 20 seconds to keep the connection alive.
         """
-        while session.live_session and session.state == NegotiationState.ACTIVE:
+        keepalive_states = {
+            NegotiationState.IDLE,
+            NegotiationState.CONSENTED,
+            NegotiationState.ACTIVE,
+        }
+        while session.live_session and session.state in keepalive_states:
             try:
                 await asyncio.sleep(20)  # Ping every 20 seconds (before 30s timeout)
                 
-                if session.live_session and session.state == NegotiationState.ACTIVE:
+                if session.live_session and session.state in keepalive_states:
                     # Send a minimal keepalive message (empty text with turn_complete=False)
                     async with session.gemini_send_lock:
                         await session.live_session.send_client_content(
@@ -1682,7 +2152,8 @@ class GeminiClient:
             # D5: Use the async context manager correctly
             async with open_live_session(
                 api_key=api_key,
-                context=f"{session.context}\n\nCONTINUATION CONTEXT:\n{context_summary}"
+                context=f"{session.context}\n\nCONTINUATION CONTEXT:\n{context_summary}",
+                response_language=(session.response_language if settings.MULTILANG_ENABLED else None),
             ) as new_live:
                 session.live_session = new_live
                 

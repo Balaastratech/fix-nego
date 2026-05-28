@@ -96,6 +96,7 @@ class ConnectionManager:
             "live_session_keepalive_task",
             "live_session_monitor_task",
             "live_reconnect_task",
+            "live_preconnect_task",
         ):
             task = getattr(session, task_attr, None)
             if task:
@@ -130,10 +131,12 @@ class ConnectionManager:
             session.trace_report_path = str(report_path)
 
     async def _close_gemini_session(self, session: NegotiationSession) -> None:
-        if session.live_session is None:
+        if session.live_session is None and session.live_session_cm is None:
             return
         try:
-            if hasattr(session.live_session, "close"):
+            if session.live_session_cm is not None:
+                await session.live_session_cm.__aexit__(None, None, None)
+            elif hasattr(session.live_session, "close"):
                 await session.live_session.close()
             elif hasattr(session.live_session, "aio") and hasattr(session.live_session.aio, "close"):
                 await session.live_session.aio.close()
@@ -142,6 +145,7 @@ class ConnectionManager:
             logger.warning("Error during Gemini session close", extra={"session_id": session.session_id, "error": str(exc)})
         finally:
             session.live_session = None
+            session.live_session_cm = None
 
     def get_session(self, session_id: str) -> Optional[NegotiationSession]:
         connection_data = self.active_connections.get(session_id)

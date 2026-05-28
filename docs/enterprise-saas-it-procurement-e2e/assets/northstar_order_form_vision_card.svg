@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <rect width="1600" height="1000" fill="#f7f9fc"/>
+  <rect x="70" y="55" width="1460" height="890" rx="18" fill="#ffffff" stroke="#c7d2e5" stroke-width="4"/>
+  <text x="110" y="125" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#14213d">Northstar Observability Cloud Renewal Order Form</text>
+  <text x="110" y="175" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#334155">Customer: Cobalt Bank Group | Draft ID: NS-COBALT-2026-RENEWAL</text>
+
+  <rect x="110" y="230" width="1380" height="92" rx="12" fill="#e8f1ff" stroke="#9db7e8"/>
+  <text x="140" y="288" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" fill="#0f3b75">Proposed Renewal ARR: $1,260,000 | Term: 36 months</text>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="31" fill="#0f172a">
+    <text x="130" y="390">Payment: Annual upfront, Net-30</text>
+    <text x="130" y="450">Auto-renewal: Included with 90-day non-renewal notice</text>
+    <text x="130" y="510">Renewal uplift cap: 5% annually after initial term</text>
+    <text x="130" y="570">SLA: 99.9% uptime with service credits capped at 10% of monthly fees</text>
+    <text x="130" y="630">Expansion: AI incident summarization, 220 engineering seats, 90-day data retention</text>
+  </g>
+
+  <rect x="110" y="700" width="650" height="155" rx="12" fill="#ecfdf5" stroke="#86efac"/>
+  <text x="135" y="745" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#166534">Tradable Give-Gets</text>
+  <text x="135" y="795" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#14532d">Net-45 / Net-60, success hours, SLA reporting</text>
+  <text x="135" y="835" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#14532d">One-time success credit tied to signature timing</text>
+
+  <rect x="815" y="700" width="675" height="155" rx="12" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="840" y="745" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#9f1239">Protected Clauses</text>
+  <text x="840" y="795" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#881337">Do not remove auto-renewal or accept termination for convenience</text>
+  <text x="840" y="835" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#881337">No uncapped SLA credits, broad benchmarking, or indefinite price freeze</text>
+</svg>

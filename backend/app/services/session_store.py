@@ -109,6 +109,17 @@ class SessionStore:
                     conn.execute(
                         "ALTER TABLE sessions ADD COLUMN final_summary_json TEXT NOT NULL DEFAULT '{}'"
                     )
+                # Multilanguage adaptation — additive columns. Safe to leave NULL
+                # so older rows continue to load. Reversible: dropping the
+                # MULTILANG_ENABLED flag simply makes these columns inert.
+                if "language_profile" not in columns:
+                    conn.execute("ALTER TABLE sessions ADD COLUMN language_profile TEXT")
+                if "display_language" not in columns:
+                    conn.execute("ALTER TABLE sessions ADD COLUMN display_language TEXT")
+                if "per_source_language_json" not in columns:
+                    conn.execute(
+                        "ALTER TABLE sessions ADD COLUMN per_source_language_json TEXT NOT NULL DEFAULT '{}'"
+                    )
             self._initialized = True
             logger.info("SessionStore initialized", extra={"db_path": str(self.db_path)})
 
@@ -144,8 +155,9 @@ class SessionStore:
                 INSERT INTO sessions (
                     session_id, state, consent_version, consent_mode, started_at, updated_at, ended_at,
                     language, response_language, context_json, final_summary_json, transcript_json, speaker_mapping_json,
-                    last_context_json, research_json, advisor_json, vision_json, metrics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_context_json, research_json, advisor_json, vision_json, metrics_json,
+                    language_profile, display_language, per_source_language_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     state=excluded.state,
                     consent_version=excluded.consent_version,
@@ -163,7 +175,10 @@ class SessionStore:
                     research_json=excluded.research_json,
                     advisor_json=excluded.advisor_json,
                     vision_json=excluded.vision_json,
-                    metrics_json=excluded.metrics_json
+                    metrics_json=excluded.metrics_json,
+                    language_profile=excluded.language_profile,
+                    display_language=excluded.display_language,
+                    per_source_language_json=excluded.per_source_language_json
                 """,
                 (
                     session.session_id,
@@ -184,6 +199,9 @@ class SessionStore:
                     _json_dumps(advisor_history),
                     _json_dumps(vision_history),
                     _json_dumps(session.session_metrics),
+                    session.language_profile,
+                    session.display_language,
+                    _json_dumps(session.per_source_language or {}),
                 ),
             )
         session.last_persisted_at = now
@@ -301,6 +319,11 @@ class SessionStore:
             "ended_at": session_row["ended_at"],
             "language": session_row["language"],
             "response_language": session_row["response_language"],
+            "language_profile": (session_row["language_profile"] if "language_profile" in session_row.keys() else None),
+            "display_language": (session_row["display_language"] if "display_language" in session_row.keys() else None),
+            "per_source_language": json.loads(
+                (session_row["per_source_language_json"] if "per_source_language_json" in session_row.keys() else None) or "{}"
+            ),
             "context": json.loads(session_row["context_json"] or "{}"),
             "final_summary": json.loads(session_row["final_summary_json"] or "{}"),
             "transcript": json.loads(session_row["transcript_json"] or "[]"),
