@@ -65,7 +65,14 @@ POLL_INTERVAL = 1.5         # seconds between extraction cycles (optimized for s
 WINDOW_SECONDS = 20         # audio window sent to Flash each cycle (fallback audio path)
 MIN_NEW_AUDIO = 1.5         # minimum seconds of new audio required before extraction (optimized for speed)
 VOICE_SIMILARITY_THRESHOLD = 0.75  # Resemblyzer cosine similarity; above = same speaker
-TEXT_EXTRACTION_DEBOUNCE_SECONDS = 1.5  # limit text extraction cadence (optimized for speed)
+TEXT_EXTRACTION_DEBOUNCE_SECONDS = 3.0  # limit text extraction cadence (balanced: cost vs freshness)
+SHORT_TEXT_EXTRACTION_PROMPT = """
+Extract only the negotiation facts from this short transcript. Return strict JSON
+with the same keys as the full extraction schema when possible. Use null, false,
+or empty arrays for unknown fields. Do not add markdown.
+
+TRANSCRIPT:
+"""
 
 # Speaker smoothing: use rolling average of last N classifications to avoid jitter
 SPEAKER_SMOOTHING_WINDOW = 3  # Consider last 3 classifications
@@ -104,6 +111,7 @@ class ListenerAgent:
         self._research_task: Optional[asyncio.Task] = None
         self._background_tasks: set[asyncio.Task] = set()
         self._running = False
+        self._paused = False
 
         # Accumulated context for "Ask AI" query enrichment
         self.last_context: dict = {}
@@ -187,15 +195,44 @@ class ListenerAgent:
 
     def start(self) -> None:
         """Start the background polling loop."""
+        if self._task and not self._task.done():
+            return
         self._running = True
+        self._paused = False
         self._task = asyncio.create_task(
             self._poll_loop(), name=f"listener-{self.session_id[:8]}"
         )
         logger.info(f"ðŸŽ§ ListenerAgent started")
 
+    async def pause(self) -> None:
+        """Suspend polling and cancel any in-flight background listener work."""
+        self._paused = True
+        await self._cancel_background_tasks()
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await asyncio.wait_for(self._task, timeout=3.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+        self._task = None
+        logger.info("[ListenerAgent] Paused [%s]", self.session_id)
+
+    async def resume(self) -> None:
+        """Resume polling after a pause without dropping session context."""
+        if not self._running:
+            return
+        self._paused = False
+        if self._task and not self._task.done():
+            return
+        self._task = asyncio.create_task(
+            self._poll_loop(), name=f"listener-{self.session_id[:8]}"
+        )
+        logger.info("[ListenerAgent] Resumed [%s]", self.session_id)
+
     async def stop(self) -> None:
         """Gracefully stop the polling loop."""
         self._running = False
+        self._paused = False
         await self._cancel_background_tasks()
         if self._task and not self._task.done():
             self._task.cancel()
@@ -206,7 +243,7 @@ class ListenerAgent:
         logger.info(f"ðŸ›‘ ListenerAgent stopped")
 
     def _create_background_task(self, coro, *, name: str) -> asyncio.Task | None:
-        if not self._running:
+        if not self._running or self._paused:
             if hasattr(coro, "close"):
                 coro.close()
             return None
@@ -318,7 +355,7 @@ class ListenerAgent:
         Transcribe a batch of segments in one API call.
         Concatenates audio, transcribes once, then splits result by speaker changes.
         """
-        if not segments:
+        if not segments or self._paused:
             return
         
         # Process each segment individually (simpler approach)
@@ -820,6 +857,9 @@ class ListenerAgent:
         if not self._running:
             return
 
+        if self._paused:
+            return
+
         if self._text_extraction_in_flight:
             logger.debug("[ListenerAgent] Skipping text extraction - request already in flight")
             return
@@ -842,7 +882,11 @@ class ListenerAgent:
             logger.debug("[ListenerAgent] Skipping text extraction - transcript unchanged")
             return
 
-        prompt = TEXT_EXTRACTION_PROMPT + transcript_slice
+        prompt = (
+            SHORT_TEXT_EXTRACTION_PROMPT + transcript_slice
+            if len(transcript_slice) < 200
+            else TEXT_EXTRACTION_PROMPT + transcript_slice
+        )
         trace = get_session_trace(self.session.session_id)
         extraction_artifacts: list[str] = []
         if trace:
@@ -860,14 +904,25 @@ class ListenerAgent:
                     ext=".txt",
                 )
             )
+            from app.utils.trace_helpers import model_block as _mb, model_route as _mr
+            _extract_model = _mb(
+                str(self._flash_model),
+                route=_mr(),
+                purpose="text_extraction",
+                timeout_s=settings.TEXT_EXTRACTION_TIMEOUT_SECONDS,
+                temperature=0.1,
+            )
             trace.record(
                 category="extraction",
                 name="text_extraction_triggered",
                 summary="Transcript accumulation triggered a text extraction cycle",
                 data={
                     "cycle": self._cycle_count,
+                    "model": _extract_model,
                     "transcript_chars": len(transcript_slice),
                     "transcript_hash": transcript_hash,
+                    "transcript_tail_preview": " ".join(transcript_slice.split())[-400:],
+                    "prompt_chars": len(prompt),
                 },
                 artifacts=extraction_artifacts,
                 related_event_ids=[
@@ -875,25 +930,66 @@ class ListenerAgent:
                 ],
             )
 
-        def do_extract():
-            return self._client.models.generate_content(
+        async def do_extract():
+            return await self._client.aio.models.generate_content(
                 model=self._flash_model,
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(temperature=0.1),
             )
 
+        _extract_t0 = time.perf_counter()
         try:
             self._text_extraction_in_flight = True
             self._last_text_extraction_time = now
-            response = await asyncio.get_event_loop().run_in_executor(None, do_extract)
+            response = await asyncio.wait_for(
+                do_extract(),
+                timeout=settings.TEXT_EXTRACTION_TIMEOUT_SECONDS,
+            )
             if not self._running:
                 return
             raw = (response.text or "").strip()
             if raw.startswith("```"):
                 raw = "\n".join(raw.split("\n")[1:]).rstrip("`").strip()
             if not raw:
+                if trace:
+                    try:
+                        from app.utils.trace_helpers import extract_token_usage as _tok
+                        trace.record(
+                            category="extraction",
+                            name="text_extraction_failed",
+                            summary="Text extraction returned empty body",
+                            data={
+                                "cycle": self._cycle_count,
+                                "latency_ms": int((time.perf_counter() - _extract_t0) * 1000),
+                                "reason": "empty_response",
+                                "tokens": _tok(response),
+                            },
+                        )
+                    except Exception:
+                        pass
                 return
-            context = json.loads(raw)
+            try:
+                context = json.loads(raw)
+            except json.JSONDecodeError as je:
+                if trace:
+                    try:
+                        from app.utils.trace_helpers import text_preview as _tp
+                        trace.record(
+                            category="extraction",
+                            name="text_extraction_failed",
+                            summary="Text extraction JSON parse failed",
+                            data={
+                                "cycle": self._cycle_count,
+                                "latency_ms": int((time.perf_counter() - _extract_t0) * 1000),
+                                "reason": "json_parse_failed",
+                                "error": str(je),
+                                "raw_preview": _tp(raw, 400),
+                            },
+                        )
+                    except Exception:
+                        pass
+                logger.warning(f"[ListenerAgent] Text extraction JSON parse failed: {je}")
+                return
             self._last_extracted_transcript_hash = transcript_hash
             from app.utils.session_logger import get_session_logger as _gsl
             _sl = _gsl(self.session.session_id)
@@ -907,13 +1003,37 @@ class ListenerAgent:
                         ext=".json",
                     )
                 )
+                from app.utils.trace_helpers import (
+                    text_preview as _tp, extract_token_usage as _tok,
+                )
+                key_moments = context.get("key_moments") or []
+                leverage = context.get("leverage_points") or []
                 event = trace.record(
                     category="extraction",
                     name="text_extraction_completed",
                     summary="Text extraction cycle completed",
                     data={
                         "cycle": self._cycle_count,
+                        "model": _extract_model,
+                        "latency_ms": int((time.perf_counter() - _extract_t0) * 1000),
+                        "tokens": _tok(response),
                         "keys": sorted(context.keys()),
+                        "item": context.get("item"),
+                        "negotiation_type": context.get("negotiation_type"),
+                        "counterparty_price": context.get("counterparty_price"),
+                        "user_price": context.get("user_price"),
+                        "user_target_price": context.get("user_target_price"),
+                        "user_walk_away_price": context.get("user_walk_away_price"),
+                        "counterparty_sentiment": context.get("counterparty_sentiment"),
+                        "counterparty_goal": _tp(context.get("counterparty_goal"), 240),
+                        "key_moments_count": len(key_moments) if isinstance(key_moments, list) else 0,
+                        "leverage_points_count": len(leverage) if isinstance(leverage, list) else 0,
+                        "research_needed": context.get("research_needed"),
+                        "research_query": _tp(context.get("research_query"), 200),
+                        "research_gap": _tp(context.get("research_gap"), 200),
+                        "transcript_snippet": _tp(context.get("transcript_snippet"), 300),
+                        "counterparty_person_name": context.get("counterparty_person_name"),
+                        "counterparty_company": context.get("counterparty_company"),
                     },
                     artifacts=result_artifacts,
                     related_event_ids=[
@@ -922,7 +1042,47 @@ class ListenerAgent:
                 )
                 trace.remember("last_extraction_event_id", event["event_id"])
                 self.session.trace_refs["last_extraction_event_id"] = event["event_id"]
+        except asyncio.TimeoutError:
+            # Don't reset debounce timer on timeout — prevents immediate retry loop.
+            # The next transcript change will naturally trigger a new attempt after
+            # TEXT_EXTRACTION_DEBOUNCE_SECONDS.
+            # self._last_text_extraction_time = 0.0  # BUG: caused 6s retry storm
+            if trace:
+                try:
+                    trace.record(
+                        category="extraction",
+                        name="text_extraction_failed",
+                        summary="Text extraction timed out",
+                        data={
+                            "cycle": self._cycle_count,
+                            "latency_ms": int((time.perf_counter() - _extract_t0) * 1000),
+                            "reason": "timeout",
+                            "timeout_s": settings.TEXT_EXTRACTION_TIMEOUT_SECONDS,
+                        },
+                    )
+                except Exception:
+                    pass
+            logger.warning(
+                "[ListenerAgent] Text extraction timed out after %.1fs",
+                settings.TEXT_EXTRACTION_TIMEOUT_SECONDS,
+            )
+            return
         except Exception as exc:
+            if trace:
+                try:
+                    trace.record(
+                        category="extraction",
+                        name="text_extraction_failed",
+                        summary="Text extraction raised an exception",
+                        data={
+                            "cycle": self._cycle_count,
+                            "latency_ms": int((time.perf_counter() - _extract_t0) * 1000),
+                            "reason": "exception",
+                            "error": f"{type(exc).__name__}: {exc}",
+                        },
+                    )
+                except Exception:
+                    pass
             logger.warning(f"[ListenerAgent] Text extraction failed: {exc}")
             return
         finally:
@@ -1053,6 +1213,14 @@ class ListenerAgent:
                 if context_changed:
                     self._update_last_sent_context(self.last_context)
                 await self._on_context_ready(self.last_context, critical_events)
+                # Schedule background next-move cache refresh. No-op when
+                # NEXT_MOVE_CACHE_ENABLED=false or when debounce/basis-hash
+                # check rejects the refresh.
+                try:
+                    from app.services.next_move_cache import schedule_refresh
+                    schedule_refresh(self.session)
+                except Exception:
+                    logger.debug("[next_move_cache] schedule_refresh failed", exc_info=True)
 
         if critical_events:
             self._critical_events_since_research += len(critical_events)
@@ -1080,12 +1248,21 @@ class ListenerAgent:
             gap_is_new = (
                 research_needed and research_gap and research_gap != self._last_research_gap
             )
+            # Guard: item must be at least 3 meaningful characters (not noise)
+            item_meaningful = len(current_item.strip()) >= 3
+            # Guard: transcript must have enough content before triggering research
+            transcript_long_enough = len(self.accumulated_transcript.strip()) >= 60
             should_research = (
-                (first_research and has_price_context)
-                or item_changed or type_changed
-                or (market_data_missing and current_item)
-                or critical_pressure or gap_is_new
-            ) and (new_query or gap_is_new)
+                (
+                    (first_research and has_price_context)
+                    or item_changed or type_changed
+                    or (market_data_missing and current_item)
+                    or critical_pressure or gap_is_new
+                )
+                and (new_query or gap_is_new)
+                and item_meaningful
+                and transcript_long_enough
+            )
 
             if should_research:
                 reason = (
@@ -1162,6 +1339,9 @@ class ListenerAgent:
         await asyncio.sleep(POLL_INTERVAL)
 
         while self._running:
+            if self._paused:
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
             cycle_start = time.monotonic()
             try:
                 await self._run_cycle()
@@ -1313,23 +1493,46 @@ Rules:
                     )
                 )
                 
-            async with self.session.research_lock:
-                async with self._research_limiter:
-                    async def _on_retry(_attempt: int, _exc: Exception) -> None:
-                        logger.warning("[ListenerAgent] Retrying market research for %s", research_query)
+            _research_t0 = time.perf_counter()
+            try:
+                async with self.session.research_lock:
+                    async with self._research_limiter:
+                        async def _on_retry(_attempt: int, _exc: Exception) -> None:
+                            logger.warning("[ListenerAgent] Retrying market research for %s", research_query)
 
-                    response = await run_with_retries(
-                        "market_research",
-                        lambda: asyncio.get_event_loop().run_in_executor(None, do_research),
-                        max_retries=settings.RESEARCH_MAX_RETRIES,
-                        base_backoff_ms=settings.RESEARCH_BASE_BACKOFF_MS,
-                        max_backoff_ms=settings.RESEARCH_MAX_BACKOFF_MS,
-                        is_retryable=lambda exc: any(
-                            marker in str(exc).lower()
-                            for marker in ("429", "resource exhausted", "temporar", "timeout", "503", "500")
-                        ),
-                        on_retry=_on_retry,
-                    )
+                        response = await run_with_retries(
+                            "market_research",
+                            lambda: asyncio.get_event_loop().run_in_executor(None, do_research),
+                            max_retries=settings.RESEARCH_MAX_RETRIES,
+                            base_backoff_ms=settings.RESEARCH_BASE_BACKOFF_MS,
+                            max_backoff_ms=settings.RESEARCH_MAX_BACKOFF_MS,
+                            is_retryable=lambda exc: any(
+                                marker in str(exc).lower()
+                                for marker in ("429", "resource exhausted", "temporar", "timeout", "503", "500")
+                            ),
+                            on_retry=_on_retry,
+                        )
+            except Exception as research_exc:
+                if trace:
+                    try:
+                        trace.record(
+                            category="research",
+                            name="research_failed",
+                            summary="Market research call raised an exception",
+                            data={
+                                "query": research_query,
+                                "trigger_reason": trigger_reason,
+                                "latency_ms": int((time.perf_counter() - _research_t0) * 1000),
+                                "error": f"{type(research_exc).__name__}: {research_exc}",
+                            },
+                            artifacts=research_artifacts,
+                            related_event_ids=[
+                                ref for ref in [self.session.trace_refs.get("last_research_trigger_event_id")] if ref
+                            ],
+                        )
+                    except Exception:
+                        pass
+                raise
             
             raw = response.text
             if raw:
@@ -1356,11 +1559,31 @@ Rules:
                         ext=".json",
                     )
                 )
+                from app.utils.trace_helpers import (
+                    model_block as _mb_r, model_route as _mr_r,
+                    text_preview as _tp_r, extract_token_usage as _tok_r,
+                )
                 event = trace.record(
                     category="research",
                     name="research_completed",
                     summary="Market research completed",
-                    data={"query": research_query, "trigger_reason": trigger_reason},
+                    data={
+                        "query": research_query,
+                        "trigger_reason": trigger_reason,
+                        "model": _mb_r(
+                            str(self._flash_model),
+                            route=_mr_r(),
+                            purpose="market_research",
+                            temperature=0.1,
+                        ),
+                        "latency_ms": int((time.perf_counter() - _research_t0) * 1000),
+                        "tokens": _tok_r(response),
+                        "price_range": _tp_r(str(market_data.get("price_range")) if market_data.get("price_range") else None, 300),
+                        "key_facts": _tp_r(str(market_data.get("key_facts")) if market_data.get("key_facts") else None, 300),
+                        "leverage": _tp_r(str(market_data.get("leverage")) if market_data.get("leverage") else None, 300),
+                        "tactics": _tp_r(str(market_data.get("tactics")) if market_data.get("tactics") else None, 400),
+                        "gap_answer": _tp_r(str(market_data.get("gap_answer")) if market_data.get("gap_answer") else None, 300),
+                    },
                     artifacts=research_artifacts,
                     related_event_ids=[
                         ref for ref in [
@@ -1391,6 +1614,13 @@ Rules:
             event_payload = {
                 "query": research_query,
                 "market_data": insights,
+                "market_data_obj": {
+                    "price_range": market_data.get("price_range"),
+                    "key_facts":   market_data.get("key_facts"),
+                    "leverage":    market_data.get("leverage"),
+                    "tactics":     market_data.get("tactics"),
+                    "gap_answer":  market_data.get("gap_answer") if market_data.get("gap_answer") != "null" else None,
+                },
                 "timestamp": time.time(),
                 "trigger_reason": trigger_reason,
             }
@@ -1403,7 +1633,7 @@ Rules:
                 event_payload,
             )
             session_store.persist_session(self.session, ended=False)
-            
+
             # Notify frontend with results
             await self._safe_send_json({
                 "type": "RESEARCH_COMPLETE",

@@ -19,6 +19,9 @@ class Config(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = DEFAULT_GEMINI_LIVE_MODEL
     GEMINI_MODEL_FALLBACK: str = DEFAULT_GEMINI_FALLBACK_MODEL
+    GEMINI_LIVE_VOICE_NAME: str = "Aoede"
+    GEMINI_LIVE_LANGUAGE_CODE: str = "en-US"
+    GEMINI_LIVE_ENABLE_AFFECTIVE_DIALOG: bool = False
     
     # Vertex AI specific settings
     GOOGLE_CLOUD_PROJECT: str = ""
@@ -26,7 +29,7 @@ class Config(BaseSettings):
     GOOGLE_GENAI_USE_VERTEXAI: bool = False
     
     # Advanced capabilities
-    ENABLE_AFFECTIVE_DIALOG: bool = True
+    ENABLE_AFFECTIVE_DIALOG: bool = False
    
     # Speaker Recognition Configuration
     SPEAKER_RECOGNITION_ENABLED: bool = True
@@ -73,10 +76,55 @@ class Config(BaseSettings):
     DEEPGRAM_LANGUAGE_CODES: str = DEFAULT_GOOGLE_STT_LANGUAGE_CODES
     DEEPGRAM_DIARIZATION_ENABLED: bool = False
     DEEPGRAM_UTTERANCE_SPLIT: float = 0.45
+    DEEPGRAM_STREAM_ENDPOINTING_MS: int = 150
+    DEEPGRAM_STREAM_LANGUAGE: str = "en-US"
+    DEEPGRAM_STREAM_KEEPALIVE_SECONDS: float = 3.0
+
+    # ── Multilanguage adaptation (reversible feature flag) ───────────────────
+    # When False (default), all language code paths behave exactly as before.
+    # Flip to True via env (MULTILANG_ENABLED=true) to enable:
+    #   - Deepgram language=multi code-switching
+    #   - Per-source / per-session pinned language profiles
+    #   - Gemini Live native-audio auto language switching (omit language_code)
+    #   - Response-language-driven prompt instructions
+    #   - Pro advice translation wrap (non-English → English → answer → back)
+    MULTILANG_ENABLED: bool = True
+    # Profile applied when the flag is ON and the user hasn't picked one:
+    #   "auto_multi" → language=multi (en,es,fr,de,hi,it,ja,nl,ru,pt)
+    #   "pinned:<bcp47>" → monolingual stream (use for gu-IN, ta-IN, etc.)
+    LANGUAGE_PROFILE_DEFAULT: str = "auto_multi"
+    # Languages covered by Deepgram Nova-3 language=multi (per official docs)
+    DEEPGRAM_MULTI_LANGUAGES: str = "en,es,fr,de,hi,it,ja,nl,ru,pt"
+    # Pinned monolingual codes we explicitly surface in the UI (must include the
+    # must-haves: English, Hindi, Gujarati). User can pick from a longer list.
+    LANGUAGE_PROFILE_PINNED_CHOICES: str = "en-US,hi-IN,gu-IN,es-US,fr-FR,de-DE,ja-JP,zh-CN,ar"
+    # Pro-advice translation: which lightweight model handles translate calls.
+    TRANSLATION_MODEL: str = "gemini-2.5-flash"
+    TRANSLATION_TIMEOUT_SECONDS: float = 2.5
+    TRANSLATION_CACHE_MAX_ENTRIES: int = 500
+
+    # ── ASK_AI native audio path (reversible feature flag) ──────────────────
+    # When False (default), the existing transcribe-then-text flow is used:
+    #   ASK_AI_PCM → buffered → Flash WAV transcription → text via send_client_content.
+    # When True, in addition to the above, ASK_AI_PCM chunks are ALSO streamed
+    # to Gemini Live via send_realtime_input(audio=) with activity_start/end
+    # markers (we have automatic_activity_detection=disabled, so manual
+    # markers are required). The Flash-transcribed text is still sent as the
+    # final turn-completer — belt-and-suspenders so a failure on either lane
+    # doesn't kill the ask. Easy revert: set ASK_AI_NATIVE_AUDIO=false.
+    ASK_AI_NATIVE_AUDIO: bool = True
+    ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION: bool = True
+    ASK_AI_LOCAL_MIC_SUPPRESS_GRACE_SECONDS: float = 1.25
+    AI_VOICE_LEAK_GRACE_SECONDS: float = 8.0
+    AI_VOICE_LEAK_STRICT_POST_PLAYBACK_SECONDS: float = 2.0
+    AI_VOICE_LEAK_SHORT_WORD_LIMIT: int = 3
     STT_GLOBAL_CONCURRENCY: int = 8
     STT_MAX_RETRIES: int = 2
     STT_BASE_BACKOFF_MS: int = 300
     STT_MAX_BACKOFF_MS: int = 4000
+    ASK_AI_BATCH_TRANSCRIBE_TIMEOUT_SECONDS: float = 6.0
+    TEXT_EXTRACTION_TIMEOUT_SECONDS: float = 6.0
+    GEMINI_PRECONNECT_WAIT_SECONDS: float = 4.0
     STT_PROBE_TIMEOUT_SECONDS: float = 8.0
     # Increased to handle gRPC cold-start: first call after a new connection can
     # take 12-15 s while TLS + HTTP/2 establishment completes. Subsequent calls
@@ -176,6 +224,26 @@ class Config(BaseSettings):
     ADVICE_GENERATION_ENABLED: bool = True
     ADVICE_GENERATION_TIMEOUT_SECONDS: float = 3.0
 
+    # ── Next-move cache (reversible feature flag) ───────────────────────────
+    # Background-precomputed "what should I do right now" recommendation so
+    # vague private asks ("What now?", "Trap?", "Accept?") resolve from cache
+    # without waiting for synchronous Pro reasoning. Cache is injected into
+    # the pre-query brief during hold-to-ask; handle_ask_advice Pro pre-flight
+    # is untouched (the cache only changes the *input* to Live, not the path).
+    NEXT_MOVE_CACHE_ENABLED: bool = True
+    NEXT_MOVE_FAST_MODEL: str = "gemini-2.5-flash"
+    NEXT_MOVE_PRO_UPGRADE_ENABLED: bool = True
+    NEXT_MOVE_MAX_AGE_SECONDS: float = 20.0
+    NEXT_MOVE_BACKGROUND_DEBOUNCE_MS: int = 500
+    NEXT_MOVE_FAST_TIMEOUT_SECONDS: float = 4.0
+    NEXT_MOVE_PRO_TIMEOUT_SECONDS: float = 8.0
+    # Comma-separated tokens (lowercased, substring-matched on whitespace-normalized
+    # ask text) used by classify_ask() to route short asks to the cache.
+    NEXT_MOVE_VAGUE_TOKENS: str = (
+        "what now,say what,trap,accept,can i accept,trade what,protect what,"
+        "read this,best counter,risk,summarize,what next,now what,next move"
+    )
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
@@ -202,6 +270,38 @@ class Config(BaseSettings):
     @property
     def supported_auto_speaker_languages_list(self) -> list[str]:
         return [code.strip() for code in self.SUPPORTED_AUTO_SPEAKER_LANGUAGES.split(",") if code.strip()]
+
+    @property
+    def next_move_vague_tokens_list(self) -> list[str]:
+        return [t.strip().lower() for t in self.NEXT_MOVE_VAGUE_TOKENS.split(",") if t.strip()]
+
+    @property
+    def deepgram_multi_languages_list(self) -> list[str]:
+        return [code.strip().lower() for code in self.DEEPGRAM_MULTI_LANGUAGES.split(",") if code.strip()]
+
+    @property
+    def language_profile_pinned_choices_list(self) -> list[str]:
+        return [code.strip() for code in self.LANGUAGE_PROFILE_PINNED_CHOICES.split(",") if code.strip()]
+
+    def resolve_deepgram_language(self, profile: str | None, per_source: str | None = None) -> str:
+        """Map a language profile (and optional per-source override) to a Deepgram language param.
+
+        Returns a string suitable for Deepgram's ?language= query param. Falls back to
+        DEEPGRAM_STREAM_LANGUAGE whenever the feature flag is off or input is malformed
+        so legacy behavior is preserved.
+        """
+        if not self.MULTILANG_ENABLED:
+            return self.DEEPGRAM_STREAM_LANGUAGE or "en-US"
+        candidate = (per_source or profile or self.LANGUAGE_PROFILE_DEFAULT or "").strip()
+        if not candidate:
+            return self.DEEPGRAM_STREAM_LANGUAGE or "en-US"
+        if candidate == "auto_multi":
+            return "multi"
+        if candidate.startswith("pinned:"):
+            code = candidate.split(":", 1)[1].strip()
+            return code or (self.DEEPGRAM_STREAM_LANGUAGE or "en-US")
+        # Treat bare BCP-47 as a pinned monolingual stream.
+        return candidate
     
     @property
     def effective_model(self) -> str:
