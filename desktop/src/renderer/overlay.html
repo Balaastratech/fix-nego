@@ -43,6 +43,9 @@
       <button id="lang-chip" class="lang-chip" type="button" title="Language settings">
         <span id="lang-chip-label">EN</span>
       </button>
+      <button id="screen-chip" class="screen-chip" type="button" title="Switch captured screen or window">
+        <span id="screen-chip-label">SCR</span>
+      </button>
       <div id="lang-menu" class="lang-menu hidden" role="dialog" aria-label="Language settings">
         <div class="menu-header">Language</div>
         <p class="lang-help">Controls what the listener transcribes for both speakers and what the AI replies in.</p>
@@ -121,8 +124,8 @@
         <button id="screen-picker-close" class="screen-picker-close" title="Cancel">✕</button>
       </div>
       <div class="screen-picker-tabs">
-        <button class="picker-tab active" data-tab="screen">Screens</button>
-        <button class="picker-tab" data-tab="window">Windows</button>
+        <button class="picker-tab" data-tab="screen">Screens</button>
+        <button class="picker-tab active" data-tab="window">Windows</button>
       </div>
       <div id="screen-picker-grid" class="screen-picker-grid"></div>
       <div class="screen-picker-footer">

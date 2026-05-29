@@ -18,6 +18,12 @@
       "src/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "scripts/audio-isolator.ps1",
+        "to": "scripts/audio-isolator.ps1"
+      }
+    ],
     "win": {
       "target": [
         "nsis"
@@ -27,5 +33,9 @@
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "application-loopback": "^1.2.6",
+    "dotenv": "^16.6.1"
   }
 }

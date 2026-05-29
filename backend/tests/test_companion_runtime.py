@@ -63,6 +63,30 @@ def test_remote_audio_is_not_admitted_when_binding_is_unsafe():
     assert companion_runtime.source_admissible(session, companion_runtime.REMOTE_APP_MESSAGE) is False
 
 
+def test_process_loopback_failure_marks_capture_degraded_and_remote_audio_inadmissible():
+    session = NegotiationSession(session_id="companion-process-loopback-failed")
+    session.source_mode = SourceMode.VIRTUAL_COMPANION_DESKTOP.value
+    session.meeting_binding = {"is_bound": True}
+
+    current = companion_runtime.update_capture_health(
+        session,
+        {
+            "remote_audio_ok": False,
+            "frame_capture_ok": True,
+            "process_loopback_ok": False,
+            "unsafe_device_loopback": True,
+            "degraded_reasons": ["process_loopback_unavailable"],
+        },
+    )
+
+    assert current.process_loopback_ok is False
+    assert current.unsafe_device_loopback is True
+    assert session.degraded_mode == "source_ambiguous"
+    assert "process_loopback_unavailable" in session.degraded_reasons
+    assert "unsafe_device_loopback" in session.degraded_reasons
+    assert companion_runtime.source_admissible(session, companion_runtime.REMOTE_APP_MESSAGE) is False
+
+
 def test_ai_voice_leak_filter_catches_claude_as_cloud_after_playback():
     session = NegotiationSession(session_id="companion-ai-leak-filter")
     session.ai_audio_playing = False

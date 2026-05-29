@@ -4,6 +4,10 @@ const bridge = window.companionBridge;
 const channel = new BroadcastChannel("negotiation_companion_ui");
 const STORAGE_KEY = "companion_prefs_v2";
 const BACKEND_WS_URL = "ws://localhost:8000/ws";
+const PROCESS_AUDIO_TARGET_RATE = 16000;
+const PROCESS_AUDIO_ASSUMED_INPUT_RATE = 48000;
+const PROCESS_AUDIO_FLUSH_MS = 120;
+const PROCESS_AUDIO_SILENCE_MS = 1500;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const state = {
@@ -49,6 +53,7 @@ const state = {
   copilotStarted: false,
   vbCableDeviceId: null,
   vbCableLabel: null,
+  privacyStrategy: null,   // "policyconfig" | "hotkey" | "vbcable" | null
   listeningDeviceId: null,
   listeningDeviceLabel: null,
 
@@ -57,6 +62,18 @@ const state = {
   screenSources: [],        // from getScreenSources — has thumbnails for the menu
   selectedTarget: null,
   selectedSourceId: null,   // desktop source id from getScreenSources, used for startMeetingCapture
+  selectedSourceName: null,
+  selectedSourceKind: null,
+  processAudioActive: false,
+  processAudioUnsubscribe: null,
+  processAudioFlushTimer: null,
+  processAudioPendingChunks: [],
+  processAudioUtteranceId: null,
+  processAudioStartedAt: 0,
+  processAudioLastChunkAt: 0,
+  processAudioProbeLogged: false,
+  processAudioInputFormat: null,
+  processAudioMatchStrategy: null,
 
   // Chat (private AI only)
   chatEntries: [],
@@ -133,11 +150,36 @@ function setOrbState(s) {
   orbIcon.textContent = s === "listening" ? "◉" : s === "speaking" ? "◎" : "✦";
 }
 
+// Track previous mute-to-meeting state to detect transitions for IPC calls
+let _prevMuteToMeeting = false;
+
 function updateMicMuteState() {
-  if (!state.micForwardEl) return;
   const shouldMute = state.holdActive || state.orbState === "listening";
-  state.micForwardEl.muted = shouldMute;
-  console.log(`[MicForward] Mic muted = ${shouldMute} (holdActive=${state.holdActive}, orbState=${state.orbState}, awaitingPrivateReply=${state.awaitingPrivateReply})`);
+
+  if (state.privacyStrategy === "vbcable") {
+    // Legacy VB-Cable path: mute the WebAudio forward element
+    if (!state.micForwardEl) return;
+    state.micForwardEl.muted = shouldMute;
+    console.log(`[MicForward] VB-Cable muted=${shouldMute} (hold=${state.holdActive}, orb=${state.orbState})`);
+  } else if (state.privacyStrategy === "policyconfig" || state.privacyStrategy === "hotkey") {
+    // Driverless path: call main-process IPC only on transitions
+    if (shouldMute !== _prevMuteToMeeting) {
+      if (shouldMute) {
+        bridge.privacyIsolate().catch(err =>
+          console.warn("[Privacy] isolate IPC failed:", err?.message || err)
+        );
+      } else {
+        bridge.privacyRestore().catch(err =>
+          console.warn("[Privacy] restore IPC failed:", err?.message || err)
+        );
+      }
+    }
+    console.log(`[Privacy] ${state.privacyStrategy} muted=${shouldMute} (hold=${state.holdActive}, orb=${state.orbState})`);
+  } else {
+    // No strategy yet — do nothing; mute will fire correctly once strategy resolves
+  }
+
+  _prevMuteToMeeting = shouldMute;
 }
 
 
@@ -155,7 +197,7 @@ function updateRootClasses() {
 function desiredOverlayPresentation() {
   // Screen picker needs full panel space to be usable
   const pickerEl = document.getElementById("screen-picker-overlay");
-  if (pickerEl && !pickerEl.classList.contains("hidden")) return "panel";
+  if (pickerEl && !pickerEl.classList.contains("hidden")) return "picker";
   if (state.menuOpen) return "menu";
   if (state.langMenuOpen) return "panel";
   if (state.sessionPaused) return "compact";
@@ -168,6 +210,9 @@ function desiredOverlayPresentation() {
 
 function syncOverlayPresentation() {
   updateRootClasses();
+  // Only show mix-strip when session is actually live (not just when menus open)
+  const mixStrip = document.getElementById("mix-strip");
+  if (mixStrip) mixStrip.classList.toggle("session-active", state.sessionLive || state.sessionStarting);
   bridge.setOverlayPresentation(desiredOverlayPresentation()).catch(() => {});
 }
 
@@ -431,6 +476,7 @@ function broadcastSnapshot() {
     selectedMicLabel: state.selectedMicLabel || null,
     holdActive: state.holdActive,
     orbState: state.orbState,
+    privacyStrategy: state.privacyStrategy || null,
   });
 }
 
@@ -488,13 +534,126 @@ function resolvePreferredCaptureSourceId(sourceId = null) {
   return sourceId || state.selectedSourceId || state.selectedTarget?.target_id || null;
 }
 
+function selectedSourceKindFromId(sourceId) {
+  if (String(sourceId || "").startsWith("screen:")) return "screen";
+  if (String(sourceId || "").startsWith("window:")) return "window";
+  return null;
+}
+
+function setSelectedCaptureSource(source) {
+  if (!source) {
+    state.selectedSourceId = null;
+    state.selectedSourceName = null;
+    state.selectedSourceKind = null;
+    return;
+  }
+  state.selectedSourceId = source.id || null;
+  state.selectedSourceName = source.name || null;
+  state.selectedSourceKind = source.kind || selectedSourceKindFromId(source.id);
+}
+
+function selectedSourceMatches(source) {
+  if (!source) return false;
+  if (state.selectedSourceId && source.id === state.selectedSourceId) return true;
+  const selectedName = String(state.selectedSourceName || "").trim().toLowerCase();
+  const sourceName = String(source.name || "").trim().toLowerCase();
+  const selectedKind = String(state.selectedSourceKind || "").trim().toLowerCase();
+  const sourceKind = String(source.kind || selectedSourceKindFromId(source.id) || "").trim().toLowerCase();
+  return Boolean(selectedName && sourceName && selectedName === sourceName && (!selectedKind || selectedKind === sourceKind));
+}
+
+async function refreshScreenSources() {
+  if (!bridge?.getScreenSources) return state.screenSources;
+  const sources = await bridge.getScreenSources().catch(() => []);
+  if (Array.isArray(sources) && sources.length) {
+    state.screenSources = sources;
+  }
+  return state.screenSources;
+}
+
+function resolveSourceForTarget(target, sources = state.screenSources) {
+  if (!Array.isArray(sources) || !sources.length || !target) return null;
+  const title = String(target.window_title || "").toLowerCase();
+  return (
+    sources.find((source) => String(source.name || "").toLowerCase() === title) ||
+    sources.find((source) =>
+      title.includes(String(source.name || "").toLowerCase()) ||
+      String(source.name || "").toLowerCase().includes(title)
+    ) ||
+    null
+  );
+}
+
+function resolveCurrentSelectedSource(sources = state.screenSources, preferredSourceId = null) {
+  if (!Array.isArray(sources) || !sources.length) return null;
+  const preferredId = preferredSourceId || state.selectedSourceId;
+  if (preferredId) {
+    const exact = sources.find((source) => source.id === preferredId);
+    if (exact) return exact;
+  }
+  if (state.selectedSourceName) {
+    const byMeta = sources.find((source) => selectedSourceMatches(source));
+    if (byMeta) return byMeta;
+  }
+  if (state.selectedTarget) {
+    return resolveSourceForTarget(state.selectedTarget, sources);
+  }
+  return null;
+}
+
+function parseWindowHandleFromSourceId(sourceId) {
+  const value = String(sourceId || "");
+  const match = /^window:([^:]+):/i.exec(value);
+  return match ? match[1] : null;
+}
+
+function normalizeHandle(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  try {
+    if (/^0x/i.test(raw)) return BigInt(raw).toString();
+    if (/^\d+$/.test(raw)) return BigInt(raw).toString();
+  } catch (_) {}
+  return raw.toLowerCase();
+}
+
+function resolveMeetingWindowHandle() {
+  return (
+    parseWindowHandleFromSourceId(state.selectedTarget?.target_id) ||
+    parseWindowHandleFromSourceId(state.selectedSourceId)
+  );
+}
+
+function toUint8Array(chunk) {
+  if (!chunk) return new Uint8Array(0);
+  if (chunk instanceof Uint8Array) return chunk;
+  if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+  if (ArrayBuffer.isView(chunk)) {
+    return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+  if (Array.isArray(chunk)) return Uint8Array.from(chunk);
+  return new Uint8Array(0);
+}
+
+function mergeArrayBuffers(buffers) {
+  const total = buffers.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const buffer of buffers) {
+    merged.set(new Uint8Array(buffer), offset);
+    offset += buffer.byteLength;
+  }
+  return merged.buffer;
+}
+
 async function syncDesktopCaptureSelection(sourceId = null) {
   if (!bridge?.rebindMeetingTarget || !state.selectedTarget) return;
   const resolvedSourceId = resolvePreferredCaptureSourceId(sourceId);
-  state.selectedSourceId = resolvedSourceId;
   await bridge.rebindMeetingTarget({
     ...state.selectedTarget,
     source_id: resolvedSourceId,
+    source_name: state.selectedSourceName || null,
+    source_kind: state.selectedSourceKind || selectedSourceKindFromId(resolvedSourceId),
   });
 }
 
@@ -513,6 +672,23 @@ async function connectBackend() {
       state.backendState = "IDLE";
       state._pendingStart = false;
       if (!state.sessionLive) state.sessionPaused = false;
+      // Auto-reconnect after unexpected close (e.g. minimize, network blip)
+      if (state.sessionLive || state.sessionStarting) {
+        console.warn("[WS] Connection lost during active session. Reconnecting in 2s...");
+        setTimeout(() => {
+          if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            connectWs().catch((err) => {
+              console.warn("[WS] Reconnect failed:", err?.message || err);
+              // Retry again after 5s
+              setTimeout(() => {
+                if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                  connectWs().catch(() => {});
+                }
+              }, 5000);
+            });
+          }
+        }, 2000);
+      }
     };
     ws.onmessage = handleWsMessage;
   });
@@ -1200,6 +1376,263 @@ async function createPcmCapture(stream, msgType, options = {}) {
   };
 }
 
+function inferProcessAudioFormat(uint8Chunk) {
+  if (!uint8Chunk?.byteLength) {
+    return { encoding: "int16", channels: 2, sampleRate: PROCESS_AUDIO_ASSUMED_INPUT_RATE };
+  }
+  if (uint8Chunk.byteLength % 4 === 0) {
+    const floats = new Float32Array(
+      uint8Chunk.buffer,
+      uint8Chunk.byteOffset,
+      uint8Chunk.byteLength / 4
+    );
+    const sampleCount = Math.min(floats.length, 128);
+    let finiteCount = 0;
+    let inRangeCount = 0;
+    for (let i = 0; i < sampleCount; i++) {
+      const sample = floats[i];
+      if (Number.isFinite(sample)) {
+        finiteCount += 1;
+        if (Math.abs(sample) <= 1.1) {
+          inRangeCount += 1;
+        }
+      }
+    }
+    if (sampleCount && finiteCount === sampleCount && inRangeCount / sampleCount >= 0.95) {
+      return { encoding: "float32", channels: 2, sampleRate: PROCESS_AUDIO_ASSUMED_INPUT_RATE };
+    }
+  }
+  return { encoding: "int16", channels: 2, sampleRate: PROCESS_AUDIO_ASSUMED_INPUT_RATE };
+}
+
+function convertProcessAudioChunk(uint8Chunk) {
+  const format = state.processAudioInputFormat || inferProcessAudioFormat(uint8Chunk);
+  state.processAudioInputFormat = format;
+
+  let mono;
+  if (format.encoding === "float32") {
+    const floats = new Float32Array(
+      uint8Chunk.buffer,
+      uint8Chunk.byteOffset,
+      Math.floor(uint8Chunk.byteLength / 4)
+    );
+    const channels = Math.max(1, format.channels || 1);
+    const frameCount = Math.floor(floats.length / channels);
+    mono = new Float32Array(frameCount);
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+      let sum = 0;
+      for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+        sum += floats[frameIndex * channels + channelIndex] || 0;
+      }
+      mono[frameIndex] = sum / channels;
+    }
+  } else {
+    const samples = new Int16Array(
+      uint8Chunk.buffer,
+      uint8Chunk.byteOffset,
+      Math.floor(uint8Chunk.byteLength / 2)
+    );
+    const channels = Math.max(1, format.channels || 1);
+    const frameCount = Math.floor(samples.length / channels);
+    mono = new Float32Array(frameCount);
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+      let sum = 0;
+      for (let channelIndex = 0; channelIndex < channels; channelIndex++) {
+        sum += (samples[frameIndex * channels + channelIndex] || 0) / 32768;
+      }
+      mono[frameIndex] = sum / channels;
+    }
+  }
+
+  const inputRate = format.sampleRate || PROCESS_AUDIO_ASSUMED_INPUT_RATE;
+  const ratio = inputRate / PROCESS_AUDIO_TARGET_RATE;
+  const outputLength = ratio > 1 ? Math.max(1, Math.floor(mono.length / ratio)) : mono.length;
+  const output = new Int16Array(outputLength);
+  for (let index = 0; index < outputLength; index++) {
+    const sourceIndex = ratio > 1 ? Math.min(mono.length - 1, Math.floor(index * ratio)) : index;
+    const sample = mono[sourceIndex] || 0;
+    output[index] = Math.max(
+      -32768,
+      Math.min(32767, sample < 0 ? Math.round(sample * 32768) : Math.round(sample * 32767))
+    );
+  }
+
+  let rmsSum = 0;
+  for (let index = 0; index < output.length; index++) {
+    const normalized = output[index] / 32768;
+    rmsSum += normalized * normalized;
+  }
+  const rms = output.length ? Math.sqrt(rmsSum / output.length) : 0;
+  return { buffer: output.buffer, rms, format };
+}
+
+function resetProcessAudioSegment() {
+  state.processAudioUtteranceId = null;
+  state.processAudioStartedAt = 0;
+  state.processAudioLastChunkAt = 0;
+}
+
+function stopProcessAudioCapture() {
+  if (state.processAudioActive) {
+    flushProcessAudioBuffer(true);
+  }
+  if (state.processAudioUnsubscribe) {
+    state.processAudioUnsubscribe();
+    state.processAudioUnsubscribe = null;
+  }
+  if (state.processAudioFlushTimer) {
+    clearInterval(state.processAudioFlushTimer);
+    state.processAudioFlushTimer = null;
+  }
+  state.processAudioPendingChunks = [];
+  state.processAudioActive = false;
+  state.processAudioInputFormat = null;
+  state.processAudioMatchStrategy = null;
+  resetProcessAudioSegment();
+  bridge.stopProcessAudioCapture().catch(() => {});
+}
+
+function flushProcessAudioBuffer(forceFinal = false) {
+  const now = Date.now();
+  const pendingChunks = state.processAudioPendingChunks.splice(0, state.processAudioPendingChunks.length);
+  const mergedChunk = pendingChunks.length
+    ? mergeArrayBuffers(pendingChunks.map((entry) => entry.buffer))
+    : null;
+  const hasChunk = Boolean(mergedChunk);
+
+  // Fail open for the remote counterparty lane: once per-process capture is
+  // active, admit every chunk and let Deepgram/backend decide what is speech.
+  // Frontend VAD here was suppressing quiet counterparty turns entirely.
+  if (!state.processAudioUtteranceId && hasChunk) {
+    state.processAudioUtteranceId = `REMOTE_APP_PCM_${now}`;
+    state.processAudioStartedAt = now;
+  }
+  if (hasChunk) {
+    state.processAudioLastChunkAt = now;
+  }
+
+  if (!state.processAudioUtteranceId) {
+    return;
+  }
+
+  const shouldFinalize =
+    forceFinal ||
+    (!hasChunk &&
+      state.processAudioLastChunkAt > 0 &&
+      now - state.processAudioLastChunkAt >= PROCESS_AUDIO_SILENCE_MS);
+
+  if (mergedChunk) {
+    wsSend("REMOTE_APP_PCM", {
+      pcm_base64: toBase64(mergedChunk),
+      timestamp_ms: now,
+      started_at_ms: state.processAudioStartedAt || now,
+      utterance_id: state.processAudioUtteranceId,
+      is_final: shouldFinalize,
+    });
+  }
+
+  if (shouldFinalize) {
+    resetProcessAudioSegment();
+  }
+}
+
+function findProcessAudioMatch(windows) {
+  const targetHwnd = normalizeHandle(resolveMeetingWindowHandle());
+  const targetTitle = String(state.selectedTarget?.window_title || "").trim().toLowerCase();
+  if (targetHwnd) {
+    const hwndMatch = windows.find((entry) => normalizeHandle(entry?.hwnd) === targetHwnd);
+    if (hwndMatch) {
+      return { match: hwndMatch, strategy: "hwnd" };
+    }
+  }
+  if (targetTitle) {
+    const exactTitleMatch = windows.find(
+      (entry) => String(entry?.title || "").trim().toLowerCase() === targetTitle
+    );
+    if (exactTitleMatch) {
+      return { match: exactTitleMatch, strategy: "title_exact" };
+    }
+    const partialTitleMatch = windows.find((entry) =>
+      String(entry?.title || "").trim().toLowerCase().includes(targetTitle)
+    );
+    if (partialTitleMatch) {
+      return { match: partialTitleMatch, strategy: "title_partial" };
+    }
+  }
+  return { match: null, strategy: targetHwnd ? "hwnd_miss" : "no_window_handle" };
+}
+
+async function startProcessAudioCapture() {
+  if (!bridge?.getWindowProcessIds || !bridge?.startProcessAudioCapture || !bridge?.onProcessAudioChunk) {
+    return { ok: false, reason: "bridge_unavailable" };
+  }
+
+  stopProcessAudioCapture();
+  state.processAudioProbeLogged = false;
+
+  const windows = await bridge.getWindowProcessIds();
+  const { match, strategy } = findProcessAudioMatch(Array.isArray(windows) ? windows : []);
+  state.processAudioMatchStrategy = strategy;
+  if (!match?.processId) {
+    console.warn("[ProcessAudio] No process match found for selected meeting window", {
+      strategy,
+      selectedTarget: state.selectedTarget?.window_title || null,
+      targetHandle: resolveMeetingWindowHandle(),
+    });
+    return { ok: false, reason: "process_match_not_found", strategy };
+  }
+
+  state.processAudioUnsubscribe = bridge.onProcessAudioChunk((chunk) => {
+    if (state.sessionPaused || state.backendState !== "ACTIVE") {
+      return;
+    }
+    const uint8Chunk = toUint8Array(chunk);
+    if (!uint8Chunk.byteLength) {
+      return;
+    }
+    const converted = convertProcessAudioChunk(uint8Chunk);
+    if (!state.processAudioProbeLogged) {
+      state.processAudioProbeLogged = true;
+      console.log("[ProcessAudio] First chunk received", {
+        bytes: uint8Chunk.byteLength,
+        inferred_format: converted.format,
+        match_strategy: state.processAudioMatchStrategy,
+      });
+    }
+    state.processAudioPendingChunks.push({
+      buffer: converted.buffer,
+      rms: converted.rms,
+    });
+  });
+
+  const result = await bridge.startProcessAudioCapture({
+    pid: match.processId,
+    hwnd: match.hwnd || null,
+  });
+  if (!result?.ok) {
+    stopProcessAudioCapture();
+    return { ok: false, reason: result?.reason || "process_capture_start_failed", strategy };
+  }
+
+  state.processAudioActive = true;
+  state.processAudioFlushTimer = setInterval(
+    () => flushProcessAudioBuffer(false),
+    PROCESS_AUDIO_FLUSH_MS
+  );
+  console.log("[ProcessAudio] Process-scoped remote audio capture started", {
+    pid: match.processId,
+    hwnd: match.hwnd || null,
+    strategy,
+    title: match.title || null,
+  });
+  return {
+    ok: true,
+    pid: match.processId,
+    hwnd: match.hwnd || null,
+    strategy,
+  };
+}
+
 // ─── Auto-detect audio devices ───────────────────────────────────────────────
 function _isBadMic(label) {
   // Devices that deliver silence or are not real voice mics
@@ -1340,7 +1773,7 @@ async function setupMicForward(stream) {
 // Returns a promise that resolves to the chosen desktop source ID, or null if cancelled.
 
 let _pickerResolve = null;
-let _pickerActiveTab = "screen";
+let _pickerActiveTab = "window";
 
 async function showScreenPicker() {
   return new Promise((resolve) => {
@@ -1362,6 +1795,9 @@ async function showScreenPicker() {
     if (!bridge?.getScreenSources) { overlay.classList.add("hidden"); syncOverlayPresentation(); resolve(null); return; }
 
     bridge.getScreenSources().then((sources) => {
+      if (Array.isArray(sources) && sources.length) {
+        state.screenSources = sources;
+      }
       renderPickerTab(sources, _pickerActiveTab);
     }).catch(() => { overlay.classList.add("hidden"); syncOverlayPresentation(); resolve(null); });
 
@@ -1371,7 +1807,12 @@ async function showScreenPicker() {
         overlay.querySelectorAll(".picker-tab").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         _pickerActiveTab = btn.dataset.tab;
-        bridge.getScreenSources().then(sources => renderPickerTab(sources, _pickerActiveTab));
+        bridge.getScreenSources().then(sources => {
+          if (Array.isArray(sources) && sources.length) {
+            state.screenSources = sources;
+          }
+          renderPickerTab(sources, _pickerActiveTab);
+        });
       };
     });
 
@@ -1415,7 +1856,7 @@ async function showScreenPicker() {
       }
       filtered.forEach(src => {
         const card = document.createElement("div");
-        card.className = "picker-source-card";
+        card.className = "picker-source-card" + (selectedSourceMatches(src) ? " selected" : "");
         const img = document.createElement("img");
         img.className = "picker-source-thumb";
         img.src = src.thumbnail;
@@ -1433,7 +1874,7 @@ async function showScreenPicker() {
           });
           overlay.classList.add("hidden");
           syncOverlayPresentation();
-          if (_pickerResolve) { _pickerResolve(src.id); _pickerResolve = null; }
+          if (_pickerResolve) { _pickerResolve(src); _pickerResolve = null; }
         };
         grid.appendChild(card);
       });
@@ -1446,6 +1887,7 @@ async function showScreenPicker() {
 
 // ─── Meeting capture ──────────────────────────────────────────────────────────
 async function stopMeetingCapture() {
+  stopProcessAudioCapture();
   if (!state.meetingCapture) return;
   clearInterval(state.meetingCapture.frameTimer);
   await state.meetingCapture.audio.stop();
@@ -1470,6 +1912,12 @@ async function teardownLocalSession({ resetSelection = false, closeSocket = fals
     state.micStream.getTracks().forEach(t => t.stop());
     state.micStream = null;
   }
+  // Belt-and-suspenders restore for driverless strategies (main also restores on endCompanionSession)
+  if ((state.privacyStrategy === "policyconfig" || state.privacyStrategy === "hotkey") && _prevMuteToMeeting) {
+    bridge.privacyRestore().catch(() => {});
+  }
+  _prevMuteToMeeting = false;
+  state.privacyStrategy = null;
   state.sessionLive = false;
   state.sessionStarting = false;
   state.sessionPaused = false;
@@ -1486,7 +1934,7 @@ async function teardownLocalSession({ resetSelection = false, closeSocket = fals
   state.menuOpen = false;
   if (resetSelection) {
     state.selectedTarget = null;
-    state.selectedSourceId = null;
+    setSelectedCaptureSource(null);
     state.prefs.lastMeetingTitle = null;
     savePrefs();
   }
@@ -1504,7 +1952,14 @@ async function teardownLocalSession({ resetSelection = false, closeSocket = fals
 
 async function startMeetingCapture(sourceId) {
   await stopMeetingCapture();
-  const effectiveSourceId = resolvePreferredCaptureSourceId(sourceId);
+  await refreshScreenSources().catch(() => {});
+  const selectedSource =
+    resolveCurrentSelectedSource(state.screenSources, sourceId) ||
+    (sourceId ? { id: sourceId, name: state.selectedSourceName, kind: state.selectedSourceKind } : null);
+  if (selectedSource?.id) {
+    setSelectedCaptureSource(selectedSource);
+  }
+  const effectiveSourceId = resolvePreferredCaptureSourceId(selectedSource?.id || sourceId);
   if (effectiveSourceId) {
     await syncDesktopCaptureSelection(effectiveSourceId).catch((err) => {
       console.warn("[MeetingCapture] Failed to sync selected desktop source:", err?.message || err);
@@ -1512,8 +1967,14 @@ async function startMeetingCapture(sourceId) {
   }
   traceClientEvent("meeting_capture_requested", "Overlay started meeting capture setup", {
     source_id: effectiveSourceId,
+    source_name: state.selectedSourceName || null,
+    source_kind: state.selectedSourceKind || null,
     selected_target: state.selectedTarget?.window_title || null,
   });
+  const processCapture = await startProcessAudioCapture().catch((error) => ({
+    ok: false,
+    reason: error?.message || String(error),
+  }));
 
   let stream;
   try {
@@ -1527,18 +1988,32 @@ async function startMeetingCapture(sourceId) {
       error: displayErr?.message || String(displayErr),
     });
     if (!effectiveSourceId) {
+      // Clear stale state so user can re-select
+      state.selectedSourceId = null;
+      state.selectedSourceName = null;
+      state.selectedSourceKind = null;
       throw displayErr;
     }
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: "desktop",
-          chromeMediaSourceId: effectiveSourceId,
-          maxFrameRate: 6,
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: effectiveSourceId,
+            maxFrameRate: 6,
+          },
         },
-      },
-    });
+      });
+    } catch (fallbackErr) {
+      // Both attempts failed — clear stale source so user can re-select
+      console.warn("[MeetingCapture] Source not capturable, clearing stale selection:", effectiveSourceId);
+      state.selectedSourceId = null;
+      state.selectedSourceName = null;
+      state.selectedSourceKind = null;
+      syncOverlayPresentation();
+      throw fallbackErr;
+    }
   }
 
   // Feed only the video tracks into the video element — audio must NOT play through
@@ -1556,19 +2031,18 @@ async function startMeetingCapture(sourceId) {
     capturePreview.classList.remove("hidden");
   }
 
-  const hasAudio = stream.getAudioTracks().length > 0;
-  const remoteAudioCapture = hasAudio
-    ? await createPcmCapture(stream, "REMOTE_APP_PCM", {
-        flushMs: 120,
-        silenceMs: 1500,
-        speechThreshold: 0.0003,
-        minUtteranceMs: 100,
-        minSpeechFrames: 1,
-      minAverageRms: 0.0,
-      minPeakRms: 0.0,
-      maxUtteranceMs: 12000,
-      suppressCapture: () => state.sessionPaused,
-    })
+  const displayAudioTracks = stream.getAudioTracks();
+  const hasDisplayAudio = displayAudioTracks.length > 0;
+  if (!processCapture.ok) {
+    displayAudioTracks.forEach((track) => track.stop());
+  }
+  const remoteAudioOk = Boolean(processCapture.ok);
+  const remoteAudioCapture = remoteAudioOk
+    ? {
+        stop: async () => {
+          stopProcessAudioCapture();
+        },
+      }
     : { stop: async () => {} };
 
   let lastPixelHash = null;
@@ -1642,13 +2116,19 @@ async function startMeetingCapture(sourceId) {
 
   state.meetingCapture = {
     stream,
-    hasAudio,
+    hasAudio: remoteAudioOk,
+    hasDisplayAudio,
+    processAudioActive: remoteAudioOk,
     audio: remoteAudioCapture,
     frameTimer,
   };
   traceClientEvent("meeting_capture_started", "Meeting capture started successfully", {
     source_id: effectiveSourceId,
-    has_audio: hasAudio,
+    has_audio: remoteAudioOk,
+    display_audio_track_count: hasDisplayAudio ? displayAudioTracks.length : 0,
+    process_audio_ok: remoteAudioOk,
+    process_audio_reason: processCapture.ok ? null : processCapture.reason || null,
+    process_audio_match_strategy: processCapture.strategy || state.processAudioMatchStrategy || null,
     video_track_label: stream.getVideoTracks()[0]?.label || null,
     audio_track_count: stream.getAudioTracks().length,
   });
@@ -1680,7 +2160,7 @@ async function startMeetingCapture(sourceId) {
       // Fallback: stop capture and notify, but do NOT show picker automatically
       await stopMeetingCapture();
       wsSend("CAPTURE_HEALTH", { remote_audio_ok: false, frame_capture_ok: false,
-        unsafe_device_loopback: false, degraded_reasons: ["meeting_capture_ended"] });
+        process_loopback_ok: false, unsafe_device_loopback: true, degraded_reasons: ["meeting_capture_ended", "process_loopback_unavailable"] });
       broadcastSnapshot();
     });
     vtrack.onmute = async () => {
@@ -1713,30 +2193,67 @@ async function startMeetingCapture(sourceId) {
       console.warn("[MeetingCapture] All hot-reload attempts failed. Capture stopped. User can re-select from the main window.");
       await stopMeetingCapture();
       wsSend("CAPTURE_HEALTH", { remote_audio_ok: false, frame_capture_ok: false,
-        unsafe_device_loopback: false, degraded_reasons: ["wgc_track_muted_unrecoverable"] });
+        process_loopback_ok: false, unsafe_device_loopback: true, degraded_reasons: ["wgc_track_muted_unrecoverable", "process_loopback_unavailable"] });
       broadcastSnapshot();
     };
   }
 
-  reportCaptureHealth({ remote_audio_ok: hasAudio, frame_capture_ok: true });
+  const forcedUnsafeLoopback = remoteAudioOk ? hasUnsafeDeviceLoopback() : true;
+  const captureDegradedReasons = [];
+  // Privacy route degraded check (strategy-aware)
+  const strategy = state.privacyStrategy;
+  if (strategy === "vbcable") {
+    if (!Boolean(state.vbCableDeviceId && state.micForwardEl)) captureDegradedReasons.push("vbcable_not_detected");
+  } else if (!strategy) {
+    captureDegradedReasons.push("privacy_route_unavailable");
+  }
+  // (policyconfig / hotkey: no mic-forward element needed, no degraded reason)
+  if (!remoteAudioOk) captureDegradedReasons.push("process_loopback_unavailable");
+  if (forcedUnsafeLoopback) captureDegradedReasons.push("unsafe_device_loopback");
+  reportCaptureHealth({
+    remote_audio_ok: remoteAudioOk,
+    frame_capture_ok: true,
+    process_loopback_ok: remoteAudioOk,
+    unsafe_device_loopback: forcedUnsafeLoopback,
+    degraded_reasons: captureDegradedReasons,
+  });
 }
 
 // ─── Capture health ───────────────────────────────────────────────────────────
 function reportCaptureHealth(overrides = {}) {
-  const hasVb = Boolean(state.vbCableDeviceId && state.micForwardEl);
-  const unsafeLoopback = hasUnsafeDeviceLoopback();
+  const strategy = state.privacyStrategy;
+  let helperActive = false;
+  let micForwardOk = false;
   const degradedReasons = [];
-  if (!hasVb) degradedReasons.push("vbcable_not_detected");
+
+  if (strategy === "vbcable") {
+    // Legacy path: helper is active iff VB-Cable found and forward element running
+    const hasVb = Boolean(state.vbCableDeviceId && state.micForwardEl);
+    helperActive = hasVb;
+    micForwardOk = Boolean(state.micForwardEl);
+    if (!hasVb) degradedReasons.push("vbcable_not_detected");
+  } else if (strategy === "policyconfig" || strategy === "hotkey") {
+    // Driverless path: helper is always considered active once strategy is set
+    helperActive = true;
+    micForwardOk = true;  // mic goes direct to meeting app — no forward element needed
+  } else {
+    // Strategy not yet resolved — report degraded
+    degradedReasons.push("privacy_route_unavailable");
+  }
+
+  const unsafeLoopback = overrides.unsafe_device_loopback ?? hasUnsafeDeviceLoopback();
   if (unsafeLoopback) degradedReasons.push("unsafe_device_loopback");
+
   const health = {
-    mic_forward_ok: Boolean(state.micForwardEl),
+    mic_forward_ok: micForwardOk,
     remote_audio_ok: Boolean(state.meetingCapture?.hasAudio),
     frame_capture_ok: Boolean(state.meetingCapture),
     reply_output_ok: Boolean(state.listeningDeviceId) && !unsafeLoopback,
-    helper_active: hasVb,
-    process_loopback_ok: Boolean(state.meetingCapture?.hasAudio),
+    helper_active: helperActive,
+    process_loopback_ok: Boolean(state.meetingCapture?.processAudioActive),
     unsafe_device_loopback: unsafeLoopback,
     degraded_reasons: degradedReasons,
+    privacy_strategy: strategy || null,
     ...overrides,
   };
   bridge.setCaptureHealth(health).catch(() => {});
@@ -1767,6 +2284,7 @@ function sendStartNegotiation() {
       is_bound: true,
     },
     selected_output_device: { device_id: state.listeningDeviceId, label: state.listeningDeviceLabel },
+    privacy_strategy: state.privacyStrategy || null,
   });
 }
 
@@ -1782,6 +2300,8 @@ async function startSession() {
   traceClientEvent("session_start_requested", "Overlay began session startup", {
     meeting_title: state.selectedTarget?.window_title || null,
     source_id: resolvePreferredCaptureSourceId(state.selectedSourceId || null),
+    source_name: state.selectedSourceName || null,
+    source_kind: state.selectedSourceKind || null,
   });
   setOrbState("active");
   broadcastSnapshot();
@@ -1799,7 +2319,53 @@ async function startSession() {
     await bridge.bindMeetingTarget({
       ...state.selectedTarget,
       source_id: chosenSourceId,
+      source_name: state.selectedSourceName || null,
+      source_kind: state.selectedSourceKind || selectedSourceKindFromId(chosenSourceId),
     });
+
+    // Resolve privacy strategy (policyconfig | hotkey | vbcable) once per session.
+    // This starts the PowerShell helper and enumerates audio devices in the background.
+    // Falls back gracefully if the helper is unavailable.
+    let privacyMethod = null;
+    try {
+      const strategyResult = await bridge.resolvePrivacyStrategy({
+        platform: state.selectedTarget?.platform_hint || "generic",
+        listenerName: state.selectedMicLabel || null,  // exclude our mic from silent-target choice
+      });
+      state.privacyStrategy = strategyResult?.strategy || "hotkey";
+      privacyMethod = strategyResult?.method || null;
+      console.log("[Privacy] Session strategy:", state.privacyStrategy, "method:", privacyMethod, strategyResult?.reason || "");
+    } catch (err) {
+      console.warn("[Privacy] resolvePrivacyStrategy failed — defaulting to hotkey:", err?.message);
+      state.privacyStrategy = "hotkey";
+    }
+
+    // ── Detect & guide: one-time setup note per active method ─────────────────
+    // No device is ever disabled (that breaks the AI listener). Two listener-safe paths:
+    //   • policyconfig/redirect-cable: redirect ONLY Zoom's process to a virtual-cable
+    //     endpoint. Requires Zoom's mic set to "Same as System / Default" for the
+    //     per-process override to take effect.
+    //   • hotkey: send Zoom's mute hotkey. Requires Zoom global shortcut enabled once.
+    if (state.privacyStrategy === "hotkey") {
+      const combo = state.selectedTarget?.platform_hint === "teams" ? "Ctrl+Shift+M"
+                  : state.selectedTarget?.platform_hint === "google_meet" ? "Ctrl+D"
+                  : "Alt+A";
+      broadcast("PRIVACY_SETUP_NOTE", {
+        kind: "hotkey",
+        message:
+          `🔒 Privacy = hotkey mute (${combo}). To make it work outside the meeting window, ` +
+          `enable Zoom → Settings → Keyboard Shortcuts → "Enable Global Shortcut" for ` +
+          `Mute/Unmute My Audio (one time). Your mic stays live for the AI the whole time.`,
+      });
+    } else if (state.privacyStrategy === "policyconfig" && privacyMethod === "redirect-cable") {
+      broadcast("PRIVACY_SETUP_NOTE", {
+        kind: "redirect-cable",
+        message:
+          `🔒 Privacy = per-app redirect to a virtual cable. For this to take effect, set your ` +
+          `meeting app's microphone to "Same as System" / "Default" (NOT a specific device). ` +
+          `Your real mic stays live for the AI; only the counterparty hears silence on hold.`,
+      });
+    }
 
     // Start screen + audio capture using the source already selected in the main window.
     // state.selectedSourceId is set when user clicks a window in the full.js meeting list
@@ -1840,8 +2406,14 @@ async function startSession() {
       console.error('[MIC] TRACK IS MUTED — this mic is delivering silence. Check Windows audio settings.');
     }
 
-    // Forward mic to VB-CABLE (meeting app hears us through this)
-    await setupMicForward(micStream);
+    // Forward mic to VB-CABLE only when the vbcable strategy is active.
+    // For policyconfig/hotkey strategies, the meeting app reads the mic directly
+    // from the OS default device; the forward element is not needed.
+    if (state.privacyStrategy === "vbcable") {
+      await setupMicForward(micStream);
+    } else {
+      console.log("[Privacy] Skipping VB-Cable forward (strategy=" + state.privacyStrategy + ")");
+    }
     reportCaptureHealth();
 
     // Public transcript capture → LOCAL_MIC_PCM.
@@ -1920,7 +2492,12 @@ function pauseSession() {
   state.holdSource = null;
   state.awaitingPrivateReply = false;
   stopActivePlayback(true);
-  if (state.micForwardEl) state.micForwardEl.muted = false;
+  if (state.privacyStrategy === "vbcable") {
+    if (state.micForwardEl) state.micForwardEl.muted = false;
+  } else if ((state.privacyStrategy === "policyconfig" || state.privacyStrategy === "hotkey") && _prevMuteToMeeting) {
+    bridge.privacyRestore().catch(() => {});
+  }
+  _prevMuteToMeeting = false;
   traceClientEvent("session_pause_requested", "Overlay requested desktop session pause", {});
   wsSend("PAUSE_NEGOTIATION", {});
   bridge.setHoldToAsk({ active: false, muted_to_meeting: false }).catch(() => {});
@@ -1959,6 +2536,12 @@ function endSession() {
 
 async function selectTarget(target, { autoStart = false } = {}) {
   state.selectedTarget = target;
+  if (!state.selectedSourceId) {
+    const resolved = resolveSourceForTarget(target, state.screenSources);
+    if (resolved) {
+      setSelectedCaptureSource(resolved);
+    }
+  }
   state.prefs.lastMeetingTitle = target.window_title;
   savePrefs();
   traceClientEvent("meeting_target_selected", "User selected a meeting target from the overlay", {
@@ -1966,6 +2549,8 @@ async function selectTarget(target, { autoStart = false } = {}) {
     window_title: target.window_title,
     platform_hint: target.platform_hint,
     source_id: state.selectedSourceId || null,
+    source_name: state.selectedSourceName || null,
+    source_kind: state.selectedSourceKind || null,
     auto_start: autoStart,
   });
   closeMenu();
@@ -1985,14 +2570,7 @@ function closeMenu() {
 }
 
 function _findSourceForTarget(t) {
-  if (!state.screenSources || !state.screenSources.length) return null;
-  const title = (t.window_title || "").toLowerCase();
-  return (
-    state.screenSources.find(s => s.name.toLowerCase() === title) ||
-    state.screenSources.find(s =>
-      title.includes(s.name.toLowerCase()) || s.name.toLowerCase().includes(title)
-    ) || null
-  );
+  return resolveSourceForTarget(t, state.screenSources);
 }
 
 function renderMenu() {
@@ -2034,7 +2612,15 @@ function renderMenu() {
     btn.appendChild(info);
 
     btn.addEventListener("click", () => {
-      state.selectedSourceId = src?.id || t.target_id || null;
+      if (src) {
+        setSelectedCaptureSource(src);
+      } else {
+        setSelectedCaptureSource({
+          id: t.target_id || null,
+          name: t.window_title || null,
+          kind: selectedSourceKindFromId(t.target_id) || "window",
+        });
+      }
       void selectTarget(t);
     });
     menu.appendChild(btn);
@@ -2056,6 +2642,32 @@ async function openMenu() {
   state.menuOpen = true;
   syncOverlayPresentation();
   refreshContrast();
+}
+
+async function openScreenSelectionFromOverlay() {
+  document.getElementById("lang-menu")?.classList.add("hidden");
+  state.langMenuOpen = false;
+  closeMenu();
+  const chosenSource = await showScreenPicker();
+  if (!chosenSource?.id) return;
+  setSelectedCaptureSource(chosenSource);
+  traceClientEvent("overlay_capture_source_selected", "Overlay switched the captured screen/window", {
+    source_id: chosenSource.id,
+    source_name: chosenSource.name || null,
+    source_kind: chosenSource.kind || null,
+    session_live: state.sessionLive,
+  });
+  if (state.selectedTarget) {
+    await syncDesktopCaptureSelection(chosenSource.id).catch((error) =>
+      console.warn("[Overlay] Capture source sync failed:", error?.message || error)
+    );
+  }
+  if (state.sessionLive && !state.sessionPaused) {
+    await startMeetingCapture(chosenSource.id).catch((error) =>
+      console.warn("[Overlay] Live screen switch failed:", error?.message || error)
+    );
+  }
+  broadcastSnapshot();
 }
 
 function toggleMenu() {
@@ -2216,8 +2828,11 @@ channel.onmessage = (ev) => {
   if (type === "COMMAND_RESUME_SESSION") resumeSession();
   if (type === "COMMAND_SELECT_MEETING" && payload?.target) {
     void selectTarget(payload.target, { autoStart: false });
-    // Store the desktop source_id so startMeetingCapture uses the same source the user picked
-    state.selectedSourceId = payload.source_id || payload.target?.target_id || null;
+    setSelectedCaptureSource({
+      id: payload.source_id || payload.target?.target_id || null,
+      name: payload.source_name || payload.target?.window_title || null,
+      kind: payload.source_kind || selectedSourceKindFromId(payload.source_id || payload.target?.target_id) || "window",
+    });
     // If session is already live, restart capture immediately with the new source —
     // no button needed; clicking in the main window switches the captured screen right away
     if (state.sessionLive && !state.sessionPaused) {
@@ -2281,6 +2896,31 @@ window.addEventListener("load", async () => {
   await refreshContrast();
   broadcastSnapshot();
 });
+
+(function setupScreenPickerChip() {
+  const chip = document.getElementById("screen-chip");
+  const label = document.getElementById("screen-chip-label");
+  if (!chip || !label) return;
+
+  chip.classList.add("visible");
+
+  function paint() {
+    const kind = state.selectedSourceKind || selectedSourceKindFromId(state.selectedSourceId);
+    label.textContent = kind === "window" ? "WIN" : "SCR";
+    chip.classList.toggle("active", Boolean(state.selectedSourceId || state.selectedSourceName));
+    chip.title = state.selectedSourceName
+      ? `Switch captured source (current: ${state.selectedSourceName})`
+      : "Switch captured screen or window";
+  }
+
+  chip.addEventListener("click", () => {
+    void openMenu();
+  });
+
+  const timer = setInterval(paint, 400);
+  window.addEventListener("beforeunload", () => clearInterval(timer));
+  paint();
+})();
 
 // ─── Audio mix UI (reversible block) ──────────────────────────────────────────
 // Compact slider + duck toggle near the orb. Mirrors the main-window card via

@@ -655,21 +655,34 @@ async function configureMicForward(stream) {
 }
 
 async function reportCaptureHealth(overrides = {}) {
-  const helperActive = Boolean(state.meetingRouteOutput && isVirtualRouteDevice(state.meetingRouteOutput.label));
+  // Strategy-aware helper_active: vbcable uses route device; policyconfig/hotkey are always active
+  const strategy = state.privacyStrategy || null;
+  const driverless = strategy === "policyconfig" || strategy === "hotkey";
+  const helperActive = driverless
+    ? true
+    : Boolean(state.meetingRouteOutput && isVirtualRouteDevice(state.meetingRouteOutput.label));
+
+  const degradedReasons = [];
+  if (!helperActive && !driverless) degradedReasons.push("virtual_mic_helper_unavailable");
+
   const health = await bridge.setCaptureHealth({
-    mic_forward_ok: Boolean(state.micForwardAudioEl),
+    mic_forward_ok: driverless ? true : Boolean(state.micForwardAudioEl),
     remote_audio_ok: Boolean(state.meetingCapture),
     frame_capture_ok: Boolean(state.meetingCapture),
     reply_output_ok: Boolean(state.listeningOutput),
     helper_active: helperActive,
     process_loopback_ok: Boolean(state.meetingCapture?.hasAudioTrack),
     unsafe_device_loopback: false,
-    degraded_reasons: helperActive ? [] : ["virtual_mic_helper_unavailable"],
+    degraded_reasons: degradedReasons,
+    privacy_strategy: strategy,
     ...overrides,
   });
 
   elements.healthJson.textContent = JSON.stringify(health, null, 2);
-  setExpandedStatus(elements.privacyStatus, helperActive ? "Virtual mic ready" : "Need VB-CABLE route");
+  const privacyLabel = driverless
+    ? `Privacy active (${strategy})`
+    : (helperActive ? "Virtual mic ready" : "Need VB-CABLE route");
+  setExpandedStatus(elements.privacyStatus, privacyLabel);
   safeSendControl("CAPTURE_HEALTH", health);
 }
 
@@ -961,7 +974,7 @@ window.addEventListener("load", async () => {
   updateOverlayState();
   setExpandedStatus(elements.backendStatus, "Connecting");
   setExpandedStatus(elements.sessionStatus, "Idle");
-  setExpandedStatus(elements.privacyStatus, "Need VB-CABLE route");
+  setExpandedStatus(elements.privacyStatus, "Initializing privacy route...");
   setMiniStatus("Double-click AI to choose meeting");
 
   await connectBackend().catch((error) => log("Backend connect failed", { error: String(error) }));

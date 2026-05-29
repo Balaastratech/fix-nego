@@ -1,5 +1,167 @@
 # HANDOFF.md
 
+---
+
+## 2026-05-29 (later) — REMOVED device-disabling; it broke the AI listener. New: redirect-to-cable OR hotkey.
+
+[2026-05-29][Agent: Claude Code] Live test (session `45034473-b568-4a02-9ec6-1eb0c18f6bd1`) proved the `disable-spare` method is fundamentally broken:
+
+**Evidence from the trace:** ZERO transcription / `question_text_ready` events the whole session. All 4 `ai_response_completed` were generic filler ("Ask them to turn their camera on", "Focus on active listening") — the AI answered the context `pre_query_brief` but **never heard a word the user spoke**. User also got the Windows popup *"Your default microphone has changed to Stereo Mix (Realtek) and will now be used."*
+
+**Root cause:** `IPolicyConfig::SetEndpointVisibility(dev,0)` (disable) is a **system-wide** op, not per-process. Disabling the spare (a) reassigned the Windows default mic and (b) killed the Electron `getUserMedia` stream that is the AI's ears — it never re-acquired. So after the first hold: Zoom re-grabbed its mic (counterparty hears user) but the AI listener was dead for the rest of the session.
+
+**Decision (user-approved):** remove ALL device-disabling. Two listener-safe driverless paths only:
+1. **redirect-cable** — if an ACTIVE virtual-cable capture endpoint exists (CABLE Output / VoiceMeeter / etc.), redirect ONLY the meeting app's process to it (silent when nothing feeds the cable input). No disable, no default change, listener untouched.
+2. **hotkey** — no cable present → send the meeting app's mute hotkey. Listener untouched.
+
+**Changes:**
+- `audio-isolator.ps1` `Invoke-Probe` → now returns `redirect-cable` (active cable endpoint by name match) or `none`. The `disable-spare` selection is gone. `set-visibility` command still exists but is no longer used by the isolate path.
+- `main.js` `performPrivacyIsolate` → redirect-only, never disables. Recovery marker carries no disabled device. (Startup sweep still re-enables any spare left disabled by the OLD build, for safety.)
+- `overlay.js` → replaced the misleading "VB-Cable still set" warning with `PRIVACY_SETUP_NOTE` guidance per method (hotkey: enable Zoom global shortcut; redirect-cable: set Zoom mic to "Same as System/Default").
+- `full.js` → handles `PRIVACY_SETUP_NOTE` (blue info banner, dismissable).
+
+**Verified:** probe → `method: redirect-cable | target: CABLE Output | needsDisable: False`. All JS + PS parse clean.
+
+**CRITICAL caveats for the next live test:**
+- redirect-cable only takes effect if **Zoom's mic = "Same as System / Default"** (the per-process default override is ignored if Zoom is pinned to a specific device). Guidance banner tells the user this.
+- The user's Windows **default mic may currently be stuck on Stereo Mix** from the old disable build — they should reset it (Settings → Sound → Input) to their headset.
+- For THIS machine (has VB-Cable installed), the MOST reliable option remains the legacy forward-and-mute: `COMPANION_VBCABLE=on` (Zoom mic = CABLE Output, app forwards real mic to CABLE Input, mutes during hold; listener reads real mic directly). redirect-cable is the no-forward alternative the user chose.
+
+### Follow-up: hotkey path fixed + .env comparison harness
+- Bug found in `Invoke-SendKeys`: PowerShell `[ushort]` is not a type accelerator → "Unable to find type [ushort]". Also `SendInput` P/Invoke was declared `bool` but returns `uint`. **Fixed**: moved all key parsing + SendInput into a C# `NativeHelpers.SendKeyCombo(combo)` static; PS just calls it. `SendInput` now `uint`. Compiles clean; in this headless test SendInput returns 0 (no interactive desktop) — expected; will fire in the live Electron app.
+- `desktop/.env` rewritten with accurate current semantics (no "disable" language) + a **TEST A/B/C comparison guide**: A=auto/redirect-cable, B=hotkey, C=vbcable. Flip one line, `npm start`, test. Reminds user to reset Windows default mic off Stereo Mix and set Zoom mic appropriately per method.
+- Verified: probe→redirect→restore lifecycle all `ok` after the C# changes.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-29 (later)
+
+## 2026-05-29 — Driverless mic isolation v2: policyconfig-FIRST, probe-driven (COM layer proven on real HW)
+
+[2026-05-29][Agent: Claude Code] Reworked the privacy isolation to make **IAudioPolicyConfig the always-chosen primary** (no pre-emptive hotkey fallback), per user directive. Heavy reverse-engineering + on-machine COM testing done. All COM primitives now verified working on this Windows 11 box.
+
+### Root causes of the earlier hotkey fallback (session bc71d52e)
+1. Helper spawned in MTA — Windows audio COM is STA-only → enumerate returned nothing. Fixed: `-Sta` added to spawn (main.js startPrivacyHelper).
+2. PowerShell **cannot call IUnknown-only COM interface methods** (routes via IDispatch). Fixed: ALL COM calls moved into the C# `Add-Type` layer (`NativeHelpers`); PowerShell only calls simple static methods returning strings/ints.
+
+### Key reverse-engineering findings (verified empirically this session)
+- **IAudioPolicyConfig activation is WinRT**, not CoCreateInstance. Use `RoGetActivationFactory("Windows.Media.Internal.AudioPolicyConfig", iid)`. Win11 IID `ab3d4648-…` (this machine → `policyVersion: win11`), Win10 `2a59116d-…`.
+- The interface is **IInspectable-derived with 19 `__incomplete__` stub methods** before `SetPersistedDefaultAudioEndpoint`. The earlier 2-stub IUnknown decl caused an `AccessViolationException` (wrong vtable slot). Fixed with full 19-stub IInspectable layout (source: Belphemur/SoundSwitch).
+- `deviceId` must be a **manually-created HSTRING** (IntPtr via `WindowsCreateString`); the automatic `UnmanagedType.HString` marshaller gave E_INVALIDARG.
+- **The persisted-endpoint API wants the device-path form** `\\?\SWD#MMDEVAPI#<bareId>#{2eef81be-33fa-4800-9670-1cd474972c3f}` (eCapture iface class), NOT the bare `{0.0.1...}.{guid}` from IMMDevice::GetId. `Redirect()` now auto-retries the wrapped form on E_INVALIDARG.
+- **A redirect target MUST be ACTIVE at redirect time.** disabled/unplugged/not_present targets → E_INVALIDARG. ⇒ the only viable method is **disable-spare**: redirect to an active non-listener endpoint FIRST, THEN `set-visibility(0)` to silence it. (existing-disabled method removed — it cannot be a target.)
+- `IPolicyConfig::SetEndpointVisibility` (IID `f8679f50-…`, CLSID `870af99c-…`) works with **no admin** (RPCs into audiosrv).
+
+### Final architecture
+- **resolvePrivacyStrategy(platform, listenerName)** → starts STA helper, `init` (WinRT activate), `probe` (picks an ACTIVE capture endpoint that is NOT the listener, excluded by friendly-name since getUserMedia ids ≠ WASAPI ids). Always returns `strategy: "policyconfig"` + `method: "disable-spare"` + targetDeviceId. Env overrides honored (`COMPANION_PRIVACY_MODE`, `COMPANION_VBCABLE`).
+- **isolate (hold press):** `redirect(zoomPid → spare)` THEN `set-visibility(spare,0)`. Writes recovery marker {pid, disabledSpare}.
+- **restore (hold release):** `restore(pid)` + `set-visibility(spare,1)`.
+- **Runtime hotkey safety net:** ONLY if a live COM call throws mid-hold (never pre-emptive).
+- **Crash safety:** recovery marker + startup sweep (`recoverStaleRedirect` re-enables any disabled spare AND clears redirect) + before-quit restore + 30s watchdog.
+- Single-mic machines (no active non-listener endpoint) → probe returns `none` → hotkey net (surfaced, not silent). We never disable the listener's own mic (would kill the AI listener — user-confirmed concern).
+
+### Files changed this session
+- `desktop/scripts/audio-isolator.ps1` — full rewrite of COM layer (WinRT activation, 19-stub IInspectable interfaces, IPolicyConfig, manual HSTRING, SWD-path auto-wrap, `probe`/`set-visibility` commands; all COM in C#).
+- `desktop/src/main.js` — privacyState fields (method/targetDeviceId/needsDisable/disabledSpare/listenerName); resolvePrivacyStrategy rewritten probe-driven; isolate redirect-then-disable; restore re-enables spare; recovery marker carries disabledSpare; endCompanionSession resets new fields; `-Sta` on helper spawn.
+- `desktop/src/renderer/overlay.js` — resolvePrivacyStrategy now passes `listenerName: state.selectedMicLabel`.
+
+### Verified this session (PowerShell harness, real HW)
+- WinRT activation → `policyVersion: win11` ✓
+- enumerate → 10 capture endpoints ✓
+- probe → picks active non-listener spare ✓
+- redirect (with SWD auto-wrap) → ok ✓; restore → ok ✓
+- set-visibility 0/1 → ok ✓
+- **Full lifecycle redirect→disable→restore→re-enable → all ok** ✓
+
+### STILL UNVERIFIED (needs the user's live Zoom + 2nd account)
+Whether Zoom, redirected to the spare we then disable, receives **clean silence vs an `AUDCLNT_E_DEVICE_INVALIDATED` "mic disconnected" dialog** — this is OS-version-specific and cannot be measured without a real capturing app. Runtime hotkey net covers the error case. THIS IS THE NEXT TEST: set Zoom mic to the real headset, start session, Hold-to-Ask, confirm (a) counterparty hears silence, (b) AI still transcribes, (c) no Zoom error dialog, (d) release restores audio.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-29
+
+## 2026-05-28 — Driverless Per-Process Mic Isolation (replaces VB-Cable as default)
+
+[2026-05-28][Agent: Claude Code] Implemented the full driverless privacy isolation feature per `docs/DRIVERLESS_MIC_ISOLATION_PLAN.md`.
+
+### What changed
+
+**New file: `desktop/scripts/audio-isolator.ps1`**
+PowerShell server-mode helper. Stays alive per session. Handles 6 commands via JSON stdin/stdout:
+- `init` — pre-warms COM singletons
+- `enumerate` — lists all WASAPI capture endpoints with IDs, names, state via IMMDeviceEnumerator
+- `pid-from-hwnd <hwnd>` — GetWindowThreadProcessId → PID
+- `redirect <pid> <deviceId>` — SetPersistedDefaultAudioEndpoint (tries Win11 CLSID then Win10 fallback)
+- `restore <pid>` — restores default (null deviceId)
+- `send-keys <combo>` — SendInput for hotkey fallback (e.g. alt+a, ctrl+shift+m)
+
+**Modified: `desktop/src/main.js`**
+- Added `child_process` require
+- Added entire privacy module (300+ lines): helper lifecycle, strategy resolution, isolate/restore, recovery marker, watchdog, before-quit restore, startup sweep
+- `COMPANION_PRIVACY_MODE` env var: auto|policyconfig|hotkey|vbcable (default auto)
+- `COMPANION_VBCABLE` env var: auto|on|off (default auto; `off` = fully disables VB-Cable path)
+- bindMeetingTarget + rebindMeetingTarget now resolve meeting app PID async via HWND→pid-from-hwnd
+- 3 new IPC handlers: `companion:resolvePrivacyStrategy`, `companion:privacyIsolate`, `companion:privacyRestore`
+- endCompanionSession now restores isolation and stops helper
+- before-quit restores isolation
+- startup sweep reads `privacy-recovery.json` and restores stale redirect on crash recovery
+
+**Modified: `desktop/src/preload.js`**
+- Added `resolvePrivacyStrategy`, `privacyIsolate`, `privacyRestore` to bridge
+
+**Modified: `desktop/src/renderer/overlay.js`**
+- `state.privacyStrategy` field added
+- `_prevMuteToMeeting` module var for transition detection
+- `updateMicMuteState()` dispatches by strategy: vbcable→micForwardEl.muted, policyconfig/hotkey→IPC bridge call (fire-and-forget, only on transitions)
+- `startSession()` calls `bridge.resolvePrivacyStrategy()` after bindMeetingTarget; gates `setupMicForward()` to vbcable only
+- `sendStartNegotiation()` includes `privacy_strategy` in payload
+- `reportCaptureHealth()` strategy-aware: policyconfig/hotkey always reports helper_active=true; VB-Cable degraded reason only fires for vbcable strategy
+- `teardownLocalSession()` and `pauseSession()` call `bridge.privacyRestore()` if driverless and was muted
+- `broadcastSnapshot()` includes `privacyStrategy`
+- Inline `reportCaptureHealth` inside `startMeetingCapture` is now strategy-aware
+
+**Modified: `desktop/src/renderer/full.js`**
+- `state.privacyStrategy` tracked from STATE_SNAPSHOT
+- `renderDevices()` shows "Driverless (IAudioPolicyConfig ✓)" or "Driverless (hotkey ✓)" instead of VB-Cable row when driverless strategy is active
+
+**Modified: `desktop/src/renderer/app.js`** (loaded from index.html, not an active window in current main.js — consistent changes for future use)
+- `reportCaptureHealth()` strategy-aware
+- Initial privacy status text changed from "Need VB-CABLE route" to "Initializing privacy route..."
+
+**Modified: `desktop/package.json`**
+- `extraResources` added to bundle `scripts/audio-isolator.ps1` in dist builds
+
+### Critical safety property
+`SetPersistedDefaultAudioEndpoint` is persisted and survives crashes. Three layers of protection:
+1. Recovery marker file (`privacy-recovery.json` in runtimeRoot) — written on redirect, cleared on restore
+2. Startup sweep (`recoverStaleRedirect()`) — runs on every app launch before creating windows
+3. `before-quit` handler — restores on clean exit
+
+### Behavior summary
+- **Default (auto)**: App starts helper, enumerates WASAPI capture endpoints, finds a silent/non-default endpoint → uses `policyconfig` strategy. No VB-Cable, no driver, no admin.
+- **Fallback (no silent endpoint)**: Uses `hotkey` strategy — sends Alt+A (Zoom), Ctrl+Shift+M (Teams), Ctrl+D (Meet) via SendInput on hold press/release.
+- **Legacy path**: `COMPANION_VBCABLE=on` or `COMPANION_PRIVACY_MODE=vbcable` → original VB-Cable forward path unchanged.
+- **Full shutoff**: `COMPANION_VBCABLE=off` → VB-Cable never selected even as fallback.
+
+### Verification needed (not yet E2E tested)
+1. `node_modules/.bin/electron .` in desktop/ — confirm app starts without error
+2. Start a Zoom call (set Zoom mic to "Default"), start companion session — check privacy strategy resolves in console
+3. Hold-to-Ask → confirm Zoom mic indicator goes silent, AI transcribes voice
+4. Release → confirm Zoom mic returns, no error dialogs
+5. Kill app during hold → relaunch → confirm Zoom mic restored (startup sweep)
+6. Test `COMPANION_VBCABLE=on` → confirm VB-Cable forward path still works
+
+### Backend
+No changes needed. `companion_runtime.py:340-346` gates LOCAL_MIC_PCM independently. `muted_to_meeting` field in hold state is stored but never acted on by backend.
+
+### Risks to watch
+- Helper takes 2-8s to start (PowerShell + Add-Type compilation). Only happens once per session start — acceptable.
+- If no silent WASAPI capture endpoint found, falls back to hotkey — Zoom users need global shortcut enabled once.
+- On some Windows builds, `IAudioPolicyConfigWin11.Stub0/Stub1` vtable offsets may not match. If `redirect` consistently returns HRESULT errors, the CLSID/vtable needs tuning per EarTrumpet source.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-28
+
+---
+
 ## 2026-05-28 — Session lifecycle UX fixes: no auto-start, backend readiness, screen drop resilience, picker usability
 
 [2026-05-28T23:00:00+05:30][Agent: Kiro] Fixed four user-reported issues with the screen selection and session start flow:
@@ -1599,3 +1761,197 @@ One transient failure occurred during the first run because the new positive-pat
 3. Add Electron auth window + secure token handoff to main.
 4. Switch renderer/backend connection flow from anonymous `ws://localhost:8000/ws` to authenticated desktop session bootstrap.
 5. Gate overlay/full UI until desktop auth is complete.
+
+---
+
+## 2026-05-28 - Process-scoped remote audio capture implemented for active overlay path
+
+[2026-05-28T23:55:00+05:30][Agent: Codex] Implemented the approved process-scoped remote audio capture plan in the active desktop companion path so AI playback is no longer intentionally sourced from mixed display-loopback audio.
+
+### Objective
+
+Stop the desktop companion from treating Electron AI reply audio as counterparty speech by replacing `getDisplayMedia(... audio: true)` loopback ingestion with per-process capture for the selected meeting window, while failing closed if process capture cannot bind.
+
+### Files changed
+
+- `desktop/package.json`
+  - Added `application-loopback@^1.2.6`.
+- `desktop/src/main.js`
+  - Lazy-loads `application-loopback`.
+  - Added main-process remote audio mode state: `none | process_loopback | display_loopback`.
+  - Added IPC handlers:
+    - `companion:getWindowProcessIds`
+    - `companion:startProcessAudioCapture`
+    - `companion:stopProcessAudioCapture`
+  - `setDisplayMediaRequestHandler(...)` now omits `audio: "loopback"` unless the main-process mode explicitly allows it.
+  - `companion:endCompanionSession` now tears down any active process capture.
+- `desktop/src/preload.js`
+  - Exposed the new process-audio IPC methods and `onProcessAudioChunk(...)`.
+- `desktop/src/renderer/overlay.js`
+  - Added process-audio state, window-handle parsing, IPC chunk subscription, process/window matching, PCM-format probing, conversion/downsampling, and timed remote-audio flushing.
+  - Matching now prefers the meeting window handle derived from Electron `window:XX:YY` ids, with exact/partial title fallback only as secondary recovery.
+  - `startMeetingCapture(...)` now attempts process capture first, keeps screen/video capture, and **does not** create `REMOTE_APP_PCM` from the display stream anymore.
+  - If process capture fails, overlay reports:
+    - `remote_audio_ok: false`
+    - `process_loopback_ok: false`
+    - `unsafe_device_loopback: true`
+    - degraded reason `process_loopback_unavailable`
+  - This keeps the backend remote lane inadmissible instead of silently reintroducing mixed loopback.
+- `backend/tests/test_companion_runtime.py`
+  - Added regression coverage for degraded process-loopback failure health and remote-lane inadmissibility.
+
+### Important implementation behavior
+
+- Active scope is the current Electron overlay/full-window flow only. Legacy `desktop/src/renderer/app.js` was intentionally left untouched.
+- The remote audio path is now:
+  1. overlay resolves the meeting window handle from `selectedTarget.target_id` / `selectedSourceId`
+  2. overlay asks main for active windows from `application-loopback`
+  3. overlay matches by `hwnd` first
+  4. main starts per-process audio capture for that PID
+  5. main forwards raw chunks to overlay over IPC
+  6. overlay probes the first chunk format heuristically, converts to `int16` mono `16kHz`, and sends `REMOTE_APP_PCM`
+- The first process-audio chunk is logged with byte length and inferred format. This is deliberate because the package README only promises raw PCM, not an exact sample format.
+
+### Verification completed
+
+- `npm install application-loopback@1.2.6` in `desktop/` -> success
+- `node -e "const m=require('./node_modules/application-loopback'); console.log(Object.keys(m).sort().join(','))"` in `desktop/` -> success
+  - exported keys confirmed:
+    - `getActiveWindowProcessIds`
+    - `getLoopbackBinaryPath`
+    - `getProcessListBinaryPath`
+    - `setExecutablesRoot`
+    - `startAudioCapture`
+    - `stopAudioCapture`
+- `node --check desktop/src/main.js` -> success
+- `node --check desktop/src/preload.js` -> success
+- `node --check desktop/src/renderer/overlay.js` -> success
+- `backend\venv\Scripts\python.exe -m pytest backend\tests\test_companion_runtime.py -q` -> 20 passed, 1 existing Pydantic deprecation warning
+
+### Not yet verified live
+
+- No live Electron + Zoom/Teams/Meet session was run after this patch.
+- The process-audio converter currently assumes the package is either:
+  - float32 stereo at 48kHz, or
+  - int16 stereo at 48kHz
+  and logs the first real chunk so this can be corrected quickly if the native helper emits a different shape.
+- For browser-hosted meetings like Google Meet, process capture is still browser-process scoped, not tab scoped. This patch fixes Electron self-capture first; it does not prove per-tab purity for Meet.
+
+### Risks / follow-up
+
+- If live audio sounds silent, clipped, or distorted, inspect the first `[ProcessAudio] First chunk received` console log in overlay DevTools and adjust the converter's assumed input format/rate.
+- If `application-loopback` cannot find a matching meeting PID on a given machine, the app now fails closed for remote audio rather than falling back to mixed loopback. Video/screen capture should still work.
+- `data/logs/copilot_conversation_audit.jsonl` is currently dirty in the worktree as well. This implementation did not intentionally edit that file; keep that in mind before staging.
+
+---
+
+## 2026-05-28 - Remote counterparty lane was being dropped by frontend process-loopback VAD
+
+[2026-05-28T12:50:00+05:30][Agent: Codex] Investigated the user's live regression after the process-scoped capture rollout: after pressing the orb, AI no longer leaked into counterparty, but the real counterparty often failed to transcribe immediately afterward.
+
+### Root cause confirmed from the live log
+
+- In the user's session `cbb7d6d2-e09f-483f-a0dc-aeb715329214`, hold-to-ask ran from `12:34:07` to `12:34:15`, Gemini answered by `12:34:18`, but there were **no** `remote_app` Deepgram stream logs until `12:35:55`.
+- The backend code already allows `remote_app` to keep flowing during hold and after AI playback:
+  - `backend/app/services/companion_runtime.py` explicitly skips only `local_mic` during hold.
+  - There is no backend-side post-orb suppression left on the `remote_app` lane.
+- The actual suppression point was the new process-loopback frontend in `desktop/src/renderer/overlay.js`:
+  - `flushProcessAudioBuffer()` only opened a `REMOTE_APP_PCM` utterance when frontend RMS crossed `PROCESS_AUDIO_SPEECH_THRESHOLD`.
+  - That made the remote lane depend on a second frontend VAD gate that is stricter/different from the older display-loopback path.
+  - Quiet/short counterparty turns after orb release were getting dropped before they ever reached `REMOTE_APP_PCM`, so Deepgram never saw them.
+
+### Fix landed
+
+- `desktop/src/renderer/overlay.js`
+  - Removed the frontend speech-threshold gate from the process-loopback remote lane.
+  - Process-loopback now **fails open** for counterparty audio once the process capture is active:
+    - first chunk starts the utterance
+    - every chunk is forwarded
+    - finalization now depends on lack of chunks for `PROCESS_AUDIO_SILENCE_MS`, not on frontend RMS being above a speech threshold
+  - State now tracks `processAudioLastChunkAt` instead of `processAudioLastSpeechAt`.
+
+### Why this is the correct direction
+
+- The user's hard requirement is that counterparty audio must not be dropped/suppressed as an AI-leak workaround.
+- Deepgram/backend already have better downstream handling for real speech vs noise.
+- The remote lane is more important to preserve than to pre-filter in the renderer.
+
+### Verification completed
+
+- `node --check desktop/src/renderer/overlay.js` -> success
+
+### Next live validation needed
+
+- Restart the desktop app and rerun the exact flow:
+  1. user speaks before orb
+  2. hold orb and ask AI
+  3. counterparty speaks immediately after orb release / while AI is done speaking
+- Expected change:
+  - `remote_app` Deepgram stream should start as soon as counterparty audio is present
+  - there should no longer be a long gap like `12:34:18` -> `12:35:55` before the first `remote_app` transcript activity
+
+---
+
+## 2026-05-28 - Stale display source IDs and overlay screen-switch UX fix
+
+[2026-05-28T13:25:00+05:30][Agent: Codex] Investigated the user's next live desktop issue after the remote-audio fix:
+
+- Electron repeatedly logged:
+  - `[DisplayMedia] Selected source not found: window:201524:0`
+- The captured screen/window did not stay attached reliably.
+- Once transcription/session was live, the overlay had no direct control to reopen the screen picker and switch the captured source.
+
+### Root cause confirmed
+
+- The desktop flow was persisting/reusing only a raw `selectedDesktopSourceId`.
+- Electron `desktopCapturer.getSources()` IDs for windows are not stable enough to trust blindly across retries/hot-reloads/recreated windows.
+- `main.js` request handling only tried exact-id lookup. If the old `window:...` id disappeared, capture failed immediately instead of remapping by source metadata.
+- The overlay already had a screen-picker modal, but no live-session button exposed it, and the picker did not highlight the current source.
+
+### Fix landed
+
+- `desktop/src/main.js`
+  - Companion state now also stores:
+    - `selectedDesktopSourceName`
+    - `selectedDesktopSourceKind`
+  - Added `resolveDisplaySource(...)` fallback logic for `setDisplayMediaRequestHandler(...)`:
+    1. exact source id
+    2. source name + kind
+    3. stale window handle extracted from `window:XX:YY`
+    4. bound meeting window title
+  - When remapped, main logs:
+    - `[DisplayMedia] Remapped stale source id old -> new`
+
+- `desktop/src/renderer/overlay.js`
+  - Tracks capture-source metadata in renderer state:
+    - `selectedSourceId`
+    - `selectedSourceName`
+    - `selectedSourceKind`
+  - Before each `startMeetingCapture(...)`, overlay refreshes available screen sources and reconciles stale ids to a current source before syncing with main.
+  - Added `openScreenSelectionFromOverlay()` to reopen the existing screen-picker modal from the live overlay and immediately switch capture if the session is live.
+  - Picker cards now highlight the currently selected source.
+
+- `desktop/src/renderer/overlay.html` / `overlay.css`
+  - Added a new live overlay chip:
+    - `screen-chip`
+  - Behavior mirrors the language chip style and opens the screen-picker modal.
+  - Label shows `SCR` or `WIN` based on the currently selected capture source kind.
+
+- `desktop/src/renderer/full.js`
+  - `COMMAND_SELECT_MEETING` now sends `source_name` and `source_kind` in addition to `source_id` so overlay/main can remap stale ids more reliably.
+
+### Verification completed
+
+- `node --check desktop/src/main.js` -> success
+- `node --check desktop/src/renderer/overlay.js` -> success
+- `node --check desktop/src/renderer/full.js` -> success
+
+### Expected live behavior now
+
+- If a stale window source id disappears, capture should remap instead of repeatedly logging `Selected source not found`.
+- During a live session, the overlay should now show a dedicated screen-switch chip near the language chip.
+- Clicking that chip should reopen the picker, highlight the currently selected screen/window, and immediately switch capture when another source is clicked.
+
+### Remaining live risk
+
+- If the selected source truly no longer exists and cannot be remapped by id/name/handle/title, capture will still fail, but now that failure is explicit rather than endlessly retrying the stale id.

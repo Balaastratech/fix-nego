@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld("companionBridge", {
   getScreenSources: () => ipcRenderer.invoke("companion:getScreenSources"),
   bindMeetingTarget: (binding) => ipcRenderer.invoke("companion:bindMeetingTarget", binding),
   rebindMeetingTarget: (binding) => ipcRenderer.invoke("companion:rebindMeetingTarget", binding),
+  getWindowProcessIds: () => ipcRenderer.invoke("companion:getWindowProcessIds"),
+  startProcessAudioCapture: (request) => ipcRenderer.invoke("companion:startProcessAudioCapture", request),
+  stopProcessAudioCapture: () => ipcRenderer.invoke("companion:stopProcessAudioCapture"),
   listAudioDevices: () => enumerateAudioDevices(),
   selectListeningOutput: (output) => ipcRenderer.invoke("companion:selectListeningOutput", output),
   selectMeetingRouteOutput: (output) => ipcRenderer.invoke("companion:selectMeetingRouteOutput", output),
@@ -39,4 +42,17 @@ contextBridge.exposeInMainWorld("companionBridge", {
     ipcRenderer.on("companion:overlayPresentation", listener);
     return () => ipcRenderer.removeListener("companion:overlayPresentation", listener);
   },
+  onProcessAudioChunk: (handler) => {
+    const listener = (_event, chunk) => handler(chunk);
+    ipcRenderer.on("companion:processAudioChunk", listener);
+    return () => ipcRenderer.removeListener("companion:processAudioChunk", listener);
+  },
+  // ── Privacy isolation ──────────────────────────────────────────────────────
+  // Resolve strategy once at session start (policyconfig | hotkey | vbcable)
+  resolvePrivacyStrategy: (opts) =>
+    ipcRenderer.invoke("companion:resolvePrivacyStrategy", opts || {}),
+  // Called on Hold-to-Ask press — mutes meeting app mic without a virtual cable
+  privacyIsolate: () => ipcRenderer.invoke("companion:privacyIsolate"),
+  // Called on Hold-to-Ask release — restores meeting app mic
+  privacyRestore: () => ipcRenderer.invoke("companion:privacyRestore"),
 });

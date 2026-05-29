@@ -56,6 +56,7 @@ const state = {
   researchActiveQuery: "",
   listeningDeviceId: null,
   vbCableDeviceId: null,
+  privacyStrategy: null,   // "policyconfig" | "hotkey" | "vbcable" | null
   selectedMicLabel: null,
   orbState: null,
 };
@@ -162,15 +163,32 @@ function renderListenBanner() {
 }
 
 function renderDevices() {
+  const strategy = state.privacyStrategy;
+  const driverless = strategy === "policyconfig" || strategy === "hotkey";
   const hasVb  = Boolean(state.vbCableDeviceId);
   const hasOut = Boolean(state.listeningDeviceId);
+
   labelMic.textContent = state.sessionLive
     ? (state.selectedMicLabel || "System default mic")
     : "Auto on session start";
   dotMic.className = "device-dot" + (state.sessionLive ? " ok" : "");
-  labelVbcable.textContent = hasVb ? "CABLE Input (detected ✓)" : "Not found";
-  dotVbcable.className = "device-dot" + (hasVb ? " ok" : " err");
-  vbcableHint.style.display = hasVb ? "none" : "block";
+
+  if (driverless) {
+    // Driverless mode: VB-Cable row shows the active isolation strategy
+    const strategyLabel = strategy === "policyconfig" ? "Driverless (IAudioPolicyConfig ✓)" : "Driverless (hotkey ✓)";
+    labelVbcable.textContent = strategyLabel;
+    dotVbcable.className = "device-dot ok";
+    vbcableHint.style.display = "none";
+  } else if (hasVb) {
+    labelVbcable.textContent = "CABLE Input (detected ✓)";
+    dotVbcable.className = "device-dot ok";
+    vbcableHint.style.display = "none";
+  } else {
+    labelVbcable.textContent = "Not found";
+    dotVbcable.className = "device-dot err";
+    vbcableHint.style.display = "block";
+  }
+
   labelOutput.textContent = hasOut ? "Headphones / Default" : "Auto on session start";
   dotOutput.className = "device-dot" + (hasOut ? " ok" : "");
 }
@@ -238,7 +256,12 @@ function renderMeetingTargets() {
       renderSessionStatus();
       channel.postMessage({
         type: "COMMAND_SELECT_MEETING",
-        payload: { target: t, source_id: src?.id || t.target_id || null },
+        payload: {
+          target: t,
+          source_id: src?.id || t.target_id || null,
+          source_name: src?.name || t.window_title || null,
+          source_kind: src?.kind || (String(src?.id || t.target_id || "").startsWith("screen:") ? "screen" : "window"),
+        },
       });
     });
     meetingList.appendChild(btn);
@@ -461,6 +484,7 @@ channel.onmessage = (ev) => {
     state.meetingTitle    = payload.meetingTitle || null;
     state.listeningDeviceId  = payload.listeningDeviceId || null;
     state.vbCableDeviceId    = payload.vbCableDeviceId || null;
+    state.privacyStrategy    = payload.privacyStrategy || null;
     state.selectedMicLabel   = payload.selectedMicLabel || null;
     state.orbState = payload.orbState || null;
     renderListenBanner();
@@ -532,7 +556,40 @@ channel.onmessage = (ev) => {
     dotSession.className = "status-dot dot-red";
     labelSession.textContent = `Degraded: ${payload.mode || "capture issue"}`;
   }
+
+  if (type === "PRIVACY_SETUP_NOTE" && payload) {
+    // One-time, dismissable setup guidance for the active privacy method.
+    showPrivacyMicWarning(payload.message);
+  }
 };
+
+function showPrivacyMicWarning(message) {
+  // Reuse or create a dismissable info banner at the top of the full window
+  let banner = document.getElementById("privacy-mic-warning-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "privacy-mic-warning-banner";
+    banner.style.cssText = [
+      "position:fixed", "top:0", "left:0", "right:0", "z-index:9999",
+      "background:#1d4ed8", "color:#fff", "font-size:13px", "font-weight:500",
+      "padding:10px 16px", "display:flex", "align-items:center", "gap:12px",
+      "box-shadow:0 2px 8px rgba(0,0,0,0.4)",
+    ].join(";");
+
+    const text = document.createElement("span");
+    text.style.flex = "1";
+    banner.appendChild(text);
+
+    const dismiss = document.createElement("button");
+    dismiss.textContent = "✕ Dismiss";
+    dismiss.style.cssText = "background:rgba(255,255,255,0.2);border:none;color:#fff;cursor:pointer;padding:4px 10px;border-radius:4px;font-size:12px;";
+    dismiss.onclick = () => banner.remove();
+    banner.appendChild(dismiss);
+
+    document.body.prepend(banner);
+  }
+  banner.querySelector("span").textContent = message;
+}
 
 // ─── Buttons ──────────────────────────────────────────────────────────────────
 btnStart.addEventListener("click", () => {
