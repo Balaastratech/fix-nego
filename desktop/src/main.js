@@ -6,6 +6,27 @@ const child_process = require("child_process");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const { app, BrowserWindow, desktopCapturer, ipcMain, screen, session } = require("electron");
 
+// ── Backend endpoint resolution (Phase A) ────────────────────────────────────
+// Shipped builds default to the hosted production backend. For local dev set
+// COMPANION_BACKEND_WS (and optionally COMPANION_BACKEND_HTTP) in desktop/.env.
+// HTTP is derived from the WS URL when not given (ws->http, wss->https, drop /ws).
+const PROD_BACKEND_WS = "wss://api.balaastratech.com/ws";
+function resolveBackendConfig() {
+  const ws = (process.env.COMPANION_BACKEND_WS || PROD_BACKEND_WS).trim();
+  let http = (process.env.COMPANION_BACKEND_HTTP || "").trim();
+  if (!http) {
+    http = ws
+      .replace(/^wss:\/\//, "https://")
+      .replace(/^ws:\/\//, "http://")
+      .replace(/\/ws\/?$/, "");
+  }
+  return { ws, http };
+}
+// Synchronous so preload can expose it before any renderer code runs.
+ipcMain.on("companion:getBackendConfig", (event) => {
+  event.returnValue = resolveBackendConfig();
+});
+
 let startAudioCapture = null;
 let stopAudioCapture = null;
 let getActiveWindowProcessIds = null;
@@ -78,6 +99,12 @@ const companionState = {
   selectedDesktopSourceId: null,
   selectedDesktopSourceName: null,
   selectedDesktopSourceKind: null,
+  // Capture resilience: when the selected window can't be tracked we fall back to
+  // capturing its monitor instead of dropping the session. These fields drive the
+  // "Following screen" UI note and let us keep re-trying to re-adopt the window.
+  captureFollowingScreen: false,
+  captureMissCount: 0,
+  meetingDisplayId: null,   // display the meeting window was last on (best-effort)
   remoteAudioMode: "none",
   processAudioCapture: {
     pid: null,
@@ -254,10 +281,12 @@ function hotkeyForPlatform(platform) {
   }
 }
 
-// ── Strategy resolution (policyconfig-FIRST, probe-driven) ────────────────────
-// policyconfig is the ALWAYS-chosen primary. No pre-emptive hotkey fallback. The probe
-// only selects WHICH silent-target method (existing-disabled vs disable-spare). Hotkey is
-// a runtime safety net only (see performPrivacyIsolate). Env overrides still honored.
+// ── Strategy resolution ───────────────────────────────────────────────────────
+// HOTKEY is the default/primary (free, legal, no driver, listener-safe — Zoom mutes itself;
+// our getUserMedia mic is never touched). redirect-cable is fragile (needs a virtual cable AND
+// the meeting app's mic set to "Same as System"), so it is used ONLY when explicitly requested
+// via COMPANION_PRIVACY_MODE=redirect-cable|policyconfig. vbcable via =vbcable / COMPANION_VBCABLE=on.
+//   COMPANION_PRIVACY_MODE = auto (=hotkey) | hotkey | redirect-cable | policyconfig | vbcable
 async function resolvePrivacyStrategy(platform, listenerName) {
   const modeEnv    = (process.env.COMPANION_PRIVACY_MODE || "auto").toLowerCase().trim();
   const vbcableEnv = (process.env.COMPANION_VBCABLE      || "auto").toLowerCase().trim();
@@ -271,13 +300,19 @@ async function resolvePrivacyStrategy(platform, listenerName) {
     privacyState.strategy = "vbcable";
     return { strategy: "vbcable", vbcableEnabled: true, reason: "env_forced" };
   }
-  if (modeEnv === "hotkey") {
-    console.log("[Privacy] Strategy forced to hotkey via env");
+
+  // auto (default) and explicit hotkey both resolve to hotkey — the robust primary.
+  // redirect-cable is NOT used in auto (too fragile); only via explicit mode below.
+  if (modeEnv === "auto" || modeEnv === "hotkey") {
+    const hotkey = hotkeyForPlatform(platform);
+    console.log(`[Privacy] Strategy: hotkey (${modeEnv === "auto" ? "auto default" : "forced"}) combo=${hotkey}`);
     privacyState.strategy = "hotkey";
-    return { strategy: "hotkey", vbcableEnabled: vbcableAllowed, hotkey: hotkeyForPlatform(platform), reason: "env_forced" };
+    // Helper provides SendInput for the hotkey — start it so it's ready on first hold.
+    if (helperScriptExists()) { startPrivacyHelper(); }
+    return { strategy: "hotkey", vbcableEnabled: vbcableAllowed, hotkey, reason: modeEnv === "auto" ? "auto_default" : "env_forced" };
   }
 
-  // policyconfig (auto or explicit): start helper, run probe to pick the silent-target method
+  // Explicit redirect-cable / policyconfig: start helper, run probe to pick a cable target
   if (helperScriptExists()) {
     try {
       startPrivacyHelper();
@@ -390,7 +425,7 @@ async function performPrivacyIsolate() {
   if (strategy === "policyconfig") {
     if (!pid) {
       console.warn("[Privacy] isolate: no meeting PID — runtime hotkey safety net");
-      return performHotkeyMute(hotkeyForPlatform(platform));
+      return performHotkeyMute(hotkeyForPlatform(platform), true);
     }
     try {
       // LISTENER-SAFE: redirect ONLY the meeting app's process to the virtual-cable
@@ -400,7 +435,7 @@ async function performPrivacyIsolate() {
       const result = await helperCmd({ cmd: "redirect", pid, deviceId: targetDeviceId }, 5000);
       if (!result.ok) {
         console.warn("[Privacy] redirect failed:", result.error, "— hotkey safety net");
-        return performHotkeyMute(hotkeyForPlatform(platform));
+        return performHotkeyMute(hotkeyForPlatform(platform), true);
       }
 
       privacyState.isMuted = true;
@@ -413,12 +448,12 @@ async function performPrivacyIsolate() {
         await helperCmd({ cmd: "set-visibility", deviceId: privacyState.disabledSpare, visible: 1 }, 5000).catch(() => {});
         privacyState.disabledSpare = null;
       }
-      return performHotkeyMute(hotkeyForPlatform(platform));
+      return performHotkeyMute(hotkeyForPlatform(platform), true);
     }
   }
 
   if (strategy === "hotkey") {
-    return performHotkeyMute(privacyState.hotkey || hotkeyForPlatform(platform));
+    return performHotkeyMute(privacyState.hotkey || hotkeyForPlatform(platform), true);
   }
 
   return { ok: false, strategy, reason: "no_action_needed" };
@@ -458,7 +493,7 @@ async function performPrivacyRestore() {
   }
 
   if (strategy === "hotkey") {
-    return performHotkeyMute(hotkey || hotkeyForPlatform(platform));
+    return performHotkeyMute(hotkey || hotkeyForPlatform(platform), false);
   }
 
   privacyState.isMuted = false;
@@ -466,34 +501,38 @@ async function performPrivacyRestore() {
   return { ok: true, strategy };
 }
 
-async function performHotkeyMute(combo) {
-  // Try helper first (has SendInput), then inline PowerShell
-  if (helperScriptExists() && privacyState.helperProc && !privacyState.helperProc.killed) {
-    try {
-      const r = await helperCmd({ cmd: "send-keys", combo }, 3000);
-      privacyState.isMuted = !privacyState.isMuted; // toggle
-      return { ok: r.ok, strategy: "hotkey", combo };
-    } catch (_) {}
+// Send the meeting app's mute-toggle hotkey via the proven C# SendInput helper.
+// `desired` is the intended mute state for THIS call (true = muting on hold, false =
+// unmuting on release). We update privacyState.isMuted to that explicit value rather than
+// blind-toggling, so state stays deterministic across rapid holds. The hotkey itself is a
+// toggle in the meeting app, so this is correct as long as the meeting app started unmuted
+// (normal talking) — which is the expected case.
+async function performHotkeyMute(combo, desired) {
+  // Auto-(re)start the helper if it isn't running (it can take a few seconds to
+  // boot, or may have died) so the FIRST hold doesn't silently no-op.
+  if (helperScriptExists() && (!privacyState.helperProc || privacyState.helperProc.killed)) {
+    console.warn("[Privacy] hotkey: helper not running — starting it now");
+    startPrivacyHelper();
+    await waitForHelperReady(4000).catch(() => {});
   }
-  // Inline fallback: spawn a one-shot PowerShell command
-  return new Promise((resolve) => {
-    const psCmd = `
-$k=@{alt=0x12;ctrl=0x11;shift=0x10};
-$sig='[DllImport(\"user32.dll\")] public static extern bool SendInput(uint n,IntPtr[] a,int s);';
-$t=Add-Type -MemberDefinition $sig -Name U32 -Namespace W -PassThru;
-$parts='${combo}'.Split('+');
-$vks=@();foreach($p in $parts){if($k[$p]){$vks+=$k[$p]}else{$vks+=[byte][char]$p.ToUpper()[0]}};
-Add-Type -TypeDefinition '[StructLayout(LayoutKind.Sequential)]struct KI{public ushort v,s;public uint f,t;public IntPtr e;}[StructLayout(LayoutKind.Explicit)]struct IN{[FieldOffset(0)]public uint tp;[FieldOffset(8)]public KI k;}' -Language CSharp;
-$a=@();foreach($v in $vks){$i=[IN]::new();$i.tp=1;$i.k=[KI]::new();$i.k.v=$v;$a+=$i};
-foreach($v in ($vks|Sort -Desc)){$i=[IN]::new();$i.tp=1;$i.k=[KI]::new();$i.k.v=$v;$i.k.f=2;$a+=$i};
-[System.Runtime.InteropServices.Marshal]::SizeOf([IN])`;
-    child_process.exec(`powershell.exe -NonInteractive -NoProfile -WindowStyle Hidden -Command "${psCmd.replace(/\n/g, "")}"`,
-      { windowsHide: true }, (err) => {
-        privacyState.isMuted = !privacyState.isMuted;
-        resolve({ ok: !err, strategy: "hotkey_inline", combo });
-      }
-    );
-  });
+  if (!helperScriptExists() || !privacyState.helperProc || privacyState.helperProc.killed) {
+    console.warn("[Privacy] hotkey: helper unavailable; cannot send", combo);
+    return { ok: false, strategy: "hotkey", combo, reason: "helper_unavailable" };
+  }
+  try {
+    console.log(`[Privacy] hotkey send-keys combo=${combo} desired=${desired}`);
+    const r = await helperCmd({ cmd: "send-keys", combo }, 3000);
+    console.log("[Privacy] hotkey send-keys result:", JSON.stringify(r));
+    if (typeof desired === "boolean") {
+      privacyState.isMuted = desired;
+    } else {
+      privacyState.isMuted = !privacyState.isMuted;
+    }
+    return { ok: Boolean(r && r.ok), strategy: "hotkey", combo, muted: privacyState.isMuted };
+  } catch (err) {
+    console.warn("[Privacy] hotkey send-keys failed:", err.message);
+    return { ok: false, strategy: "hotkey", combo, reason: err.message };
+  }
 }
 
 // ── Watchdog: auto-restore if hold not released within 30s ───────────────────
@@ -647,7 +686,89 @@ function resolveDisplaySource(sources) {
       return byMeetingTitle;
     }
   }
+
+  // ── Fuzzy meeting-window match ──────────────────────────────────────────────
+  // The exact id/name can change when the meeting app swaps windows (e.g. a
+  // browser opening a new window, or the title gaining a "(3)" unread badge / a
+  // call timer). Match on the normalized title (volatile suffixes stripped), and
+  // for known meeting apps prefer the highest-priority meeting window present.
+  const wantNorm = normalizeTitleForMatch(companionState.selectedDesktopSourceName || meetingTitle);
+  const windowSources = sources.filter((s) => String(s.id).startsWith("window:"));
+  if (wantNorm) {
+    const byFuzzy = windowSources.find((source) => {
+      const got = normalizeTitleForMatch(source.name);
+      return got && (got === wantNorm || got.startsWith(wantNorm) || wantNorm.startsWith(got));
+    });
+    if (byFuzzy) {
+      return byFuzzy;
+    }
+  }
+  const boundPlatform = inferPlatform(companionState.meetingBinding.window_title || companionState.selectedDesktopSourceName || "");
+  if (boundPlatform && boundPlatform !== "generic") {
+    // The meeting app is a known platform; re-adopt its current top window even if
+    // the handle/title changed (covers the PID/window-swap case from the logs).
+    const candidates = windowSources
+      .filter((s) => !isNoiseWindowTitle(s.name))
+      .map((s) => ({ s, score: targetPriority(s.name) }))
+      .filter((c) => c.score > 0 && inferPlatform(c.s.name) === boundPlatform)
+      .sort((a, b) => b.score - a.score);
+    if (candidates.length) {
+      return candidates[0].s;
+    }
+  }
   return null;
+}
+
+// Strip volatile parts of a window title so a moved/renamed window still matches:
+// unread badges "(3)", leading counts "5 • ", trailing call timers "00:12:34",
+// and "- N new messages" suffixes.
+function normalizeTitleForMatch(title) {
+  let t = String(title || "").toLowerCase().trim();
+  if (!t) return "";
+  t = t.replace(/\(\d+\)/g, " ");                       // (3)
+  t = t.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ");   // call timers
+  t = t.replace(/[-–—]\s*\d+\s*(new\s*)?(messages?|notifications?|unread).*/i, " ");
+  t = t.replace(/^\s*\d+\s*[•·\-–—]\s*/, " ");           // leading "5 • "
+  t = t.replace(/\s+/g, " ").trim();
+  return t;
+}
+
+// Pick a screen (monitor) source as a capture fallback when the selected window
+// can't be tracked. Best-effort prefers the display the window was last on
+// (companionState.meetingDisplayId), then the primary display, then any screen.
+// Windows note: desktopCapturer screen sources often have an empty display_id, so
+// we degrade gracefully to the primary/first screen rather than failing.
+function pickScreenSource(sources) {
+  const screens = (sources || []).filter((s) => String(s.id).startsWith("screen:"));
+  if (!screens.length) return null;
+  const wantDisplay = companionState.meetingDisplayId != null ? String(companionState.meetingDisplayId) : null;
+  if (wantDisplay) {
+    const byDisplay = screens.find((s) => String(s.display_id || "") === wantDisplay);
+    if (byDisplay) return byDisplay;
+  }
+  try {
+    const primaryId = String(screen.getPrimaryDisplay().id);
+    const byPrimary = screens.find((s) => String(s.display_id || "") === primaryId);
+    if (byPrimary) return byPrimary;
+  } catch (_) {}
+  // "Entire screen" / first screen as the final safe default.
+  return screens.find((s) => /entire screen|screen 1|primary/i.test(s.name || "")) || screens[0];
+}
+
+// Update the "following screen" capture state and push it to the overlay renderer
+// (which relays to the full window via BroadcastChannel) only when it changes.
+function setCaptureFollowingScreen(following) {
+  following = !!following;
+  if (companionState.captureFollowingScreen === following) return;
+  companionState.captureFollowingScreen = following;
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    try {
+      overlayWindow.webContents.send("companion:captureFollowingScreen", {
+        following_screen: following,
+        window_title: companionState.meetingBinding.window_title || companionState.selectedDesktopSourceName || null,
+      });
+    } catch (_) {}
+  }
 }
 
 function targetPriority(title) {
@@ -1031,6 +1152,10 @@ ipcMain.handle("companion:endCompanionSession", async () => {
   companionState.sessionActive = false;
   stopRemoteProcessCapture();
   setRemoteAudioMode("none");
+  // Reset capture-resilience state so the next session starts clean.
+  companionState.captureMissCount = 0;
+  companionState.meetingDisplayId = null;
+  setCaptureFollowingScreen(false);
   companionState.holdState = {
     active: false,
     muted_to_meeting: false,
@@ -1123,9 +1248,13 @@ ipcMain.handle("companion:getOverlayContrast", async () => {
     const bounds = overlayWindow.getBounds();
     const display = screen.getDisplayMatching(bounds);
     const size = display.size;
+    const thumbW = Math.min(400, size.width);
+    const thumbH = Math.min(300, size.height);
+    const scaleX = thumbW / size.width;
+    const scaleY = thumbH / size.height;
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
-      thumbnailSize: { width: size.width, height: size.height },
+      thumbnailSize: { width: thumbW, height: thumbH },
       fetchWindowIcons: false,
     });
     const source = sources[0];
@@ -1135,16 +1264,16 @@ ipcMain.handle("companion:getOverlayContrast", async () => {
 
     const image = source.thumbnail;
     const bitmap = image.toBitmap();
-    const sampleStartX = Math.max(0, bounds.x - display.bounds.x + 72);
-    const sampleStartY = Math.max(0, bounds.y - display.bounds.y + 8);
-    const sampleWidth = Math.min(220, Math.max(32, bounds.width - 84));
-    const sampleHeight = Math.min(120, Math.max(32, bounds.height - 16));
+    const sampleStartX = Math.max(0, Math.round((bounds.x - display.bounds.x + 72) * scaleX));
+    const sampleStartY = Math.max(0, Math.round((bounds.y - display.bounds.y + 8) * scaleY));
+    const sampleWidth = Math.min(Math.round(220 * scaleX), Math.max(8, Math.round((bounds.width - 84) * scaleX)));
+    const sampleHeight = Math.min(Math.round(120 * scaleY), Math.max(8, Math.round((bounds.height - 16) * scaleY)));
     let total = 0;
     let count = 0;
 
     for (let y = sampleStartY; y < sampleStartY + sampleHeight; y += 4) {
       for (let x = sampleStartX; x < sampleStartX + sampleWidth; x += 4) {
-        const idx = (y * size.width + x) * 4;
+        const idx = (y * thumbW + x) * 4;
         const b = bitmap[idx];
         const g = bitmap[idx + 1];
         const r = bitmap[idx + 2];
@@ -1201,36 +1330,63 @@ app.whenReady().then(() => {
           fetchWindowIcons: false,
         })
         .then((sources) => {
-          const selected = resolveDisplaySource(sources);
+          let selected = resolveDisplaySource(sources);
+          let followingScreen = false;
+
           if (!selected) {
-            console.warn(
-              "[DisplayMedia] Selected source not found:",
-              companionState.selectedDesktopSourceId
-            );
-            // Clear stale source so user can re-select
-            companionState.selectedDesktopSourceId = null;
-            companionState.selectedDesktopSourceName = null;
-            companionState.selectedDesktopSourceKind = null;
+            // The exact window can't be tracked right now (HWND changed, window
+            // swapped/minimized, or moved to another virtual desktop). Do NOT drop
+            // the session and do NOT wipe the selection — fall back to capturing
+            // the window's monitor so the AI keeps seeing the call, and keep the
+            // original window identity so we can re-adopt it once it reappears.
+            const screenSrc = pickScreenSource(sources);
+            if (screenSrc) {
+              selected = screenSrc;
+              followingScreen = true;
+              companionState.captureMissCount += 1;
+              console.warn(
+                "[DisplayMedia] Window not found (miss #%d) — following screen %s instead of %s",
+                companionState.captureMissCount,
+                screenSrc.id,
+                companionState.selectedDesktopSourceId
+              );
+            } else {
+              // No screen source either — keep the selection and report empty so a
+              // later attempt can re-find the window. Selection is intentionally NOT
+              // cleared here (that was the bug that "dropped" the window).
+              console.warn(
+                "[DisplayMedia] Selected source not found and no screen fallback:",
+                companionState.selectedDesktopSourceId
+              );
+              once({});
+              return;
+            }
           }
-          if (!selected) {
-            once({});
-            return;
+
+          if (followingScreen) {
+            // Serve the monitor for THIS request but preserve the window selection
+            // (id/name) so resolveDisplaySource can re-adopt the real window later.
+            setCaptureFollowingScreen(true);
+          } else {
+            companionState.captureMissCount = 0;
+            setCaptureFollowingScreen(false);
+            if (selected.id !== companionState.selectedDesktopSourceId) {
+              console.warn(
+                "[DisplayMedia] Remapped stale source id",
+                companionState.selectedDesktopSourceId,
+                "->",
+                selected.id
+              );
+            }
+            companionState.selectedDesktopSourceId = selected.id;
+            companionState.selectedDesktopSourceName = selected.name || companionState.selectedDesktopSourceName;
+            companionState.selectedDesktopSourceKind = selected.id.startsWith("screen:")
+              ? "screen"
+              : selected.id.startsWith("window:")
+                ? "window"
+                : companionState.selectedDesktopSourceKind;
           }
-          if (selected.id !== companionState.selectedDesktopSourceId) {
-            console.warn(
-              "[DisplayMedia] Remapped stale source id",
-              companionState.selectedDesktopSourceId,
-              "->",
-              selected.id
-            );
-          }
-          companionState.selectedDesktopSourceId = selected.id;
-          companionState.selectedDesktopSourceName = selected.name || companionState.selectedDesktopSourceName;
-          companionState.selectedDesktopSourceKind = selected.id.startsWith("screen:")
-            ? "screen"
-            : selected.id.startsWith("window:")
-              ? "window"
-              : companionState.selectedDesktopSourceKind;
+
           const response = { video: selected };
           if (companionState.remoteAudioMode === "display_loopback") {
             response.audio = "loopback";

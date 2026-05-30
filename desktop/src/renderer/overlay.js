@@ -3,7 +3,7 @@
 const bridge = window.companionBridge;
 const channel = new BroadcastChannel("negotiation_companion_ui");
 const STORAGE_KEY = "companion_prefs_v2";
-const BACKEND_WS_URL = "ws://localhost:8000/ws";
+const BACKEND_WS_URL = (window.companionConfig && window.companionConfig.ws) || "ws://localhost:8000/ws";
 const PROCESS_AUDIO_TARGET_RATE = 16000;
 const PROCESS_AUDIO_ASSUMED_INPUT_RATE = 48000;
 const PROCESS_AUDIO_FLUSH_MS = 120;
@@ -224,7 +224,10 @@ async function refreshContrast() {
     root.classList.toggle("bg-dark",  result?.theme !== "dark-text");
   } catch (_) {}
 }
-setInterval(refreshContrast, 1500);
+setInterval(() => {
+  if (!state.sessionLive && !state.sessionStarting && !state.sessionPaused) return;
+  refreshContrast();
+}, 1500);
 
 // ─── Chat rendering ───────────────────────────────────────────────────────────
 function getChatIterations() {
@@ -273,13 +276,31 @@ function formatChatTimestamp(ts) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
 
+let _chatLastCount = -1, _chatLastTopPartial = false;
 function renderChat() {
+  const iters = getChatIterations();
+  const top = iters[iters.length - 1];
+  const topIsPartial = !!(top?.aiEntry?.isPartial || top?.userEntry?.isPartial);
+
+  if (iters.length === _chatLastCount && topIsPartial && _chatLastTopPartial) {
+    // Only the top bubble's text changed — update text node in place, skip full rebuild
+    const partialEntry = top?.aiEntry?.isPartial ? top.aiEntry : top?.userEntry;
+    const partialBubble = chatFeed.firstElementChild
+      ?.querySelector(".chat-bubble.partial .chat-bubble-text");
+    if (partialEntry && partialBubble) {
+      partialBubble.textContent = partialEntry.text;
+      return;
+    }
+  }
+  _chatLastCount = iters.length;
+  _chatLastTopPartial = topIsPartial;
+
   chatFeed.innerHTML = "";
   // Newest pair on top, oldest on bottom. Each pair shows the user question
   // first (left-aligned, yellow) then the AI reply right below it (right-aligned,
   // green). Within a pair, USER comes BEFORE AI so the reader sees the question
   // and then the answer — like a real chat transcript.
-  const iterations = getChatIterations().slice().reverse();
+  const iterations = iters.slice().reverse();
 
   iterations.forEach((iter, idx) => {
     const block = document.createElement("div");
@@ -477,7 +498,14 @@ function broadcastSnapshot() {
     holdActive: state.holdActive,
     orbState: state.orbState,
     privacyStrategy: state.privacyStrategy || null,
+    captureFollowingScreen: state.captureFollowingScreen || false,
   });
+}
+
+let _snapThrottle = null;
+function broadcastSnapshotThrottled() {
+  if (_snapThrottle) return;
+  _snapThrottle = setTimeout(() => { _snapThrottle = null; broadcastSnapshot(); }, 300);
 }
 
 // ─── PCM helpers ─────────────────────────────────────────────────────────────
@@ -862,7 +890,7 @@ function handleWsMessage(ev) {
         }
       }
     }
-    broadcastSnapshot();
+    broadcastSnapshotThrottled();
   }
   if (t === "TRANSCRIPT_DELETE") {
     const entryId = p.id;
@@ -1159,6 +1187,27 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
   }
 }
 registerProcessor('pcm-capture-processor', PcmCaptureProcessor);
+`;
+
+// ─── Frame encoder worker (off-thread JPEG encode for screen capture) ────────
+// Inline Worker source. Receives an ImageBitmap (transferable, zero-copy),
+// draws it onto an OffscreenCanvas, encodes to JPEG via convertToBlob, and
+// posts back the base64 string. Keeps the heavy toDataURL/JPEG work off the
+// main UI thread so the overlay orb animation stays smooth during capture.
+const FRAME_ENCODER_CODE = `
+self.onmessage = async (ev) => {
+  const { bitmap, quality, id } = ev.data;
+  try {
+    const oc = new OffscreenCanvas(bitmap.width, bitmap.height);
+    oc.getContext("2d").drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await oc.convertToBlob({ type: "image/jpeg", quality });
+    const ab = await blob.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    self.postMessage({ id, base64: btoa(bin) });
+  } catch (e) { self.postMessage({ id, error: e.message }); }
+};
 `;
 
 // ─── PCM capture stream ───────────────────────────────────────────────────────
@@ -1890,6 +1939,7 @@ async function stopMeetingCapture() {
   stopProcessAudioCapture();
   if (!state.meetingCapture) return;
   clearInterval(state.meetingCapture.frameTimer);
+  if (state.meetingCapture.frameWorker) state.meetingCapture.frameWorker.terminate();
   await state.meetingCapture.audio.stop();
   state.meetingCapture.stream.getTracks().forEach(t => t.stop());
   state.meetingCapture = null;
@@ -2045,6 +2095,23 @@ async function startMeetingCapture(sourceId) {
       }
     : { stop: async () => {} };
 
+  // ── Fix 1: off-thread JPEG encoder worker (instantiated once per capture session) ──
+  const _fwBlob = new Blob([FRAME_ENCODER_CODE], { type: "application/javascript" });
+  const _fwUrl = URL.createObjectURL(_fwBlob);
+  const frameWorker = new Worker(_fwUrl);
+  URL.revokeObjectURL(_fwUrl);
+  let _fwSeq = 0, _fwBusy = false;
+  const _fwPending = new Map();
+  frameWorker.onmessage = ({ data: { id, base64, error } }) => {
+    const meta = _fwPending.get(id); _fwPending.delete(id); _fwBusy = false;
+    if (error || !base64 || !meta) return;
+    wsSend("SCREEN_FRAME", { image: base64, timestamp: meta.ts,
+      source_mode: "virtual_companion_desktop", source: "meeting_window" });
+  };
+
+  // ── Fix 1 Part B: reused capture canvas (declared once, just before the timer) ──
+  let captureCanvas = null, captureCtx = null;
+
   let lastPixelHash = null;
   let identicalFrameCount = 0;
 
@@ -2057,24 +2124,28 @@ async function startMeetingCapture(sourceId) {
       video.play().catch(() => {});
     }
     if (!video.videoWidth) return;
-    const canvas = document.createElement("canvas");
-    canvas.width  = Math.min(1280, video.videoWidth);
-    canvas.height = Math.min(720, video.videoHeight);
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const targetW = Math.min(1280, video.videoWidth);
+    const targetH = Math.min(720, video.videoHeight);
+    // Canvas allocated once per capture session (resize only on dimension change)
+    if (!captureCtx || captureCanvas.width !== targetW || captureCanvas.height !== targetH) {
+      captureCanvas = document.createElement("canvas");
+      captureCanvas.width = targetW; captureCanvas.height = targetH;
+      captureCtx = captureCanvas.getContext("2d", { willReadFrequently: true });
+    }
+    captureCtx.drawImage(video, 0, 0, targetW, targetH);
 
     // Pixel-level freeze detection (checks 5 sample coordinates)
     const samplePoints = [
-      { x: Math.floor(canvas.width / 4), y: Math.floor(canvas.height / 4) },
-      { x: Math.floor(canvas.width / 2), y: Math.floor(canvas.height / 2) },
-      { x: Math.floor(canvas.width * 3 / 4), y: Math.floor(canvas.height * 3 / 4) },
+      { x: Math.floor(targetW / 4), y: Math.floor(targetH / 4) },
+      { x: Math.floor(targetW / 2), y: Math.floor(targetH / 2) },
+      { x: Math.floor(targetW * 3 / 4), y: Math.floor(targetH * 3 / 4) },
       { x: 15, y: 15 },
-      { x: canvas.width - 15, y: canvas.height - 15 }
+      { x: targetW - 15, y: targetH - 15 }
     ];
     let hash = "";
     try {
       for (const pt of samplePoints) {
-        const pix = ctx.getImageData(pt.x, pt.y, 1, 1).data;
+        const pix = captureCtx.getImageData(pt.x, pt.y, 1, 1).data;
         hash += `${pix[0]},${pix[1]},${pix[2]}|`;
       }
     } catch (_) {}
@@ -2106,12 +2177,13 @@ async function startMeetingCapture(sourceId) {
       }
     }
 
-    wsSend("SCREEN_FRAME", {
-      image: canvas.toDataURL("image/jpeg", 0.82).split(",")[1],
-      timestamp: Date.now(),
-      source_mode: "virtual_companion_desktop",
-      source: "meeting_window",
-    });
+    if (_fwBusy) return;  // skip frame if encode still in progress
+    _fwBusy = true;
+    const encId = ++_fwSeq;
+    _fwPending.set(encId, { ts: Date.now() });
+    createImageBitmap(captureCanvas).then(bm =>
+      frameWorker.postMessage({ bitmap: bm, quality: 0.82, id: encId }, [bm])
+    ).catch(() => { _fwPending.delete(encId); _fwBusy = false; });
   }, 800);
 
   state.meetingCapture = {
@@ -2121,6 +2193,7 @@ async function startMeetingCapture(sourceId) {
     processAudioActive: remoteAudioOk,
     audio: remoteAudioCapture,
     frameTimer,
+    frameWorker,
   };
   traceClientEvent("meeting_capture_started", "Meeting capture started successfully", {
     source_id: effectiveSourceId,
@@ -2750,6 +2823,16 @@ function stopRingFill() {
 // ─── Global hold events from main process (PS script) ────────────────────────
 
 bridge.onOverlayPresentation(() => void refreshContrast());
+
+// Capture-following-screen: main falls back to monitor capture when the selected
+// window can't be tracked. Reflect that in shared state so the full window can
+// show a "Following screen" note + Re-pick button.
+if (bridge.onCaptureFollowingScreen) {
+  bridge.onCaptureFollowingScreen((payload) => {
+    state.captureFollowingScreen = !!(payload && payload.following_screen);
+    broadcastSnapshot();
+  });
+}
 
 // ─── Orb pointer events (drag + hold) ────────────────────────────────────────
 orb.addEventListener("pointerdown", (e) => {

@@ -67,7 +67,7 @@ const elements = {
   runtimeLog: document.getElementById("runtime-log"),
 };
 
-const BACKEND_WS_URL = "ws://localhost:8000/ws";
+const BACKEND_WS_URL = (window.companionConfig && window.companionConfig.ws) || "ws://localhost:8000/ws";
 
 function loadPrefs() {
   try {
@@ -719,25 +719,24 @@ async function startMeetingCapture() {
     stream,
     hasAudioTrack,
     audio: createPcmCapture(stream, "REMOTE_APP_PCM", { flushMs: 1400 }),
-    frameTimer: window.setInterval(() => {
+    frameTimer: (() => {
       const video = elements.meetingVideo;
-      if (video.paused) {
-        video.play().catch(() => {});
-      }
-      if (!video.videoWidth || !video.videoHeight) {
-        return;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.min(960, video.videoWidth);
-      canvas.height = Math.min(540, video.videoHeight);
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
-      safeSendControl("SCREEN_FRAME", {
-        image: dataUrl.split(",")[1],
-        timestamp: Date.now(),
-      });
-    }, 1000),
+      let _c = null, _ctx = null;
+      return window.setInterval(() => {
+        if (video.paused) video.play().catch(() => {});
+        if (!video.videoWidth || !video.videoHeight) return;
+        const w = Math.min(960, video.videoWidth), h = Math.min(540, video.videoHeight);
+        if (!_c || _c.width !== w || _c.height !== h) {
+          _c = document.createElement("canvas"); _c.width = w; _c.height = h;
+          _ctx = _c.getContext("2d");
+        }
+        _ctx.drawImage(video, 0, 0, w, h);
+        safeSendControl("SCREEN_FRAME", {
+          image: _c.toDataURL("image/jpeg", 0.65).split(",")[1],
+          timestamp: Date.now(),
+        });
+      }, 1000);
+    })(),
   };
 
   const track = stream.getVideoTracks()[0];

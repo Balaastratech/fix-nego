@@ -1,5 +1,17 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Resolve the backend endpoints once (synchronously) from the main process so
+// every renderer (overlay, full) reads the same packaged/dev URL. See main.js
+// resolveBackendConfig(). Falls back to localhost only if the IPC is unavailable.
+let backendConfig = { ws: "ws://localhost:8000/ws", http: "http://localhost:8000" };
+try {
+  const resolved = ipcRenderer.sendSync("companion:getBackendConfig");
+  if (resolved && resolved.ws) backendConfig = resolved;
+} catch (_err) {
+  // keep localhost fallback
+}
+contextBridge.exposeInMainWorld("companionConfig", backendConfig);
+
 async function enumerateAudioDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) {
     return { inputs: [], outputs: [] };
@@ -46,6 +58,11 @@ contextBridge.exposeInMainWorld("companionBridge", {
     const listener = (_event, chunk) => handler(chunk);
     ipcRenderer.on("companion:processAudioChunk", listener);
     return () => ipcRenderer.removeListener("companion:processAudioChunk", listener);
+  },
+  onCaptureFollowingScreen: (handler) => {
+    const listener = (_event, payload) => handler(payload);
+    ipcRenderer.on("companion:captureFollowingScreen", listener);
+    return () => ipcRenderer.removeListener("companion:captureFollowingScreen", listener);
   },
   // ── Privacy isolation ──────────────────────────────────────────────────────
   // Resolve strategy once at session start (policyconfig | hotkey | vbcable)

@@ -36,6 +36,8 @@ const researchCount   = $("research-count");
 const researchPill    = $("research-status-pill");
 const researchBar     = $("research-status-bar");
 const researchQueryLabel = $("research-query-label");
+const captureNote     = $("capture-note");
+const btnRepick       = $("btn-repick");
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const state = {
@@ -123,6 +125,12 @@ function renderSessionStatus() {
   }
 }
 
+function renderCaptureNote() {
+  if (!captureNote) return;
+  const sessionActive = state.sessionLive || state.sessionStarting || state.sessionPaused;
+  captureNote.classList.toggle("hidden", !(state.captureFollowingScreen && sessionActive));
+}
+
 function renderMeetingStatus() {
   if (state.meetingTitle) {
     dotMeeting.className    = "status-dot dot-green";
@@ -159,7 +167,14 @@ function renderListenBanner() {
   else                           bannerState = "ready";
 
   listenBanner.setAttribute("data-state", bannerState);
-  listenLabel.textContent = bannerState === "paused" ? "Paused" : (BANNER_LABELS[bannerState] || BANNER_LABELS.ready);
+  // While holding, reassure the user the counterparty cannot hear the private AI exchange.
+  // The mute is real in every strategy (hotkey = Zoom self-mute, vbcable = forward muted,
+  // redirect-cable = process redirected). Wording stays strategy-agnostic.
+  if (state.holdActive) {
+    listenLabel.textContent = "🔒 Counterparty muted — talking privately to AI";
+  } else {
+    listenLabel.textContent = bannerState === "paused" ? "Paused" : (BANNER_LABELS[bannerState] || BANNER_LABELS.ready);
+  }
 }
 
 function renderDevices() {
@@ -487,6 +502,8 @@ channel.onmessage = (ev) => {
     state.privacyStrategy    = payload.privacyStrategy || null;
     state.selectedMicLabel   = payload.selectedMicLabel || null;
     state.orbState = payload.orbState || null;
+    state.captureFollowingScreen = Boolean(payload.captureFollowingScreen);
+    renderCaptureNote();
     renderListenBanner();
     if (Array.isArray(payload.meetingTargets) && payload.meetingTargets.length)
       state.meetingTargets = payload.meetingTargets;
@@ -502,7 +519,12 @@ channel.onmessage = (ev) => {
       state.selectedTarget = null;
       state.selectedSourceId = null;
     }
-    renderAll();
+    // STATE_SNAPSHOT: only re-render control panels — entry lists are kept
+    // current by the targeted CONVERSATION_ENTRY / PRIVATE_ENTRY messages.
+    renderSessionStatus();
+    renderMeetingStatus();
+    renderDevices();
+    renderListenBanner();
   }
 
   if (type === "CONVERSATION_ENTRY" && payload) {
@@ -625,6 +647,24 @@ btnRefresh.addEventListener("click", async () => {
   await refreshTargets();
   channel.postMessage({ type: "REQUEST_STATE" });
 });
+
+// Re-pick window: refresh the meeting list and scroll the picker into view so the
+// user can re-select the window after capture fell back to following the screen.
+if (btnRepick) {
+  btnRepick.addEventListener("click", async () => {
+    // Ensure we're on the dashboard tab where the picker lives.
+    const dashTab = document.querySelector('.tab[data-tab="dashboard"]');
+    if (dashTab) dashTab.click();
+    await refreshTargets();
+    channel.postMessage({ type: "REQUEST_STATE" });
+    const picker = document.getElementById("card-picker");
+    if (picker) {
+      picker.scrollIntoView({ behavior: "smooth", block: "center" });
+      picker.classList.add("flash-highlight");
+      setTimeout(() => picker.classList.remove("flash-highlight"), 1600);
+    }
+  });
+}
 
 // ─── Audio Mix card (reversible block — delete to roll back) ──────────────────
 (function setupAudioMixCard() {
@@ -789,3 +829,300 @@ window.addEventListener("load", () => {
     channel.postMessage({ type: "REQUEST_STATE" });
   }, 800);
 });
+
+// ═══════════════ Settings page (self-contained) ═══════════════
+// Talks to the backend REST config API directly. Renderer fetch is allowed; the
+// backend CORS layer whitelists the desktop origin. Isolated from the live
+// dashboard logic above.
+(function setupSettingsPage() {
+  const BACKEND_HTTP = (window.companionConfig && window.companionConfig.http) || "http://localhost:8000";
+  const SLOT_ORDER = ["live_voice", "reasoning", "fast_text", "vision", "stt"];
+  const SLOT_HINTS = {
+    live_voice: "Real-time audio for Hold-to-Ask",
+    reasoning: "Strategic advice (Pro pre-flight)",
+    fast_text: "Extraction, next-move cache, translation",
+    vision: "Per-frame screen analysis",
+    stt: "Speech-to-text transcription",
+  };
+
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  const panelDash = $("tab-dashboard");
+  const panelSet = $("tab-settings");
+  const providerRows = $("provider-rows");
+  const keyRows = $("key-rows");
+  const saveBtn = $("btn-settings-save");
+  const saveStatus = $("settings-status");
+  const refreshBtn = $("btn-providers-refresh");
+  const configPathEl = $("advanced-config-path");
+  if (!panelSet || !providerRows) return;
+
+  let registry = null;   // { slots: {slot:{label, providers:{pid:{models,source,key_status,supports_custom_model}}}}, providers:{pid:{display_name,...}} }
+  let config = null;     // { slots:{slot:{provider,model}}, key_status:{pid:status}, path }
+  let loaded = false;
+
+  function setStatus(msg, kind) {
+    saveStatus.textContent = msg || "";
+    saveStatus.className = "settings-status" + (kind ? " " + kind : "");
+  }
+
+  async function api(path, opts) {
+    const res = await fetch(BACKEND_HTTP + path, opts);
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.json()).error || ""; } catch (_) {}
+      throw new Error(detail || ("HTTP " + res.status));
+    }
+    return res.json();
+  }
+
+  function providerName(pid) {
+    return (registry && registry.providers[pid] && registry.providers[pid].display_name) || pid;
+  }
+
+  function buildOptions(select, values, selected) {
+    select.innerHTML = "";
+    for (const v of values) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = v;
+      if (v === selected) o.selected = true;
+      select.appendChild(o);
+    }
+  }
+
+  function renderProviderRows() {
+    providerRows.innerHTML = "";
+    for (const slot of SLOT_ORDER) {
+      const sdef = registry.slots[slot];
+      if (!sdef) continue;
+      const provs = sdef.providers || {};
+      const provIds = Object.keys(provs);
+      const cur = (config.slots && config.slots[slot]) || {};
+      const locked = slot === "live_voice"; // Google-only this release
+
+      const row = document.createElement("div");
+      row.className = "provider-row" + (locked ? " is-locked" : "");
+      row.dataset.slot = slot;
+
+      // label
+      const label = document.createElement("div");
+      label.className = "provider-slot-label";
+      label.innerHTML =
+        '<span class="provider-slot-name">' + (sdef.label || slot) + "</span>" +
+        '<span class="provider-slot-hint">' + (SLOT_HINTS[slot] || "") + "</span>";
+      row.appendChild(label);
+
+      // provider select
+      const provSel = document.createElement("select");
+      provSel.className = "provider-select";
+      provSel.disabled = locked || provIds.length <= 1;
+      for (const pid of provIds) {
+        const o = document.createElement("option");
+        o.value = pid; o.textContent = providerName(pid);
+        if (pid === cur.provider) o.selected = true;
+        provSel.appendChild(o);
+      }
+      row.appendChild(provSel);
+
+      // model cell (select + custom input + meta)
+      const modelCell = document.createElement("div");
+      modelCell.className = "model-cell";
+      const modelSel = document.createElement("select");
+      modelSel.className = "model-select";
+      modelSel.disabled = locked;
+      const custom = document.createElement("input");
+      custom.className = "custom-model-input";
+      custom.type = "text";
+      custom.placeholder = "Custom model id…";
+      custom.hidden = true;
+      const meta = document.createElement("div");
+      meta.className = "model-meta";
+      const srcTag = document.createElement("span");
+      meta.appendChild(srcTag);
+      const keyBadge = document.createElement("span");
+      meta.appendChild(keyBadge);
+      modelCell.appendChild(modelSel);
+      modelCell.appendChild(custom);
+      modelCell.appendChild(meta);
+      row.appendChild(modelCell);
+
+      // spacer (keeps grid 4-col alignment)
+      const spacer = document.createElement("div");
+      row.appendChild(spacer);
+
+      function paintForProvider(pid) {
+        const pdata = provs[pid] || { models: [], source: "fallback", key_status: "missing", supports_custom_model: false };
+        const models = pdata.models || [];
+        const selModel = (pid === cur.provider && cur.model) ? cur.model : (models[0] || cur.model || "");
+        buildOptions(modelSel, models.length ? models : (selModel ? [selModel] : []), selModel);
+        // custom model input
+        if (pdata.supports_custom_model) {
+          custom.hidden = false;
+          // if current model isn't in the list, prefill custom
+          if (selModel && !models.includes(selModel)) custom.value = selModel;
+          else custom.value = "";
+        } else {
+          custom.hidden = true;
+          custom.value = "";
+        }
+        // source + key tags
+        srcTag.className = "source-tag " + (pdata.source === "live" ? "live" : "fallback");
+        srcTag.textContent = pdata.source === "live" ? "live" : "offline list";
+        keyBadge.className = "key-badge " + (locked ? "locked" : pdata.key_status);
+        keyBadge.textContent = locked ? "Google" : (pdata.key_status === "present" ? "key set" : "no key");
+      }
+      paintForProvider(cur.provider || provIds[0]);
+
+      provSel.addEventListener("change", () => paintForProvider(provSel.value));
+      providerRows.appendChild(row);
+    }
+  }
+
+  function renderKeyRows() {
+    keyRows.innerHTML = "";
+    const pids = Object.keys(registry.providers);
+    for (const pid of pids) {
+      const status = (config.key_status && config.key_status[pid]) || "missing";
+      const row = document.createElement("div");
+      row.className = "key-row";
+      row.dataset.provider = pid;
+
+      const name = document.createElement("span");
+      name.className = "key-provider-name";
+      name.textContent = providerName(pid);
+      row.appendChild(name);
+
+      const wrap = document.createElement("div");
+      wrap.className = "key-field-wrap";
+      const input = document.createElement("input");
+      input.className = "key-input";
+      input.type = "password";
+      input.placeholder = status === "present" ? "•••••••• (saved — type to replace)" : "Paste API key…";
+      wrap.appendChild(input);
+      row.appendChild(wrap);
+
+      const showBtn = document.createElement("button");
+      showBtn.className = "key-show-btn";
+      showBtn.type = "button";
+      showBtn.textContent = "Show";
+      showBtn.addEventListener("click", () => {
+        input.type = input.type === "password" ? "text" : "password";
+        showBtn.textContent = input.type === "password" ? "Show" : "Hide";
+      });
+      row.appendChild(showBtn);
+
+      const testBtn = document.createElement("button");
+      testBtn.className = "key-test-btn";
+      testBtn.type = "button";
+      testBtn.textContent = "Test";
+      row.appendChild(testBtn);
+
+      const result = document.createElement("span");
+      result.className = "key-test-result";
+      row.appendChild(result);
+
+      testBtn.addEventListener("click", async () => {
+        result.className = "key-test-result pending";
+        result.textContent = "Testing…";
+        try {
+          const body = { provider: pid };
+          if (input.value.trim()) body.key = input.value.trim();
+          const r = await api("/api/providers/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (r.ok) {
+            result.className = "key-test-result ok";
+            result.textContent = "✓ " + (r.latency_ms != null ? r.latency_ms + "ms" : "OK");
+          } else {
+            result.className = "key-test-result err";
+            result.textContent = "✗ " + (r.error ? "failed" : "failed");
+            result.title = r.error || "";
+          }
+        } catch (e) {
+          result.className = "key-test-result err";
+          result.textContent = "✗ error";
+          result.title = String(e);
+        }
+      });
+
+      keyRows.appendChild(row);
+    }
+  }
+
+  function collectPatch() {
+    const slots = {};
+    providerRows.querySelectorAll(".provider-row").forEach((row) => {
+      if (row.classList.contains("is-locked")) return; // live_voice not editable
+      const slot = row.dataset.slot;
+      const provSel = row.querySelector(".provider-select");
+      const modelSel = row.querySelector(".model-select");
+      const custom = row.querySelector(".custom-model-input");
+      const model = (custom && !custom.hidden && custom.value.trim())
+        ? custom.value.trim()
+        : (modelSel ? modelSel.value : "");
+      slots[slot] = { provider: provSel.value, model };
+    });
+    const keys = {};
+    keyRows.querySelectorAll(".key-row").forEach((row) => {
+      const input = row.querySelector(".key-input");
+      if (input && input.value.trim()) keys[row.dataset.provider] = input.value.trim();
+    });
+    const settings = {};
+    const gb = document.getElementById("google-backend-select");
+    if (gb) settings.google_backend = gb.value;
+    return { slots, keys, settings };
+  }
+
+  async function loadSettings(force) {
+    try {
+      setStatus("Loading…", "");
+      const [reg, cfg] = await Promise.all([
+        api(force ? "/api/providers/refresh" : "/api/providers/registry", force ? { method: "POST" } : undefined),
+        api("/api/providers/config"),
+      ]);
+      registry = reg; config = cfg;
+      if (configPathEl && cfg.path) configPathEl.textContent = cfg.path;
+      const gb = document.getElementById("google-backend-select");
+      if (gb && cfg.settings) gb.value = cfg.settings.google_backend || "";
+      renderProviderRows();
+      renderKeyRows();
+      setStatus("", "");
+      loaded = true;
+    } catch (e) {
+      providerRows.innerHTML = '<div class="empty-state">Could not reach backend at ' +
+        BACKEND_HTTP + '. Start the backend, then reopen Settings.</div>';
+      setStatus("Backend unreachable", "err");
+    }
+  }
+
+  saveBtn && saveBtn.addEventListener("click", async () => {
+    try {
+      setStatus("Saving…", "");
+      const patch = collectPatch();
+      const r = await api("/api/providers/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      config = r.config || config;
+      // refresh model lists for any provider whose key changed
+      await loadSettings(Object.keys(patch.keys || {}).length > 0);
+      setStatus("Saved ✓", "ok");
+      setTimeout(() => { if (saveStatus.textContent === "Saved ✓") setStatus("", ""); }, 3000);
+    } catch (e) {
+      setStatus("Save failed: " + String(e).slice(0, 80), "err");
+    }
+  });
+
+  refreshBtn && refreshBtn.addEventListener("click", () => loadSettings(true));
+
+  // Tab switching
+  function activate(tabName) {
+    tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === tabName));
+    if (panelDash) panelDash.hidden = tabName !== "dashboard";
+    if (panelSet) panelSet.hidden = tabName !== "settings";
+    if (tabName === "settings" && !loaded) loadSettings(false);
+  }
+  tabs.forEach((t) => t.addEventListener("click", () => activate(t.dataset.tab)));
+})();
