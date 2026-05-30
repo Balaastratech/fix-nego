@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LEAN PRODUCTION REQUIREMENTS — hosted desktop-companion backend (BYOK)
+#
+# This is the deploy profile for the Oracle-hosted backend that serves the
+# Windows desktop app. It is intentionally MINIMAL: only the deps on the live
+# runtime path (FastAPI WS + Deepgram STT + Gemini/OpenAI/Anthropic BYOK +
+# vision) are included.
+#
+# The full local-dev / research stack stays in `requirements.txt` (unchanged).
+# DO NOT install both into the same env.
+#
+# Verified against the real startup import chain (2026-05-30):
+#   app.main -> websocket -> negotiation_engine -> companion_runtime /
+#   listener_agent / stt_service. The only non-core module-top imports on that
+#   chain are `numpy` (listener_agent) and `huggingface_hub` (main.py shim).
+#   All torch / speechbrain / pyannote / whisper / wespeaker / webrtcvad /
+#   scipy imports are LAZY (inside functions) and only fire if speaker-ID /
+#   diarization is enabled — which is OFF in production (see prod .env).
+#
+# Required prod env (so no heavy/lazy path or Vertex auth is ever invoked):
+#   SPEAKER_RECOGNITION_ENABLED=False
+#   SPEECHBRAIN_ENABLED=False
+#   PERFECT_LISTENER_ENABLED=False
+#   TRANSCRIPTION_PROVIDER=deepgram
+#   GOOGLE_GENAI_USE_VERTEXAI=False        (BYOK = Google AI Studio, no GCP)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Web framework / ASGI / WebSocket server ──────────────────────────────────
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+
+# ── Config / validation / logging ────────────────────────────────────────────
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+python-json-logger>=2.0.7
+asgi-correlation-id>=4.0.0
+
+# ── Core runtime libs on the startup path ────────────────────────────────────
+# numpy: module-top import in listener_agent.py (audio array handling).
+#   torch is gone, so the old `numpy<2` ABI pin no longer applies.
+numpy>=1.26,<3
+# pillow: vision frame decoding/encoding.
+pillow>=10.0.0
+# httpx: provider HTTP + Deepgram REST/streaming auth + AssemblyAI/ElevenLabs.
+httpx>=0.27.0
+# huggingface_hub: HARD top-level import in app/main.py (the hf_hub_download shim).
+#   Light (no torch). Must stay or the backend won't import.
+huggingface_hub>=0.23.0
+
+# ── AI providers (BYOK — keys supplied per-session by the desktop) ────────────
+# google-genai: Gemini Live (hold-to-ask), advice, vision. AI Studio + Vertex.
+google-genai>=1.0.0
+# openai SDK: the single adapter for OpenAI + Groq + DeepSeek + OpenRouter
+#   (all openai-compatible, differ only by base_url + key).
+openai>=1.40.0
+# anthropic SDK: Claude reasoning/vision.
+anthropic>=0.39.0
+
+# ── STT note ─────────────────────────────────────────────────────────────────
+# Deepgram (live streaming + batch), AssemblyAI, and ElevenLabs are all reached
+# over plain HTTP/WebSocket via httpx/websockets — NO vendor SDKs required.
+# google-cloud-speech (chirp_3) is intentionally EXCLUDED: it needs Vertex/GCP
+# credentials (not BYOK-portable) and its import is lazy + disabled in prod.
+
+# ── Intentionally EXCLUDED (full stack lives in requirements.txt) ─────────────
+# torch, torchaudio, speechbrain, pyannote.audio, openai-whisper, wespeaker,
+# s3prl, peft, asteroid-filterbanks, onnxruntime, hdbscan, librosa, scipy,
+# webrtcvad-wheels, resemblyzer, pyttsx3, google-cloud-speech,
+# google-cloud-* diarization. All lazy + disabled in the hosted BYOK profile.

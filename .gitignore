@@ -123,3 +123,6 @@ backend/test_validator.py
 hackathon.md
 VIDEO_INTELLIGENCE_INTEGRATION_PLAN.md
 WHAT_WE_ARE_BUILDING.md
+
+# Lean deploy boot-test venv (Phase B)
+backend/.venv-lean/
