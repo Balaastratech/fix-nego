@@ -35,6 +35,16 @@ venv.bak/
 .env.local
 .env.*.local
 
+# Runtime provider config — CONTAINS PASTED API KEYS, never commit
+backend/data/runtime_providers.json
+data/runtime_providers.json
+runtime_providers.json
+# Any stray secret/key material
+*.pem
+*.key
+secrets.*
+*_secret*
+
 # Node.js
 node_modules/
 npm-debug.log
