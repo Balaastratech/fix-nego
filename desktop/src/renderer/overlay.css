@@ -95,6 +95,50 @@ html, body {
   min-height: 255px;
 }
 
+/* ─── Connection / readiness dot ────────────────────────── */
+/* Small status dot pinned to the top-right of the orb. Communicates, without
+   words, whether the AI is connecting (red), warming up (amber), or ready
+   (green). Paired with the orb tooltip + dimming for plain-language clarity. */
+.conn-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(8, 10, 16, 0.85);
+  z-index: 6;
+  pointer-events: auto;
+  transition: background 200ms ease, box-shadow 200ms ease;
+  -webkit-app-region: no-drag;
+}
+.conn-dot.offline {
+  background: #ff5d5d;
+  box-shadow: 0 0 6px rgba(255, 93, 93, 0.7);
+}
+.conn-dot.warming {
+  background: #f5b942;
+  box-shadow: 0 0 7px rgba(245, 185, 66, 0.85);
+  animation: conn-pulse 1.1s ease-in-out infinite;
+}
+.conn-dot.ready {
+  background: #4ad991;
+  box-shadow: 0 0 7px rgba(74, 217, 145, 0.8);
+}
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+/* While the backend is still connecting/warming up, dim the orb slightly so the
+   user can see at a glance that the companion is not ready yet. */
+.overlay-root.backend-connecting .assistant-orb {
+  filter: grayscale(0.55) brightness(0.78);
+}
+.overlay-root.backend-connecting .assistant-orb.state-idle {
+  opacity: 0.82;
+}
+
 .assistant-orb {
   width: 58px;
   height: 58px;

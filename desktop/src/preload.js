@@ -37,6 +37,21 @@ contextBridge.exposeInMainWorld("companionBridge", {
   startProcessAudioCapture: (request) => ipcRenderer.invoke("companion:startProcessAudioCapture", request),
   stopProcessAudioCapture: () => ipcRenderer.invoke("companion:stopProcessAudioCapture"),
   listAudioDevices: () => enumerateAudioDevices(),
+  // Phase G — per-session BYOK provider config (keys/slots/google_backend)
+  getProviderConfig: () => ipcRenderer.invoke("companion:getProviderConfig"),
+  setProviderConfig: (cfg) => ipcRenderer.invoke("companion:setProviderConfig", cfg),
+  // Auth (Clerk + app-session JWT)
+  getAuth: () => ipcRenderer.invoke("companion:getAuth"),
+  setAuth: (tokens) => ipcRenderer.invoke("companion:setAuth", tokens),
+  clearAuth: () => ipcRenderer.invoke("companion:clearAuth"),
+  startLogin: () => ipcRenderer.invoke("companion:startLogin"),
+  onLoginUrl: (handler) => {
+    const listener = (_event, url) => handler(url);
+    ipcRenderer.on("companion:loginUrl", listener);
+    return () => ipcRenderer.removeListener("companion:loginUrl", listener);
+  },
+  logout: () => ipcRenderer.invoke("companion:logout"),
+  loginSuccess: () => ipcRenderer.invoke("companion:loginSuccess"),
   selectListeningOutput: (output) => ipcRenderer.invoke("companion:selectListeningOutput", output),
   selectMeetingRouteOutput: (output) => ipcRenderer.invoke("companion:selectMeetingRouteOutput", output),
   startCompanionSession: () => ipcRenderer.invoke("companion:startCompanionSession"),

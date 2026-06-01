@@ -4,6 +4,51 @@ const bridge = window.companionBridge;
 const channel = new BroadcastChannel("negotiation_companion_ui");
 const STORAGE_KEY = "companion_prefs_v2";
 const BACKEND_WS_URL = (window.companionConfig && window.companionConfig.ws) || "ws://localhost:8000/ws";
+// Phase C shared token (static admin bypass — still works when set).
+const BACKEND_SHARED_TOKEN = (window.companionConfig && window.companionConfig.token) || "";
+
+// Auth: resolved lazily (async) from safeStorage via companionBridge.getAuth().
+// _authTokens is populated once before the first WS connect and refreshed on 401.
+let _authTokens = null;
+
+async function _loadAuthTokens() {
+  try {
+    _authTokens = await window.companionBridge.getAuth();
+  } catch (_) {
+    _authTokens = null;
+  }
+}
+
+async function _getActiveToken() {
+  // Prefer per-user JWT; fall back to shared admin token.
+  if (_authTokens?.access_token) return _authTokens.access_token;
+  return BACKEND_SHARED_TOKEN;
+}
+
+async function _refreshAuthTokens() {
+  const rt = _authTokens?.refresh_token;
+  if (!rt) return false;
+  try {
+    const BACKEND_HTTP = (window.companionConfig && window.companionConfig.http) || "http://localhost:8000";
+    const res = await fetch(BACKEND_HTTP + "/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (!res.ok) { _authTokens = null; return false; }
+    const data = await res.json();
+    _authTokens = { ..._authTokens, access_token: data.access_token, refresh_token: data.refresh_token };
+    await window.companionBridge.setAuth(_authTokens);
+    return true;
+  } catch (_) { return false; }
+}
+
+async function backendWsUrl() {
+  const token = await _getActiveToken();
+  if (!token) return BACKEND_WS_URL;
+  const sep = BACKEND_WS_URL.includes("?") ? "&" : "?";
+  return BACKEND_WS_URL + sep + "token=" + encodeURIComponent(token);
+}
 const PROCESS_AUDIO_TARGET_RATE = 16000;
 const PROCESS_AUDIO_ASSUMED_INPUT_RATE = 48000;
 const PROCESS_AUDIO_FLUSH_MS = 120;
@@ -17,6 +62,8 @@ const state = {
   backendState: "IDLE",   // IDLE → CONSENTED → ACTIVE
   _pendingStart: false,
   backendReady: false,    // true once CONNECTION_ESTABLISHED received with ready_to_start
+  backendStatusMessage: "Connecting to AI services…",  // plain-language status for UI
+  wsConnected: false,     // true while the websocket is open
   sessionLive: false,
   sessionStarting: false,
   sessionPaused: false,
@@ -74,9 +121,6 @@ const state = {
   processAudioProbeLogged: false,
   processAudioInputFormat: null,
   processAudioMatchStrategy: null,
-
-  // Chat (private AI only)
-  chatEntries: [],
 
   // Full conversation (for full window)
   conversationEntries: [],
@@ -148,6 +192,31 @@ function setOrbState(s) {
     return;
   }
   orbIcon.textContent = s === "listening" ? "◉" : s === "speaking" ? "◎" : "✦";
+}
+
+// ─── Connection / readiness indicator ─────────────────────────────────────────
+// Shows the user, in plain language, whether the AI is still connecting or ready.
+// While NOT ready, the orb is visually dimmed and shows a small status dot so the
+// user knows not to start a session yet. Once ready, the dot turns green.
+function updateConnectionIndicator() {
+  const ready = state.backendReady && state.wsConnected;
+  if (root) {
+    root.classList.toggle("backend-connecting", !ready);
+    root.classList.toggle("backend-ready", ready);
+  }
+  const dot = document.getElementById("conn-dot");
+  if (dot) {
+    dot.className = "conn-dot " + (ready ? "ready" : (state.wsConnected ? "warming" : "offline"));
+    dot.title = ready
+      ? "AI services ready — you can start a session"
+      : (state.backendStatusMessage || "Connecting to AI services…");
+  }
+  if (orb) {
+    // Tooltip on the orb itself, so hovering explains the current state.
+    orb.title = ready
+      ? "AI Companion — ready"
+      : (state.backendStatusMessage || "Connecting to AI services… please wait");
+  }
 }
 
 // Track previous mute-to-meeting state to detect transitions for IPC calls
@@ -230,42 +299,35 @@ setInterval(() => {
 }, 1500);
 
 // ─── Chat rendering ───────────────────────────────────────────────────────────
+// Pair the private ask entries into Q→A iterations. This mirrors the full
+// window's renderPairedAsks() EXACTLY so the orb and the full app never diverge.
+// Key rule: a NEW user entry always closes the current pair (the question owns the
+// pair); the AI reply attaches to the open pair and is replaced in place while it
+// streams. This is what keeps the question and its answer together — the previous
+// version split late/streamed entries into separate question-only / answer-only
+// blocks, which (with the compact orb showing only the newest block) made the
+// bubble appear to flip between just-the-question and just-the-answer.
 function getChatIterations() {
   const iterations = [];
-  let currentIteration = null;
-
+  let cur = null;
   for (const entry of state.privateEntries) {
     if (entry.speaker === "user") {
-      if (currentIteration && currentIteration.aiEntry) {
-        iterations.push(currentIteration);
-        currentIteration = null;
-      }
-      if (!currentIteration) {
-        currentIteration = {
-          userEntry: entry,
-          aiEntry: null
-        };
-      } else {
-        currentIteration.userEntry = entry;
-      }
+      if (cur && cur.userEntry) iterations.push(cur);
+      cur = { userEntry: entry, aiEntry: null };
     } else if (entry.speaker === "ai") {
-      if (!currentIteration) {
-        currentIteration = {
-          userEntry: null,
-          aiEntry: entry
-        };
+      if (!cur) {
+        cur = { userEntry: null, aiEntry: entry };
+      } else if (cur.aiEntry && !cur.aiEntry.isPartial) {
+        // The open pair already has a finalized answer — this AI entry belongs to
+        // a new exchange.
+        iterations.push(cur);
+        cur = { userEntry: null, aiEntry: entry };
       } else {
-        currentIteration.aiEntry = entry;
-      }
-      if (!entry.isPartial) {
-        iterations.push(currentIteration);
-        currentIteration = null;
+        cur.aiEntry = entry;
       }
     }
   }
-  if (currentIteration) {
-    iterations.push(currentIteration);
-  }
+  if (cur && (cur.userEntry || cur.aiEntry)) iterations.push(cur);
   return iterations;
 }
 
@@ -276,25 +338,13 @@ function formatChatTimestamp(ts) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
 
-let _chatLastCount = -1, _chatLastTopPartial = false;
 function renderChat() {
   const iters = getChatIterations();
-  const top = iters[iters.length - 1];
-  const topIsPartial = !!(top?.aiEntry?.isPartial || top?.userEntry?.isPartial);
 
-  if (iters.length === _chatLastCount && topIsPartial && _chatLastTopPartial) {
-    // Only the top bubble's text changed — update text node in place, skip full rebuild
-    const partialEntry = top?.aiEntry?.isPartial ? top.aiEntry : top?.userEntry;
-    const partialBubble = chatFeed.firstElementChild
-      ?.querySelector(".chat-bubble.partial .chat-bubble-text");
-    if (partialEntry && partialBubble) {
-      partialBubble.textContent = partialEntry.text;
-      return;
-    }
-  }
-  _chatLastCount = iters.length;
-  _chatLastTopPartial = topIsPartial;
-
+  // Always rebuild. The feed is tiny (a few bubbles), so a full rebuild every
+  // partial is cheap and — unlike the old in-place text-node optimization — can
+  // never leave a stale or half-updated bubble, which was the source of the
+  // "question shows, then only the answer, then only the question" flicker.
   chatFeed.innerHTML = "";
   // Newest pair on top, oldest on bottom. Each pair shows the user question
   // first (left-aligned, yellow) then the AI reply right below it (right-aligned,
@@ -350,13 +400,6 @@ function renderChat() {
 
   updateRootClasses();
   syncOverlayPresentation();
-}
-
-function pushChat(speaker, text) {
-  if (!text?.trim()) return;
-  state.chatEntries.push({ speaker, text, ts: Date.now() });
-  state.chatEntries = state.chatEntries.slice(-20);
-  renderChat();
 }
 
 function entryFromPayload(payload, fallbackSpeaker = "unknown") {
@@ -487,6 +530,8 @@ function broadcastSnapshot() {
     sessionStarting: state.sessionStarting,
     sessionPaused: state.sessionPaused,
     backendReady: state.backendReady,
+    wsConnected: state.wsConnected,
+    backendStatusMessage: state.backendStatusMessage,
     selectedTarget: state.selectedTarget || null,
     meetingTitle: state.selectedTarget?.window_title || null,
     meetingTargets: state.meetingTargets,
@@ -529,6 +574,30 @@ function wsSend(type, payload) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return false;
   state.ws.send(JSON.stringify({ type, payload }));
   return true;
+}
+
+// Phase G — per-session BYOK. Read the locally-stored provider config (keys +
+// slot/model + google_backend the user saved in Settings) and send it as a
+// PROVIDER_CONFIG message right after CONNECTION_ESTABLISHED, before START, so
+// this session resolves AI/STT against the user's OWN keys. Empty config → no
+// message → backend uses its global/.env defaults (unchanged behavior).
+async function sendProviderConfig() {
+  try {
+    if (!(window.companionBridge && window.companionBridge.getProviderConfig)) return;
+    const cfg = await window.companionBridge.getProviderConfig();
+    if (!cfg) return;
+    const hasKeys = cfg.keys && Object.keys(cfg.keys).length > 0;
+    const hasSlots = cfg.slots && Object.keys(cfg.slots).length > 0;
+    const hasSettings = cfg.settings && Object.keys(cfg.settings).some((k) => cfg.settings[k]);
+    if (!hasKeys && !hasSlots && !hasSettings) return;
+    wsSend("PROVIDER_CONFIG", {
+      slots: cfg.slots || {},
+      keys: cfg.keys || {},
+      settings: cfg.settings || {},
+    });
+  } catch (_err) {
+    // non-fatal: backend falls back to global/.env resolution
+  }
 }
 
 function stopActivePlayback(sendDone = false) {
@@ -690,33 +759,51 @@ async function connectBackend() {
   if (state.wsConnecting) return;
   state.wsConnecting = true;
 
-  await new Promise((resolve, reject) => {
-    const ws = new WebSocket(BACKEND_WS_URL);
+  // Load auth tokens once (no-op on subsequent connects if already loaded).
+  if (!_authTokens) await _loadAuthTokens();
+
+  await new Promise(async (resolve, reject) => {
+    const ws = new WebSocket(await backendWsUrl());
     ws.binaryType = "arraybuffer";
-    ws.onopen = () => { state.ws = ws; state.wsConnecting = false; resolve(); };
+    ws.onopen = () => {
+      state.ws = ws;
+      state.wsConnecting = false;
+      state.wsConnected = true;
+      // We are connected to the server, but the AI services may still be warming
+      // up. backendReady stays false until CONNECTION_ESTABLISHED / BACKEND_READY.
+      updateConnectionIndicator();
+      broadcastSnapshot();
+      resolve();
+    };
     ws.onerror = () => { state.wsConnecting = false; reject(new Error("WS error")); };
     ws.onclose = () => {
       state.wsConnecting = false;
+      state.wsConnected = false;
+      state.backendReady = false;
       state.backendState = "IDLE";
       state._pendingStart = false;
+      state.backendStatusMessage = "Reconnecting to AI services…";
+      updateConnectionIndicator();
       if (!state.sessionLive) state.sessionPaused = false;
-      // Auto-reconnect after unexpected close (e.g. minimize, network blip)
-      if (state.sessionLive || state.sessionStarting) {
-        console.warn("[WS] Connection lost during active session. Reconnecting in 2s...");
-        setTimeout(() => {
-          if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-            connectWs().catch((err) => {
-              console.warn("[WS] Reconnect failed:", err?.message || err);
-              // Retry again after 5s
-              setTimeout(() => {
-                if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-                  connectWs().catch(() => {});
-                }
-              }, 5000);
-            });
-          }
-        }, 2000);
-      }
+      // Auto-reconnect after any unexpected close — including while IDLE. The orb
+      // must recover when the backend restarts (e.g. a dev `uvicorn --reload`),
+      // otherwise an idle orb stays disconnected and Start is silently blocked
+      // until the app is reopened. (Previously this only ran during an active
+      // session AND called a non-existent connectWs(), so it never reconnected.)
+      const wasActive = state.sessionLive || state.sessionStarting;
+      if (wasActive) console.warn("[WS] Connection lost during active session. Reconnecting…");
+      setTimeout(() => {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+          connectBackend().catch((err) => {
+            console.warn("[WS] Reconnect failed:", err?.message || err);
+            setTimeout(() => {
+              if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                connectBackend().catch(() => {});
+              }
+            }, 5000);
+          });
+        }
+      }, wasActive ? 2000 : 3000);
     };
     ws.onmessage = handleWsMessage;
   });
@@ -736,8 +823,12 @@ function handleWsMessage(ev) {
 
   if (t === "CONNECTION_ESTABLISHED") {
     state.sessionId     = p.session_id;
+    void sendProviderConfig();  // Phase G — push this user's BYOK keys for the session
     state.backendState  = "IDLE";
     state.backendReady  = Boolean(p.ready_to_start);
+    state.backendStatusMessage = (p.readiness && p.readiness.status_message)
+      || (state.backendReady ? "AI services ready." : "Connecting to AI services…");
+    updateConnectionIndicator();
     traceClientEvent("connection_established_received", "Overlay received websocket connection acknowledgement", {
       session_id: p.session_id,
       restored: Boolean(p.restored),
@@ -758,6 +849,13 @@ function handleWsMessage(ev) {
       broadcastSnapshot();
     }
     // Do NOT send consent here — wait until startSession() so timing is correct
+  }
+  if (t === "BACKEND_READY") {
+    // Backend finished its startup probes — it is now safe to start a session.
+    state.backendReady = true;
+    state.backendStatusMessage = (p && p.status_message) || "AI services ready — you can start a session.";
+    updateConnectionIndicator();
+    broadcastSnapshot();
   }
   if (t === "CONSENT_ACKNOWLEDGED") {
     state.backendState = "CONSENTED";
@@ -872,13 +970,12 @@ function handleWsMessage(ev) {
           (e) => !(e.isPartial && e.speaker === entry.speaker)
         );
       }
-      if (!entry.isPartial) {
-        pushChat(entry.speaker === "ai" ? "ai" : "user", p.text);
-      }
+      // Upsert FIRST, then render. renderChat() reads state.privateEntries, so the
+      // entry must be present before we draw — otherwise the AI/user bubble is
+      // dropped from the orb. (Previously a pushChat() here rendered against stale
+      // entries before this upsert, which is why the orb sometimes showed no AI reply.)
       state.privateEntries = upsertEntry(state.privateEntries, entry, 40);
       broadcast("PRIVATE_ENTRY", entry);
-      
-      // Always call renderChat to ensure live transcribing is rendered!
       renderChat();
 
       if (!entry.isPartial) {
@@ -902,9 +999,13 @@ function handleWsMessage(ev) {
     if (state.sessionPaused) return;
     setOrbState("responding");
     const entry = entryFromPayload({ ...p, speaker: "ai" }, "ai");
-    pushChat("ai", p.text);
+    // Upsert BEFORE rendering — renderChat() reads state.privateEntries. The old
+    // pushChat() ran before this upsert, so the orb rendered without the new AI
+    // entry and the reply never appeared (the full window was fine because it
+    // rebuilds from the snapshot broadcast below).
     state.privateEntries = upsertEntry(state.privateEntries, entry, 40);
     broadcast("PRIVATE_ENTRY", entry);
+    renderChat();
     state.awaitingPrivateReply = false;
     setTimeout(() => { if (state.sessionLive && !state.holdActive) setOrbState("active"); }, 3000);
     broadcastSnapshot();
@@ -1979,7 +2080,6 @@ async function teardownLocalSession({ resetSelection = false, closeSocket = fals
   state.copilotStarted = false;
   state.conversationEntries = [];
   state.privateEntries = [];
-  state.chatEntries = [];
   state.langMenuOpen = false;
   state.menuOpen = false;
   if (resetSelection) {
@@ -2364,12 +2464,38 @@ function sendStartNegotiation() {
 async function startSession() {
   if (state.sessionLive || state.sessionStarting) return;
   if (!state.selectedTarget) throw new Error("No meeting target selected");
+  // If the socket dropped (e.g. the backend restarted), reconnect and wait briefly
+  // for it to report ready BEFORE refusing — otherwise a dropped idle connection
+  // makes clicking Start silently do nothing.
+  if (!state.wsConnected) {
+    try { await connectBackend(); } catch (_) {}
+  }
+  if (state.wsConnected && !state.backendReady) {
+    await new Promise((resolve) => {
+      const deadline = Date.now() + 5000;
+      const tick = () => {
+        if (state.backendReady || Date.now() > deadline) return resolve();
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
+  }
+
+  // Guard: the backend runs AI capability probes for ~1-2s after boot. Starting
+  // before they finish races the probes and can fail. Refuse with a clear,
+  // plain-language reason until BACKEND_READY (or ready_to_start) arrives.
+  if (!state.wsConnected || !state.backendReady) {
+    const msg = state.backendStatusMessage || "Still connecting to AI services — please wait a moment.";
+    console.warn("[startSession] blocked — backend not ready:", msg);
+    broadcast("START_BLOCKED", { reason: msg });
+    broadcastSnapshot();
+    return;
+  }
 
   state.sessionStarting = true;
   state.sessionPaused = false;
   state.conversationEntries = [];
   state.privateEntries = [];
-  state.chatEntries = [];
   traceClientEvent("session_start_requested", "Overlay began session startup", {
     meeting_title: state.selectedTarget?.window_title || null,
     source_id: resolvePreferredCaptureSourceId(state.selectedSourceId || null),
@@ -2724,6 +2850,15 @@ async function openScreenSelectionFromOverlay() {
   const chosenSource = await showScreenPicker();
   if (!chosenSource?.id) return;
   setSelectedCaptureSource(chosenSource);
+  // Keep the meeting target in sync with the newly picked source so BOTH the
+  // backend re-bind and the remote-audio PID match (which resolve the window from
+  // selectedTarget.target_id first) follow the new window. Without this the video
+  // switches but the AI keeps listening to the previously selected window.
+  state.selectedTarget = {
+    ...(state.selectedTarget || {}),
+    target_id: chosenSource.id,
+    window_title: chosenSource.name || state.selectedTarget?.window_title || null,
+  };
   traceClientEvent("overlay_capture_source_selected", "Overlay switched the captured screen/window", {
     source_id: chosenSource.id,
     source_name: chosenSource.name || null,
@@ -2836,6 +2971,9 @@ if (bridge.onCaptureFollowingScreen) {
 
 // ─── Orb pointer events (drag + hold) ────────────────────────────────────────
 orb.addEventListener("pointerdown", (e) => {
+  // BOTH left (0) and right (2) buttons drag the overlay. Middle/other are ignored.
+  // (Hold-to-ask, below, is still LEFT-only so right-drag can't ask the AI.)
+  if (e.button !== 0 && e.button !== 2) return;
   state.dragging = true;
   state.dragPointerId = e.pointerId;
   state.dragOffX = e.clientX;
@@ -2870,18 +3008,33 @@ orb.addEventListener("click", (e) => {
 });
 
 orb.addEventListener("dblclick", (e) => {
+  // Left double-click no longer opens the main app — the user asked for the main
+  // app to open ONLY on a double RIGHT-click (so left stays free for dragging).
   e.preventDefault();
-  bridge.openFullWindow().catch(() => {});
 });
 
+// Double RIGHT-click opens the full app. A single right-click does nothing (so
+// it can't accidentally pop the main window). We detect two contextmenu events
+// on the orb within 450ms as a "double right-click".
+let _lastRightClickAt = 0;
 orb.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  bridge.openFullWindow().catch(() => {});
+  const now = Date.now();
+  if (now - _lastRightClickAt <= 450) {
+    _lastRightClickAt = 0;
+    bridge.openFullWindow().catch(() => {});
+  } else {
+    _lastRightClickAt = now;
+  }
 });
 
 // Orb hold for Hold-to-Ask when session is live
 let orbHoldTimer = null;
-orb.addEventListener("pointerdown", () => {
+orb.addEventListener("pointerdown", (e) => {
+  // Hold-to-Ask is a LEFT-button-only gesture. Right-click (context menu) and
+  // middle-click must never start an AI ask — they're reserved for opening the
+  // main app / nothing.
+  if (e.button !== 0) return;
   if (state.sessionPaused) return;
   if (!state.sessionLive && !state.sessionStarting) return;
   startRingFill();
@@ -2957,6 +3110,7 @@ window.addEventListener("load", async () => {
   loadPrefs();
   renderChat();
   updateRootClasses();
+  updateConnectionIndicator();
 
   // Pre-connect WS
   await connectBackend().catch(() => {});
@@ -2996,8 +3150,13 @@ window.addEventListener("load", async () => {
       : "Switch captured screen or window";
   }
 
+  // The chip's whole purpose is to switch the captured screen/window, so open the
+  // screen picker directly. (It was wired to openMenu() — the general settings menu —
+  // which has no source picker, so clicking the chip never actually let you switch
+  // the window. openScreenSelectionFromOverlay() shows the picker AND, when a session
+  // is live, restarts capture on the chosen source so the switch takes effect mid-call.)
   chip.addEventListener("click", () => {
-    void openMenu();
+    void openScreenSelectionFromOverlay();
   });
 
   const timer = setInterval(paint, 400);

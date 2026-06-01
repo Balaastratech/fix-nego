@@ -1,10 +1,11 @@
 const fs = require("fs");
+const http = require("http");
 const os = require("os");
 const path = require("path");
 const child_process = require("child_process");
 // Load .env from the desktop/ project root (dev only — packaged builds use OS env vars)
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
-const { app, BrowserWindow, desktopCapturer, ipcMain, screen, session } = require("electron");
+const { app, BrowserWindow, desktopCapturer, ipcMain, safeStorage, screen, session, shell } = require("electron");
 
 // ── Backend endpoint resolution (Phase A) ────────────────────────────────────
 // Shipped builds default to the hosted production backend. For local dev set
@@ -20,7 +21,12 @@ function resolveBackendConfig() {
       .replace(/^ws:\/\//, "http://")
       .replace(/\/ws\/?$/, "");
   }
-  return { ws, http };
+  // Phase C — shared bearer token for a hosted/public backend. Empty by default
+  // (localhost dev). When set, renderers append it to the WS URL (?token=) and
+  // send it on REST calls (X-Companion-Token). Set COMPANION_SHARED_TOKEN in
+  // desktop/.env (dev) or the packaged build's OS env to match the VM's token.
+  const token = (process.env.COMPANION_SHARED_TOKEN || "").trim();
+  return { ws, http, token };
 }
 // Synchronous so preload can expose it before any renderer code runs.
 ipcMain.on("companion:getBackendConfig", (event) => {
@@ -129,6 +135,188 @@ const PRIVACY_HELPER_SCRIPT = app.isPackaged
   : path.join(__dirname, "..", "scripts", "audio-isolator.ps1");
 const PRIVACY_RECOVERY_FILE = path.join(runtimeRoot, "privacy-recovery.json");
 const PRIVACY_WATCHDOG_MS   = 30000; // auto-restore if hold not released within 30s
+
+// ── Phase G: per-session BYOK provider config (local, plaintext on disk) ─────
+// The Settings page writes the user's own keys + slot/model + google_backend
+// here; the overlay/app renderer reads it at WS connect and sends it as a
+// PROVIDER_CONFIG message scoped to that session. Stored in the user-data dir,
+// 0600 perms, NEVER committed and NEVER baked into the build (BYOK rule).
+const PROVIDER_CONFIG_FILE = path.join(runtimeRoot, "user-data", "provider-config.json");
+function readProviderConfig() {
+  try {
+    const raw = fs.readFileSync(PROVIDER_CONFIG_FILE, "utf-8");
+    const cfg = JSON.parse(raw);
+    if (cfg && typeof cfg === "object") {
+      return {
+        slots: cfg.slots && typeof cfg.slots === "object" ? cfg.slots : {},
+        keys: cfg.keys && typeof cfg.keys === "object" ? cfg.keys : {},
+        settings: cfg.settings && typeof cfg.settings === "object" ? cfg.settings : {},
+      };
+    }
+  } catch (_err) {
+    // missing/unreadable → empty config (pure backend-default behavior)
+  }
+  return { slots: {}, keys: {}, settings: {} };
+}
+function writeProviderConfig(cfg) {
+  const safe = {
+    slots: cfg && cfg.slots && typeof cfg.slots === "object" ? cfg.slots : {},
+    keys: cfg && cfg.keys && typeof cfg.keys === "object" ? cfg.keys : {},
+    settings: cfg && cfg.settings && typeof cfg.settings === "object" ? cfg.settings : {},
+  };
+  fs.mkdirSync(path.dirname(PROVIDER_CONFIG_FILE), { recursive: true });
+  fs.writeFileSync(PROVIDER_CONFIG_FILE, JSON.stringify(safe, null, 2), { encoding: "utf-8" });
+  try { fs.chmodSync(PROVIDER_CONFIG_FILE, 0o600); } catch (_err) { /* best effort on Windows */ }
+  return safe;
+}
+ipcMain.handle("companion:getProviderConfig", async () => readProviderConfig());
+ipcMain.handle("companion:setProviderConfig", async (_event, cfg) => writeProviderConfig(cfg || {}));
+
+// ── Auth token store (Phase auth — Clerk + app-session JWT) ──────────────────
+// Stored encrypted via Electron safeStorage (OS keychain / Windows Credential
+// Manager). Falls back to null when safeStorage is unavailable (CI / headless).
+// The blob is { access_token, refresh_token, user: { clerk_sub, email } }.
+const AUTH_TOKEN_FILE = path.join(app.getPath("userData"), "auth.enc");
+
+function readAuthTokens() {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!fs.existsSync(AUTH_TOKEN_FILE)) return null;
+    const encrypted = fs.readFileSync(AUTH_TOKEN_FILE);
+    const decrypted = safeStorage.decryptString(encrypted);
+    return JSON.parse(decrypted);
+  } catch (_err) {
+    return null;
+  }
+}
+
+function writeAuthTokens(tokens) {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return false;
+    const encrypted = safeStorage.encryptString(JSON.stringify(tokens));
+    fs.writeFileSync(AUTH_TOKEN_FILE, encrypted);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function clearAuthTokens() {
+  try { fs.unlinkSync(AUTH_TOKEN_FILE); } catch (_err) {}
+}
+
+ipcMain.handle("companion:getAuth", async () => readAuthTokens());
+ipcMain.handle("companion:setAuth", async (_event, tokens) => writeAuthTokens(tokens));
+ipcMain.handle("companion:clearAuth", async () => { clearAuthTokens(); return true; });
+
+// ── Loopback OAuth login (Clerk hosted page → token handoff) ─────────────────
+// Opens the backend's /auth/login-page in the system browser with a loopback
+// redirect URI. A one-shot HTTP server on 127.0.0.1:<PORT> catches the
+// ?clerk_token= callback, POSTs it to the backend /auth/exchange, stores the
+// resulting app JWT pair, and resolves. All real auth UI lives in Clerk's page.
+ipcMain.handle("companion:startLogin", async (event) => {
+  return new Promise((resolve, reject) => {
+    // Pick a random OS-assigned port.
+    const server = http.createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const port = server.address().port;
+      const callbackUrl = `http://127.0.0.1:${port}/callback`;
+      const { http: backendHttp } = resolveBackendConfig();
+      // Add signout=1 when the user explicitly signed out, so the browser page
+      // calls Clerk.signOut() before showing the form (clears the Clerk cookie).
+      const signoutParam = _loginForceSignout ? "&signout=1" : "";
+      _loginForceSignout = false; // consume the flag — one-shot
+      const loginUrl = `${backendHttp}/auth/login-page?redirect=${encodeURIComponent(callbackUrl)}${signoutParam}`;
+
+      // Push URL to the login window immediately — user can copy & paste it
+      // into any browser if auto-open didn't work or they prefer another browser.
+      try { event.sender.send("companion:loginUrl", loginUrl); } catch (_) {}
+
+      server.on("request", async (req, res) => {
+        const url = new URL(req.url, `http://127.0.0.1:${port}`);
+        if (url.pathname !== "/callback") {
+          res.writeHead(404).end();
+          return;
+        }
+
+        const clerkToken = url.searchParams.get("clerk_token") || "";
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(
+          "<html><body style='font-family:sans-serif;background:#0f1117;color:#e8e8f0;" +
+          "display:flex;align-items:center;justify-content:center;min-height:100vh'>" +
+          "<p>Signed in! You can close this tab and return to the app.</p></body></html>"
+        );
+        server.close();
+
+        if (!clerkToken) {
+          reject(new Error("No clerk_token in callback URL"));
+          return;
+        }
+
+        try {
+          // Exchange the Clerk token for our app tokens.
+          const exchangeRes = await fetch(`${backendHttp}/auth/exchange`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clerk_token: clerkToken }),
+          });
+          if (!exchangeRes.ok) {
+            const body = await exchangeRes.json().catch(() => ({}));
+            reject(new Error(body.detail || `Exchange failed: ${exchangeRes.status}`));
+            return;
+          }
+          const data = await exchangeRes.json();
+          writeAuthTokens({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            user: data.user || {},
+          });
+          resolve({ ok: true, user: data.user });
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      shell.openExternal(loginUrl).catch((err) => {
+        server.close();
+        reject(new Error(`Failed to open browser: ${err.message}`));
+      });
+    });
+
+    server.on("error", (err) => reject(err));
+  });
+});
+
+ipcMain.handle("companion:logout", async () => {
+  // Step 1: Revoke refresh token on the backend (best-effort).
+  const tokens = readAuthTokens();
+  if (tokens?.refresh_token) {
+    const { http: backendHttp } = resolveBackendConfig();
+    try {
+      await fetch(`${backendHttp}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+      });
+    } catch (_) { /* backend unreachable — token short-lived anyway */ }
+  }
+
+  // Step 2: Wipe all locally stored tokens.
+  clearAuthTokens();
+
+  // Step 3: Close overlay + full windows, show the login window.
+  // This is the full sign-out: no renderer reload tricks, actual window teardown.
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.destroy();
+    overlayWindow = null;
+  }
+  if (fullWindow && !fullWindow.isDestroyed()) {
+    fullWindow.destroy();
+    fullWindow = null;
+  }
+  createLoginWindow({ forceSignout: true });
+  return true;
+});
 
 const privacyState = {
   strategy:       null,   // "policyconfig" | "hotkey" | "vbcable" | null
@@ -932,6 +1120,48 @@ function createFullWindow() {
   });
 }
 
+// ── Login window (shown when no valid auth tokens are stored) ─────────────────
+let loginWindow = null;
+
+// forceSignout: true when opening login after an explicit sign-out — tells the
+// browser page to call Clerk.signOut() before showing the form so the previous
+// Clerk browser session doesn't auto-sign the user back in silently.
+let _loginForceSignout = false;
+
+function createLoginWindow(opts = {}) {
+  _loginForceSignout = Boolean(opts.forceSignout);
+  if (loginWindow && !loginWindow.isDestroyed()) {
+    loginWindow.focus();
+    return;
+  }
+  loginWindow = new BrowserWindow({
+    width: 480,
+    height: 640,
+    resizable: false,
+    maximizable: false,
+    title: "Sign in — Balaastra Companion",
+    autoHideMenuBar: true,
+    backgroundColor: "#0f1117",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  loginWindow.loadFile(path.join(__dirname, "renderer", "login.html"));
+  loginWindow.on("closed", () => { loginWindow = null; _loginForceSignout = false; });
+}
+
+// Called by the login renderer (via IPC) after a successful login exchange.
+ipcMain.handle("companion:loginSuccess", async () => {
+  if (loginWindow && !loginWindow.isDestroyed()) {
+    loginWindow.close();
+  }
+  createOverlayWindow();
+  createFullWindow();
+  return true;
+});
+
 function openFullWindow() {
   if (!fullWindow || fullWindow.isDestroyed()) {
     createFullWindow();
@@ -1398,10 +1628,27 @@ app.whenReady().then(() => {
     { useSystemPicker: false }
   );
 
-  createOverlayWindow();
-  createFullWindow();
+  // ── Auth gate: check for stored tokens ───────────────────────────────────
+  // If AUTH_REQUIRED is not enabled server-side (or we can't reach the backend),
+  // open the app normally so dev/localhost behavior is unchanged.
+  // When tokens exist, go straight to the app. When they're missing, show login.
+  const storedTokens = readAuthTokens();
+  if (storedTokens && storedTokens.access_token) {
+    // Tokens on disk — open the app immediately (the WS connect will validate
+    // the access token; if it's expired, the renderer will refresh via /auth/refresh).
+    createOverlayWindow();
+    createFullWindow();
+  } else {
+    // No tokens — show the login window. It calls companion:loginSuccess on success.
+    createLoginWindow();
+  }
 
   app.on("activate", () => {
+    // Only recreate the app windows if NOT in the login flow.
+    if (loginWindow && !loginWindow.isDestroyed()) {
+      loginWindow.focus();
+      return;
+    }
     if (!overlayWindow || overlayWindow.isDestroyed()) {
       createOverlayWindow();
     }

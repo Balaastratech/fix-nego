@@ -68,6 +68,13 @@ const elements = {
 };
 
 const BACKEND_WS_URL = (window.companionConfig && window.companionConfig.ws) || "ws://localhost:8000/ws";
+// Phase C — append the shared token to the WS URL when configured (empty in dev).
+const BACKEND_TOKEN = (window.companionConfig && window.companionConfig.token) || "";
+function backendWsUrl() {
+  if (!BACKEND_TOKEN) return BACKEND_WS_URL;
+  const sep = BACKEND_WS_URL.includes("?") ? "&" : "?";
+  return BACKEND_WS_URL + sep + "token=" + encodeURIComponent(BACKEND_TOKEN);
+}
 
 function loadPrefs() {
   try {
@@ -402,6 +409,29 @@ function safeSendControl(type, payload) {
   return true;
 }
 
+// Phase G — per-session BYOK. Send the locally-stored provider config (keys +
+// slot/model + google_backend) right after CONNECTION_ESTABLISHED, before START,
+// so this session uses the user's OWN keys. Empty config → no message → backend
+// keeps its global/.env defaults (unchanged behavior).
+async function sendProviderConfig() {
+  try {
+    if (!(window.companionBridge && window.companionBridge.getProviderConfig)) return;
+    const cfg = await window.companionBridge.getProviderConfig();
+    if (!cfg) return;
+    const hasKeys = cfg.keys && Object.keys(cfg.keys).length > 0;
+    const hasSlots = cfg.slots && Object.keys(cfg.slots).length > 0;
+    const hasSettings = cfg.settings && Object.keys(cfg.settings).some((k) => cfg.settings[k]);
+    if (!hasKeys && !hasSlots && !hasSettings) return;
+    safeSendControl("PROVIDER_CONFIG", {
+      slots: cfg.slots || {},
+      keys: cfg.keys || {},
+      settings: cfg.settings || {},
+    });
+  } catch (_err) {
+    // non-fatal: backend falls back to global/.env resolution
+  }
+}
+
 function sendControl(type, payload) {
   if (!safeSendControl(type, payload)) {
     throw new Error("Backend WebSocket is not connected");
@@ -470,7 +500,7 @@ async function connectBackend() {
 
   setExpandedStatus(elements.backendStatus, "Connecting");
   state.wsReadyPromise = new Promise((resolve, reject) => {
-    state.ws = new WebSocket(BACKEND_WS_URL);
+    state.ws = new WebSocket(backendWsUrl());
     state.ws.binaryType = "arraybuffer";
 
     state.ws.onopen = () => {
@@ -503,6 +533,7 @@ async function connectBackend() {
       const message = JSON.parse(event.data);
       if (message.type === "CONNECTION_ESTABLISHED") {
         state.sessionId = message.payload.session_id;
+        void sendProviderConfig();  // Phase G — push this user's BYOK keys for the session
       }
       if (message.type === "SESSION_STARTED") {
         state.sessionLive = true;

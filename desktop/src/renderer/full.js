@@ -45,6 +45,8 @@ const state = {
   sessionStarting: false,
   sessionPaused: false,
   backendReady: false,
+  wsConnected: false,
+  backendStatusMessage: "Connecting to AI services…",
   holdActive: false,
   meetingTitle: null,
   selectedTarget: null,
@@ -103,17 +105,25 @@ function renderSessionStatus() {
   btnResume.style.display = state.sessionPaused ? "flex" : "none";
   btnEnd.style.display    = (state.sessionLive || state.sessionPaused || state.sessionStarting) ? "flex" : "none";
 
-  // Disable Start if no target selected or backend not ready
-  const canStart = Boolean(state.selectedTarget);
+  // Disable Start until BOTH a meeting window is selected AND the backend has
+  // finished connecting/warming up. Plain-language tooltip explains why.
+  const ready = state.wsConnected && state.backendReady;
+  const canStart = Boolean(state.selectedTarget) && ready;
   btnStart.disabled = !canStart;
-  btnStart.title = !state.selectedTarget
+  btnStart.title = !ready
+    ? (state.backendStatusMessage || "Connecting to AI services…")
+    : !state.selectedTarget
     ? "Select a meeting window first"
-    : !state.backendReady
-    ? "Connecting to backend…"
     : "Start session";
+  // When the backend isn't ready yet, relabel the button so the user understands
+  // the wait instead of clicking a dead button.
+  if (!(state.sessionLive || state.sessionPaused || state.sessionStarting)) {
+    btnStart.textContent = ready ? "Start Session" : "Connecting…";
+  }
   btnPause.disabled = !state.sessionLive || state.sessionPaused || state.sessionStarting;
   btnResume.disabled = !state.sessionPaused;
   btnEnd.disabled = false;
+  renderConnectionBanner();
   // Update the card hint so user knows they can click to switch screens mid-session
   const cardHint = document.querySelector("#card-picker .card-hint");
   if (cardHint) {
@@ -129,6 +139,41 @@ function renderCaptureNote() {
   if (!captureNote) return;
   const sessionActive = state.sessionLive || state.sessionStarting || state.sessionPaused;
   captureNote.classList.toggle("hidden", !(state.captureFollowingScreen && sessionActive));
+}
+
+// ─── Connection / readiness banner ────────────────────────────────────────────
+// A prominent, plain-language strip at the top of the dashboard that tells the
+// user exactly what's happening: connecting, warming up the AI, ready, or
+// reconnecting. Hidden once a session is live (the session status bar covers it).
+function renderConnectionBanner() {
+  const banner = $("conn-banner");
+  if (!banner) return;
+  const dot   = $("conn-banner-dot");
+  const label = $("conn-banner-label");
+
+  const sessionActive = state.sessionLive || state.sessionStarting || state.sessionPaused;
+  if (sessionActive) {
+    banner.classList.add("hidden");
+    return;
+  }
+  banner.classList.remove("hidden");
+
+  let cls, text;
+  if (!state.wsConnected) {
+    cls = "offline";
+    text = "Connecting to the AI server… please wait.";
+  } else if (!state.backendReady) {
+    cls = "warming";
+    text = state.backendStatusMessage || "Getting the AI services ready… please wait.";
+  } else {
+    cls = "ready";
+    text = state.selectedTarget
+      ? "AI services ready. You can start your session."
+      : "AI services ready. Pick your meeting window below, then Start.";
+  }
+  if (dot)   dot.className = "conn-banner-dot " + cls;
+  if (label) label.textContent = text;
+  banner.className = "conn-banner " + cls;
 }
 
 function renderMeetingStatus() {
@@ -494,7 +539,9 @@ channel.onmessage = (ev) => {
     state.sessionLive     = Boolean(payload.sessionLive);
     state.sessionStarting = Boolean(payload.sessionStarting);
     state.sessionPaused   = Boolean(payload.sessionPaused);
-    state.backendReady    = Boolean(payload.backendReady);
+    // NOTE: backendReady / wsConnected are owned by the /api/ready poller
+    // (startReadinessPolling) — it's more reliable than this relayed snapshot,
+    // which can arrive stale. Do not overwrite them here.
     state.holdActive      = Boolean(payload.holdActive);
     state.meetingTitle    = payload.meetingTitle || null;
     state.listeningDeviceId  = payload.listeningDeviceId || null;
@@ -577,6 +624,14 @@ channel.onmessage = (ev) => {
   if (type === "DEGRADED" && payload) {
     dotSession.className = "status-dot dot-red";
     labelSession.textContent = `Degraded: ${payload.mode || "capture issue"}`;
+  }
+
+  if (type === "START_BLOCKED" && payload) {
+    // The overlay refused a Start because the backend wasn't ready yet. Surface
+    // the plain-language reason and refresh the banner/button states.
+    if (payload.reason) state.backendStatusMessage = payload.reason;
+    renderConnectionBanner();
+    renderSessionStatus();
   }
 
   if (type === "PRIVACY_SETUP_NOTE" && payload) {
@@ -820,6 +875,102 @@ if (btnRepick) {
   };
 })();
 
+// ─── User profile UI ──────────────────────────────────────────────────────────
+// Populates the header chip and Settings account card with the signed-in user's
+// info from the locally stored auth tokens. Gracefully no-ops if not signed in.
+
+function _initials(email) {
+  if (!email) return "?";
+  const name = email.split("@")[0];
+  const parts = name.split(/[._-]/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function _shortEmail(email) {
+  if (!email) return "";
+  if (email.length <= 22) return email;
+  const [local, domain] = email.split("@");
+  return local.slice(0, 10) + "…@" + domain;
+}
+
+async function setupUserProfile() {
+  try {
+    const auth = await window.companionBridge.getAuth();
+    const email = auth?.user?.email || auth?.email || "";
+    if (!email) return; // not signed in / dev mode
+
+    const initials = _initials(email);
+
+    // Header chip
+    const chip = document.getElementById("user-chip");
+    const avatar = document.getElementById("user-avatar");
+    const label = document.getElementById("user-label");
+    const ddAvatar = document.getElementById("dd-avatar");
+    const ddEmail = document.getElementById("dd-email");
+    if (chip) chip.style.display = "flex";
+    if (avatar) avatar.textContent = initials;
+    if (label) label.textContent = _shortEmail(email);
+    if (ddAvatar) ddAvatar.textContent = initials;
+    if (ddEmail) ddEmail.textContent = email;
+
+    // Settings account card
+    const settingsAvatar = document.getElementById("settings-avatar");
+    const settingsEmail = document.getElementById("settings-email");
+    if (settingsAvatar) settingsAvatar.textContent = initials;
+    if (settingsEmail) settingsEmail.textContent = email;
+
+    // Dropdown logout button
+    const ddLogout = document.getElementById("btn-logout-dd");
+    if (ddLogout) ddLogout.addEventListener("click", handleLogout);
+
+    // Click chip to open/close dropdown (JS toggle, not CSS hover — hover has a
+    // gap that closes the dropdown before the user reaches the sign-out button).
+    if (chip) {
+      chip.addEventListener("click", (e) => {
+        // Don't close if clicking inside the dropdown itself
+        const dropdown = document.getElementById("user-dropdown");
+        if (dropdown && dropdown.contains(e.target)) return;
+        chip.classList.toggle("is-open");
+      });
+    }
+
+    // Close dropdown when clicking anywhere outside the chip
+    document.addEventListener("click", (e) => {
+      const chipEl = document.getElementById("user-chip");
+      if (chipEl && !chipEl.contains(e.target)) {
+        chipEl.classList.remove("is-open");
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const chipEl = document.getElementById("user-chip");
+        if (chipEl) chipEl.classList.remove("is-open");
+      }
+    });
+
+  } catch (_) { /* not signed in — chip stays hidden */ }
+}
+
+async function handleLogout() {
+  const btns = [document.getElementById("btn-logout"), document.getElementById("btn-logout-dd")];
+  btns.forEach(b => { if (b) { b.disabled = true; b.textContent = "Signing out…"; } });
+  try {
+    // companion:logout in main.js:
+    //   1. Revokes refresh token on backend
+    //   2. Clears safeStorage tokens
+    //   3. Destroys overlay + full windows
+    //   4. Creates the login window
+    // This window will be destroyed by step 3 — no need to reload.
+    await window.companionBridge.logout();
+  } catch (_) {
+    // If destroy happened mid-call this may throw — that's fine, window is gone.
+    btns.forEach(b => { if (b) { b.disabled = false; b.textContent = "Sign out"; } });
+  }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 window.addEventListener("load", () => {
   renderAll();
@@ -828,7 +979,129 @@ window.addEventListener("load", () => {
     await refreshTargets();
     channel.postMessage({ type: "REQUEST_STATE" });
   }, 800);
+  startReadinessPolling();
+  setupUserProfile();
 });
+
+// ─── Auth helpers (shared by readiness poll + Settings api()) ────────────────
+// JWT is loaded lazily from safeStorage via companionBridge.getAuth().
+let _fullAuthTokens = null;
+const FULL_SHARED_TOKEN = (window.companionConfig && window.companionConfig.token) || "";
+
+async function _ensureAuthLoaded() {
+  if (_fullAuthTokens !== null) return;
+  try { _fullAuthTokens = (await window.companionBridge.getAuth()) || false; }
+  catch (_) { _fullAuthTokens = false; }
+}
+
+async function _getAuthHeader() {
+  await _ensureAuthLoaded();
+  if (_fullAuthTokens && _fullAuthTokens.access_token) {
+    return "Bearer " + _fullAuthTokens.access_token;
+  }
+  if (FULL_SHARED_TOKEN) return "Bearer " + FULL_SHARED_TOKEN;
+  return null;
+}
+
+async function _refreshAuth() {
+  if (!_fullAuthTokens || !_fullAuthTokens.refresh_token) return false;
+  const BACKEND_HTTP = (window.companionConfig && window.companionConfig.http) || "http://localhost:8000";
+  try {
+    const res = await fetch(BACKEND_HTTP + "/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: _fullAuthTokens.refresh_token }),
+    });
+    if (!res.ok) { _fullAuthTokens = null; return false; }
+    const data = await res.json();
+    _fullAuthTokens = { ..._fullAuthTokens, access_token: data.access_token, refresh_token: data.refresh_token };
+    await window.companionBridge.setAuth(_fullAuthTokens);
+    return true;
+  } catch (_) { return false; }
+}
+
+// ─── Backend readiness polling (reliable, overlay-independent) ────────────────
+// The full window does NOT own the websocket — the overlay does. Relying only on
+// the overlay's BroadcastChannel snapshot is fragile (the full window can load
+// after the overlay already broadcast "ready", and never hear it). So we ALSO
+// poll the backend's /api/ready endpoint directly. A successful response means
+// the server is reachable (wsConnected-equivalent); `ready:true` means the AI
+// probes finished and it's safe to start.
+function startReadinessPolling() {
+  const BACKEND_HTTP = (window.companionConfig && window.companionConfig.http) || "http://localhost:8000";
+  let stopped = false;
+
+  async function poll() {
+    if (stopped) return;
+    try {
+      // /api/ready is open, but attaching the token is harmless and consistent.
+      const authHdr = await _getAuthHeader();
+      const headers = authHdr ? { "Authorization": authHdr } : undefined;
+      const res = await fetch(BACKEND_HTTP + "/api/ready", { cache: "no-store", headers });
+      if (res.ok) {
+        const snap = await res.json();
+        state.wsConnected = true;
+        state.backendReady = Boolean(snap.ready);
+        if (snap.status_message) state.backendStatusMessage = snap.status_message;
+      } else {
+        state.wsConnected = false;
+        state.backendReady = false;
+        state.backendStatusMessage = "Connecting to the AI server… please wait.";
+      }
+    } catch (_) {
+      // Backend not reachable yet.
+      state.wsConnected = false;
+      state.backendReady = false;
+      state.backendStatusMessage = "Connecting to the AI server… please wait.";
+    }
+    renderConnectionBanner();
+    renderSessionStatus();
+    // Poll fast until ready, then slow down to a heartbeat.
+    setTimeout(poll, state.backendReady ? 5000 : 1000);
+  }
+
+  poll();
+  window.addEventListener("beforeunload", () => { stopped = true; });
+}
+
+// ═══════════════ Onboarding / How-to guide ═══════════════
+// First-launch guidance cards. Dismissible; "Don't show again" persists so the
+// user only sees it once unless they re-open it via the Help button.
+(function setupOnboarding() {
+  const ONBOARDING_KEY = "companion_onboarding_dismissed_v1";
+  const overlay   = $("onboarding-overlay");
+  const closeBtn  = $("onboarding-close");
+  const gotItBtn  = $("onboarding-gotit");
+  const dontShow  = $("onboarding-dontshow");
+  const helpFab   = $("btn-help");
+  if (!overlay) return;
+
+  function dismissed() {
+    try { return localStorage.getItem(ONBOARDING_KEY) === "1"; } catch (_) { return false; }
+  }
+  function open() {
+    overlay.classList.remove("hidden");
+    if (dontShow) dontShow.checked = dismissed();
+  }
+  function close() {
+    overlay.classList.add("hidden");
+    try {
+      if (dontShow && dontShow.checked) localStorage.setItem(ONBOARDING_KEY, "1");
+      else localStorage.removeItem(ONBOARDING_KEY);
+    } catch (_) {}
+  }
+
+  closeBtn?.addEventListener("click", close);
+  gotItBtn?.addEventListener("click", close);
+  helpFab?.addEventListener("click", open);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
+  });
+
+  // Auto-show on first launch only.
+  if (!dismissed()) open();
+})();
 
 // ═══════════════ Settings page (self-contained) ═══════════════
 // Talks to the backend REST config API directly. Renderer fetch is allowed; the
@@ -865,8 +1138,24 @@ window.addEventListener("load", () => {
     saveStatus.className = "settings-status" + (kind ? " " + kind : "");
   }
 
+  // Auth: attach JWT (or shared token fallback) to gated endpoints.
+  // On 401, attempt a token refresh once, then retry the request.
   async function api(path, opts) {
-    const res = await fetch(BACKEND_HTTP + path, opts);
+    const makeRequest = async () => {
+      const options = { ...(opts || {}) };
+      const authHdr = await _getAuthHeader();
+      if (authHdr) {
+        options.headers = { ...(options.headers || {}), "Authorization": authHdr };
+      }
+      return fetch(BACKEND_HTTP + path, options);
+    };
+
+    let res = await makeRequest();
+    if (res.status === 401) {
+      // Try refreshing the token once.
+      const refreshed = await _refreshAuth();
+      if (refreshed) res = await makeRequest();
+    }
     if (!res.ok) {
       let detail = "";
       try { detail = (await res.json()).error || ""; } catch (_) {}
@@ -1100,6 +1389,13 @@ window.addEventListener("load", () => {
     try {
       setStatus("Saving…", "");
       const patch = collectPatch();
+      // Phase G — persist locally so the overlay/app WS sends these as a per-session
+      // PROVIDER_CONFIG (keys scoped to THIS user's session, no cross-tester clobber).
+      try {
+        if (window.companionBridge && window.companionBridge.setProviderConfig) {
+          await window.companionBridge.setProviderConfig(patch);
+        }
+      } catch (_err) { /* local persist is best-effort; REST below still applies */ }
       const r = await api("/api/providers/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1125,4 +1421,8 @@ window.addEventListener("load", () => {
     if (tabName === "settings" && !loaded) loadSettings(false);
   }
   tabs.forEach((t) => t.addEventListener("click", () => activate(t.dataset.tab)));
+
+  // ── Logout button (Settings tab) — delegates to shared handleLogout() ──────
+  const logoutBtn = $("btn-logout");
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
 })();

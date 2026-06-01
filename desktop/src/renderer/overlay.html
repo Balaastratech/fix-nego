@@ -21,6 +21,10 @@
         <span class="orb-icon" id="orb-icon">✦</span>
       </button>
 
+      <!-- Connection / readiness dot. Sits on the orb; red=offline, amber=warming
+           up (connected but AI not ready), green=ready to start. -->
+      <span id="conn-dot" class="conn-dot offline" title="Connecting to AI services…"></span>
+
       <!-- Small capture preview shown below the orb when screen capture is active -->
       <video id="capture-preview" class="capture-preview hidden" autoplay playsinline muted></video>
 

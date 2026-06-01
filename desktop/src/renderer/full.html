@@ -17,9 +17,46 @@
       </div>
       <div class="header-right">
         <span id="session-pill" class="pill pill-idle">Idle</span>
+
+        <!-- User avatar chip — shown when signed in -->
+        <div id="user-chip" class="user-chip" title="Account" style="display:none">
+          <div id="user-avatar" class="user-avatar"></div>
+          <span id="user-label" class="user-label"></span>
+          <!-- Dropdown -->
+          <div id="user-dropdown" class="user-dropdown">
+            <div class="user-dropdown-info">
+              <div id="dd-avatar" class="dd-avatar"></div>
+              <div class="dd-details">
+                <div id="dd-email" class="dd-email"></div>
+                <div class="dd-badge">Signed in via Clerk</div>
+              </div>
+            </div>
+            <div class="user-dropdown-divider"></div>
+            <button id="btn-logout-dd" class="user-dropdown-item user-dropdown-item--danger">
+              <span>⎋</span> Sign out
+            </button>
+          </div>
+        </div>
+
         <button id="btn-minimize" class="icon-btn" title="Minimize">—</button>
       </div>
     </header>
+
+    <!-- Tab navigation -->
+    <nav class="tabbar" role="tablist">
+      <button class="tab is-active" data-tab="dashboard" role="tab">Dashboard</button>
+      <button class="tab" data-tab="settings" role="tab">Settings</button>
+    </nav>
+
+    <!-- ════════════════ DASHBOARD TAB ════════════════ -->
+    <div id="tab-dashboard" class="tab-panel">
+
+    <!-- Connection / readiness banner — plain-language status of the AI backend.
+         Hidden once a session is live. -->
+    <div id="conn-banner" class="conn-banner offline">
+      <span id="conn-banner-dot" class="conn-banner-dot offline"></span>
+      <span id="conn-banner-label" class="conn-banner-label">Connecting to the AI server… please wait.</span>
+    </div>
 
     <!-- Meeting status bar -->
     <div class="status-bar">
@@ -35,6 +72,14 @@
         <span class="status-dot dot-red pulsing"></span>
         <span>AI Listening</span>
       </div>
+    </div>
+
+    <!-- Capture fallback note — shown when the meeting window can't be tracked
+         and capture has fallen back to the whole monitor. -->
+    <div id="capture-note" class="capture-note hidden">
+      <span class="capture-note-icon">🖥️</span>
+      <span class="capture-note-text">Following your screen — the meeting window couldn't be tracked (it moved, closed, or changed). The AI still sees the call.</span>
+      <button id="btn-repick" class="capture-note-btn" type="button">Re-pick window</button>
     </div>
 
     <!-- Row 1: Top Cards Row (Audio Routing, Audio Mix, Language side-by-side) -->
@@ -268,7 +313,190 @@
       </section>
     </div>
 
+    </div><!-- /#tab-dashboard -->
+
+    <!-- ════════════════ SETTINGS TAB ════════════════ -->
+    <div id="tab-settings" class="tab-panel" hidden>
+
+      <div class="settings-intro">
+        <h2 class="settings-title">AI Providers &amp; Keys</h2>
+        <p class="settings-sub">
+          Choose a provider and model for each task, and paste your API keys. Changes are saved on this
+          machine — no reinstall or redeploy needed.
+        </p>
+      </div>
+
+      <!-- AI Providers & Models -->
+      <section class="card settings-card" id="card-providers">
+        <div class="card-title">
+          <span class="card-icon">🧠</span>
+          AI Providers &amp; Models
+          <button id="btn-providers-refresh" class="ghost-btn small-btn settings-refresh" title="Re-fetch live model lists">↺ Refresh models</button>
+        </div>
+        <p class="card-hint">
+          Each task shows only providers &amp; models that actually work for it. Model lists are pulled live
+          from each provider — they always reflect the current catalog.
+        </p>
+        <div id="provider-rows" class="provider-rows">
+          <div class="empty-state">Loading providers…</div>
+        </div>
+      </section>
+
+      <!-- API Keys -->
+      <section class="card settings-card" id="card-keys">
+        <div class="card-title">
+          <span class="card-icon">🔑</span>
+          API Keys
+        </div>
+        <p class="card-hint">
+          Keys are stored locally and never shown again once saved. Use <strong>Test</strong> to verify a key
+          before saving.
+        </p>
+        <div id="key-rows" class="key-rows">
+          <div class="empty-state">Loading providers…</div>
+        </div>
+      </section>
+
+      <!-- Save bar -->
+      <div class="settings-savebar">
+        <span id="settings-note" class="settings-note">
+          Provider, key, Live Voice &amp; STT changes apply on your next session. Vision &amp; advice apply immediately.
+        </span>
+        <span id="settings-status" class="settings-status"></span>
+        <button id="btn-settings-save" class="accent-btn small-btn">Save settings</button>
+      </div>
+
+      <!-- Advanced -->
+      <section class="card settings-card" id="card-advanced">
+        <div class="card-title">
+          <span class="card-icon">⚙</span>
+          Advanced
+        </div>
+        <div class="advanced-grid">
+          <div class="advanced-row">
+            <span class="advanced-label">Google backend</span>
+            <span class="advanced-value">
+              <select id="google-backend-select" class="provider-select" style="max-width:320px">
+                <option value="">Auto (from .env)</option>
+                <option value="ai_studio">AI Studio — just an API key (portable)</option>
+                <option value="vertex">Vertex AI — Google Cloud project + credentials</option>
+              </select>
+              <span class="advanced-hint">AI Studio works with the Google key you paste above — no Google Cloud setup. Applies on next session.</span>
+            </span>
+          </div>
+          <div class="advanced-row">
+            <span class="advanced-label">Web research grounding</span>
+            <span class="advanced-value">Always uses Google Search (provider-independent)</span>
+          </div>
+          <div class="advanced-row">
+            <span class="advanced-label">Live Voice (Hold-to-Ask)</span>
+            <span class="advanced-value">Google only this release — more providers coming</span>
+          </div>
+          <div class="advanced-row">
+            <span class="advanced-label">Config file</span>
+            <span class="advanced-value" id="advanced-config-path">runtime_providers.json</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Account / sign-out -->
+      <section class="settings-section">
+        <h3 class="settings-heading">Account</h3>
+        <div id="account-card" class="account-card">
+          <div class="account-card-left">
+            <div id="settings-avatar" class="settings-avatar"></div>
+            <div class="account-card-info">
+              <div id="settings-email" class="account-email">Not signed in</div>
+              <div class="account-provider">
+                <span class="account-provider-dot"></span>
+                Signed in via Clerk
+              </div>
+            </div>
+          </div>
+          <button id="btn-logout" class="btn-signout">
+            Sign out
+          </button>
+        </div>
+      </section>
+
+    </div><!-- /#tab-settings -->
+
   </div>
+
+  <!-- ════════════════ ONBOARDING / HOW-TO GUIDE ════════════════ -->
+  <!-- Shown on first launch (and via the Help button) to explain how everything
+       works in plain language. Dismissible; "Don't show again" persists the
+       choice in localStorage so it won't reappear. -->
+  <div id="onboarding-overlay" class="onboarding-overlay hidden" role="dialog" aria-modal="true" aria-label="How to use Negotiation Companion">
+    <div class="onboarding-modal">
+      <div class="onboarding-header">
+        <h2 class="onboarding-title">Welcome — here's how it works</h2>
+        <button id="onboarding-close" class="onboarding-close" title="Close">✕</button>
+      </div>
+
+      <div class="onboarding-cards">
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">🟢</div>
+          <div class="onboarding-card-body">
+            <h3>Wait for the green light</h3>
+            <p>When you open the app it connects to the AI services. The dot on the floating orb (and the banner here) shows the status: <strong>red</strong> = connecting, <strong>amber</strong> = getting ready, <strong>green</strong> = ready. The <strong>Start Session</strong> button stays locked until everything is ready.</p>
+          </div>
+        </div>
+
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">🪟</div>
+          <div class="onboarding-card-body">
+            <h3>Pick your meeting window</h3>
+            <p>On the Dashboard, choose the window of your meeting app (Zoom, Teams, Meet). Your mic, audio routing, and reply output are set up automatically. Then click <strong>Start Session</strong>.</p>
+          </div>
+        </div>
+
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">✦</div>
+          <div class="onboarding-card-body">
+            <h3>The floating orb</h3>
+            <p><strong>Click &amp; drag</strong> (left or right button) to move it anywhere. <strong>Left-click and hold</strong> the orb (or your global hold key) to privately ask the AI — your mic is muted to the meeting while you hold. <strong>Double right-click</strong> the orb to open this main window. A single right-click does nothing, so you won't open it by accident.</p>
+          </div>
+        </div>
+
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">⌨️</div>
+          <div class="onboarding-card-body">
+            <h3>Global shortcut (hold-to-ask)</h3>
+            <p>You can ask the AI without clicking the orb by holding the global hold key from anywhere — even while the meeting app is focused. Release to send your question. For meeting mute to work, enable your meeting app's global mute shortcut (e.g. Zoom → Settings → Keyboard Shortcuts → "Enable Global Shortcut" for Mute).</p>
+          </div>
+        </div>
+
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">🔑</div>
+          <div class="onboarding-card-body">
+            <h3>Where to save your API keys</h3>
+            <p>Open the <strong>Settings</strong> tab (top of this window). Paste your provider keys there and click <strong>Save settings</strong>. Keys are stored locally on this machine and never shown again. Use <strong>Test</strong> to verify a key before saving.</p>
+          </div>
+        </div>
+
+        <div class="onboarding-card">
+          <div class="onboarding-card-icon">🌐</div>
+          <div class="onboarding-card-body">
+            <h3>Choosing your language</h3>
+            <p>Use the <strong>Language</strong> card on the Dashboard (or the language chip on the orb). Set what to transcribe, what language the AI replies in, and how it's shown on screen. "Auto" covers 10 languages; pin a language for others.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="onboarding-footer">
+        <label class="onboarding-dontshow">
+          <input type="checkbox" id="onboarding-dontshow" />
+          <span>Don't show this again</span>
+        </label>
+        <button id="onboarding-gotit" class="accent-btn">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Small persistent Help button to re-open the guide any time. -->
+  <button id="btn-help" class="help-fab" title="How to use this app">?</button>
+
   <script src="./full.js"></script>
 </body>
 </html>

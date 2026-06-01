@@ -2,6 +2,702 @@
 
 ---
 
+## 2026-05-31 — Full auth system implemented (Clerk + JWT, end to end)
+
+[2026-05-31][Agent: Claude Code] Implemented the complete authentication plan from `C:\Users\Yuvraj\.claude\plans\can-we-implement-actual-golden-naur.md`. Auth is default-OFF (`AUTH_REQUIRED=False`) so localhost dev is completely unchanged. All the code is committed-ready; nothing is live yet until you: (1) create a Clerk app, (2) fill `.env` with the Clerk keys + `JWT_SECRET_KEY`, (3) flip `AUTH_REQUIRED=True`.
+
+### Architecture recap
+- **Identity provider:** Clerk (managed — handles email/password, Google, email verification, forgot/reset password on its hosted pages)
+- **Desktop flow:** login window → "Sign in" button → system browser opens `<backend>/auth/login-page?redirect=http://127.0.0.1:<PORT>/callback` → Clerk UI in browser → Clerk token → loopback catch → POST `/auth/exchange` → our app JWT pair stored via `safeStorage.encryptString` → login window closes, overlay + full open
+- **Token types:** Clerk JWT (one-time exchange only, 60s TTL, never stored long-term) → our HS256 access JWT (30 min) + refresh JWT (30 days, DB-stored jti for rotation/revocation)
+- **Backward compat:** `AUTH_REQUIRED=False` (default) means all routes open — zero behavior change. Shared token (`COMPANION_SHARED_TOKEN`) still works as admin/dev bypass even when `AUTH_REQUIRED=True`.
+
+### New backend files
+- `app/services/clerk_verify.py` — JWKS fetch+cache (5 min TTL, key rotation aware), RS256 verify, `ClerkTokenError`
+- `app/services/app_tokens.py` — HS256 `make_access_token`, `make_refresh_token`, `make_token_pair`, `verify_access_token`, `verify_refresh_token`, `TokenError`
+- `app/services/auth_db.py` — sqlite3 helpers: `upsert_user`, `get_user`, `store_refresh_token`, `is_refresh_token_valid`, `revoke_refresh_token`, `get_refresh_token_sub`, `purge_expired_tokens`. Lazy-configures from settings if `configure()` not called explicitly (test-safe).
+- `app/api/auth_routes.py` — `APIRouter(prefix="/auth")`: `GET /login-page` (serves Clerk-hosted sign-in HTML), `POST /exchange`, `POST /refresh` (rotates jti), `POST /logout` (revokes jti), `GET /me`
+
+### Modified backend files
+- `app/config.py` — added: `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL`, `CLERK_ISSUER`, `CLERK_AUTHORIZED_PARTY`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TTL_MINUTES=30`, `JWT_REFRESH_TTL_DAYS=30`, `AUTH_REQUIRED=False`
+- `app/api/auth.py` — added: `AuthUser` dataclass, `get_current_user` dependency (accepts JWT OR shared token OR open when `AUTH_REQUIRED=False`), `websocket_get_user` (same dual-mode, for WS pre-accept check, returns `None` on failure)
+- `app/api/websocket.py` — replaced `websocket_token_ok` with `websocket_get_user`; now accepts JWT or shared token
+- `app/api/providers.py` — router dependency swapped `require_token` → `get_current_user`
+- `app/main.py` — swapped `require_token` → `get_current_user` on session routes; added `auth_db.configure()` after `session_store.initialize()`; registered `auth_router`
+- `app/services/session_store.py` — `initialize()` now creates `users` and `refresh_tokens` tables (idempotent `CREATE TABLE IF NOT EXISTS`)
+- `requirements.txt` + `requirements-desktop.txt` — added `python-jose[cryptography]>=3.3.0`
+- `.env.example` + `deploy/.env.oracle.example` — documented all new env vars
+
+### New desktop files
+- `src/renderer/login.html` — minimal sign-in screen (matches app style, dark bg, one button)
+- `src/renderer/login.js` — calls `companionBridge.startLogin()`, shows progress/error, calls `companionBridge.loginSuccess()` on success
+
+### Modified desktop files
+- `src/main.js` — added `http`, `safeStorage`, `shell` requires; auth token store (`readAuthTokens/writeAuthTokens/clearAuthTokens` via `safeStorage` → `userData/auth.enc`); IPC: `companion:getAuth/setAuth/clearAuth`; loopback login IPC `companion:startLogin` (one-shot http server → `shell.openExternal` → catch `?clerk_token=` → POST `/auth/exchange` → store tokens); `companion:logout` (revokes refresh, clears local); `createLoginWindow()` + `companion:loginSuccess` IPC; launch gate in `app.whenReady()`: reads stored tokens → if present, open overlay+full; else show login window
+- `src/preload.js` — exposed: `getAuth`, `setAuth`, `clearAuth`, `startLogin`, `logout`, `loginSuccess`
+- `src/renderer/overlay.js` — replaced static `BACKEND_TOKEN` with async `_loadAuthTokens/_getActiveToken/_refreshAuthTokens/backendWsUrl()` (async); `connectBackend` loads tokens once then connects
+- `src/renderer/full.js` — added `_fullAuthTokens/_getAuthHeader/_refreshAuth` helpers; `startReadinessPolling` uses JWT header; `api()` in Settings attaches JWT + 401→refresh→retry; logout button wired to `companion:logout`
+- `src/renderer/full.html` — added "Account / Sign out" section with `#btn-logout` in Settings tab
+
+### Verified
+- `python -m py_compile` clean: all 9 new/modified backend files
+- `import app.main` → IMPORT_OK (via venv, no circular imports)
+- Functional auth tests (TestClient): open endpoints 200, gated 401 without token, shared token bypass works, app JWT accepted, refresh rotation works (old jti → 401 after rotate), logout works, WS bad token → WebSocketDisconnect
+- `node --check` PASS: main.js, preload.js, overlay.js, full.js, login.js
+- `pytest tests/test_startup.py` → **5 passed** (unchanged baseline)
+
+### What you must do to go live (user actions, in order)
+1. **Create Clerk app** at https://dashboard.clerk.com — enable Email+Password + Google social login + require email verification
+2. **Copy Clerk keys** into `backend/.env`: `CLERK_PUBLISHABLE_KEY`, `CLERK_JWKS_URL` (from Clerk dashboard → API Keys), `CLERK_ISSUER`
+3. **Generate JWT_SECRET_KEY**: `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+4. **Add Clerk allowed origins**: `https://api.balaastratech.com` and `http://localhost:8000` in Clerk dashboard → Domains
+5. **Test the flow locally** (`AUTH_REQUIRED=False`, no CLERK keys needed for the app to boot)
+6. **Flip `AUTH_REQUIRED=True`** in the VM `.env` after end-to-end verification
+
+### Remaining work (Phase E onward)
+- Phase E: `npm run dist` → unsigned `.exe` + GitHub Release + INSTALL.md
+- Phase H: verify mute in packaged build (`.ps1` via `process.resourcesPath`)
+- Phase G: per-session BYOK (partially implemented in code, uncommitted — see prior HANDOFF entries)
+- P0 spike: live test the full Clerk→loopback→exchange→JWT flow once Clerk keys are set
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-31 (full auth system — Clerk + JWT, desktop login gate)
+
+## 2026-05-31 — Phase C (shared-token auth) CODE DONE + Phase D deploy ARTIFACTS ready
+
+[2026-05-31][Agent: Claude Code] Started Phase C/D from `docs/plans/2026-05-30-desktop-oracle-deploy-plan.md` after re-reading AGENTS/CLAUDE/HANDOFF. Verified current repo reality first: Phase G is ALREADY re-implemented (config has `PER_SESSION_PROVIDER_OVERRIDE_ENABLED`, `websocket.py` binds `runtime_config.set_session_overrides(session.provider_overrides)` + PROVIDER_CONFIG path) — NOT touched. Kiro's readiness-gating work (`/api/ready`, BACKEND_READY) intact. C/D were genuinely untouched.
+
+### Phase C1 — backend shared-token auth (NEW, reversible, default-OFF)
+Core design: a single static `COMPANION_SHARED_TOKEN`. **EMPTY (default) = auth fully disabled → localhost dev + current behavior UNCHANGED.** Only activates when an operator sets it on the VM.
+- NEW `backend/app/api/auth.py` — `auth_enabled()`, `token_matches()` (hmac.compare_digest, trims, empty-token→allow), `require_token` FastAPI dep (reads `Authorization: Bearer` or `X-Companion-Token`), `websocket_token_ok(ws)` (reads `?token=`).
+- `config.py`: added `COMPANION_SHARED_TOKEN: str = ""` (right after GEMINI_API_KEY).
+- `websocket.py`: BEFORE `websocket.accept()` → `if not websocket_token_ok(websocket): await websocket.close(code=1008); return`. Added `from app.api.auth import websocket_token_ok`.
+- `providers.py`: router now `APIRouter(prefix="/api/providers", ..., dependencies=[Depends(require_token)])` — gates ALL provider endpoints (they read/write API keys). Added `Depends` + `from app.api.auth import require_token`.
+- `main.py`: gated `/api/sessions` + `/api/sessions/{id}` (PII) with `dependencies=[Depends(require_token)]`. Added `Depends` import + auth import. LEFT OPEN: `/health`, `/api/health`, `/api/ready`, `/api/log` (readiness poller needs /api/ready; /api/log has no desktop caller and is low-risk write-only).
+
+### Phase C — desktop token threading (default-OFF; empty token = URL/headers unchanged)
+- `main.js` `resolveBackendConfig()`: returns `{ ws, http, token }` where `token = (process.env.COMPANION_SHARED_TOKEN||"").trim()`. `preload.js` already passes the whole resolved object through → `window.companionConfig.token` flows automatically (no preload edit).
+- `overlay.js` + `app.js`: added `BACKEND_TOKEN` + `backendWsUrl()` helper (appends `?token=`/`&token=` only when token set); WS connect now uses `backendWsUrl()` (overlay:726, app.js:503).
+- `full.js`: `api()` Settings helper attaches `X-Companion-Token` header when token set (for the gated `/api/providers/*` calls); readiness poll fetch also attaches it (harmless — /api/ready is open).
+- `desktop/.env.example` + `backend/.env.example`: documented `COMPANION_SHARED_TOKEN` (empty = dev).
+
+### Phase C2 + D — deploy artifacts (NEW `deploy/` folder; pure infra, no running code touched)
+- `deploy/.env.oracle.example` — LEAN HOSTED PROFILE: AI-Studio/BYOK (`GOOGLE_GENAI_USE_VERTEXAI=False`, empty project/keys), `TRANSCRIPTION_PROVIDER=deepgram`, all speaker/speechbrain/pyannote/azure paths DISABLED (match requirements-desktop.txt), `COMPANION_SHARED_TOKEN=CHANGE_ME`.
+- `deploy/Caddyfile` — `api.balaastratech.com` → `reverse_proxy 127.0.0.1:8000` with 3600s read/write timeouts (long WS streams); auto HTTPS/WSS. (Simplified from an initial 2-directive version that would've been a Caddy ordering foot-gun.)
+- `deploy/companion-backend.service` — systemd uvicorn unit (binds 127.0.0.1:8000, EnvironmentFile=.env, Restart=always).
+- `deploy/setup-oracle.sh` — idempotent provisioner: apt + Caddy repo, venv + `pip install -r requirements-desktop.txt`, iptables 80/443 + persist, install Caddyfile (sed-rewrites domain if overridden), install+enable systemd services.
+- `deploy/keepalive.sh` — cron `*/10` curls public /health (idle-reclaim backstop, Phase D5).
+- `deploy/rsync-exclude.txt` — Phase F3 deploy-exclude (venv, data/, tests, evals, dev scripts, runtime_providers.json, .env).
+- `deploy/DEPLOY.md` — full step-by-step: VM create → BOTH firewall layers (OCI Security List + iptables) → DNS A record → code → .env → setup script → verify (curl /health, /api/ready, 401-vs-200 token check) → keepalive → ops cheat-sheet + rollback.
+
+### Verified (offline)
+- `python -m py_compile` clean on auth.py/websocket.py/providers.py/main.py/config.py.
+- `import app.main` via venv → IMPORT_OK (no circular import from new auth module).
+- Auth unit logic: empty token → `auth_enabled()=False`, `token_matches(anything)=True`; set token → None/wrong=False, exact + trimmed=True.
+- FastAPI TestClient (token set): `/api/ready`+`/api/health`=200 (open); `/api/sessions`+`/api/providers/config`=401 no-token; =200 with `X-Companion-Token` / `Authorization: Bearer`.
+- WS TestClient (token set): no-token → WebSocketDisconnect (rejected, logs "WebSocket rejected"); `?token=secret` → CONNECTION_ESTABLISHED.
+- `node --check` PASS: main.js, overlay.js, app.js, full.js, preload.js.
+- `pytest tests/test_startup.py` → **5 passed** (matches prior baseline; only pre-existing on_event deprecation warnings).
+
+### NOT done / next concrete actions
+- NOT committed (per repo rule — awaiting user OK). Suggested commit split: (1) backend C1 auth, (2) desktop token threading, (3) `deploy/` artifacts. NOTE `app/providers/` + `app/api/providers.py` are still UNTRACKED (multi-provider base) — providers.py now imports the new auth dep, so commit them together or providers import breaks on a clean checkout.
+- NOT run live (`npm start` + hosted backend) — token path only TestClient-verified.
+- Phase D is artifacts-only: the actual Oracle VM create / OCI Security List / DNS A record / running `setup-oracle.sh` are USER actions (need the tenancy + DNS). DEPLOY.md walks each step.
+- After deploy: set the SAME `COMPANION_SHARED_TOKEN` in both the VM `.env` and the desktop build (`desktop/.env` dev or OS env packaged). Remaining plan order: D (stand up) → E (package+GitHub Release) → H (mute in packaged build).
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-31 (Phase C code + Phase D deploy artifacts)
+
+## 2026-05-31 — FOLLOW-UP: full-window readiness was stale (BroadcastChannel relay) + right-click drag
+
+[2026-05-31][Agent: Kiro] User confirmed backend logs "Backend marked ready for sessions" but the full window still showed "Connecting to the AI server… please wait." Root cause: the full window does NOT own the websocket (the overlay does) — it learned readiness ONLY via the overlay's `STATE_SNAPSHOT` BroadcastChannel relay. The full window loads independently and can miss/!receive a fresh snapshot, so its banner + Start button stayed stuck at "not ready" even though the backend was ready.
+
+### Fix — full window now polls the backend directly (overlay-independent)
+- NEW backend endpoint `GET /api/ready` in `app/main.py` (next to `/api/health`) returning `readiness.snapshot()` → `{ready, status_message, detail}`. Verified live: returns `ready:true` after probes.
+- `src/renderer/full.js`: NEW `startReadinessPolling()` (called from window load) polls `BACKEND_HTTP + /api/ready` every 1s until ready, then every 5s. A successful fetch ⇒ `wsConnected=true`; `ready` ⇒ `backendReady=true`; updates `backendStatusMessage`; re-renders banner + session status. This is now the AUTHORITATIVE readiness source for the full window.
+- STATE_SNAPSHOT handler NO LONGER overwrites `backendReady`/`wsConnected` (commented why) — the poller owns them, so a stale relayed snapshot can't revert the banner to "connecting".
+
+### Fix — right-click now ALSO drags the orb (but still never asks AI)
+- `src/renderer/overlay.js` orb drag `pointerdown`: now accepts `e.button === 0 || e.button === 2` (left OR right) to start a drag. Hold-to-ask `pointerdown` is UNCHANGED (still `e.button !== 0` early-return) so a right-drag/right-hold cannot trigger an AI ask. Double-right-click still opens the main app (contextmenu handler unchanged); single right-click still does nothing.
+- Updated the onboarding "floating orb" card text: "Click & drag (left or right button) to move it… Left-click and hold to ask AI…".
+
+### Verified
+- `node --check` PASS overlay.js + full.js; getDiagnostics clean on full.js/overlay.js/main.py; `py_compile` main.py OK.
+- Live: `uvicorn` boot → `/api/ready` returns `{"ready":true,...}` after the Deepgram probe (~1.2s); before probes it would return `ready:false` (status "Connecting to AI services… please wait.").
+- NOT yet run in the packaged desktop app; user should `npm start` + restart backend and confirm the banner flips to green "AI services ready" within ~1s of the backend's "Backend marked ready" log, and that right-drag moves the orb without asking AI.
+
+Current owner: [Agent: Kiro]
+Last updated: 2026-05-31 (full-window /api/ready polling + right-click drag)
+
+---
+
+## 2026-05-31 — Backend-readiness gating + overlay right-click redesign + onboarding guide
+
+[2026-05-31][Agent: Kiro] User report: the app shows no clear progress for when the system is actually ready. The backend accepts the WS connection instantly but capability probes (Deepgram STT ~1.7s, SpeechBrain) finish ~2s later — so the user could pick a screen and Start a session before the backend was actually ready, causing problems. Also: right-click on the overlay opened the full app (wanted: keep LEFT for drag, open main app only on DOUBLE right-click, single right-click does nothing), and there was no first-run guidance (global shortcuts, where to save API keys, where to pick language).
+
+### Root cause (verified in code, not assumed)
+`backend/app/api/websocket.py` sent `"ready_to_start": True` HARDCODED in `CONNECTION_ESTABLISHED`, while `app/main.py` `_run_capability_probes_in_background()` only finishes ~2s after `startup_event` returns. The desktop overlay read `ready_to_start` into `state.backendReady` and the full window only used it for a tooltip — Start was NOT actually blocked on it.
+
+### Backend changes
+- NEW `backend/app/services/readiness.py` — `BackendReadiness` singleton (`readiness`). Tracks `is_ready` + plain-language `status_message` ("Connecting to AI services… please wait." / "AI services ready — you can start a session."), `snapshot()` dict, lazy `asyncio.Event` for `await wait()`, and `mark_ready(detail)`.
+- `app/main.py`: after the "Capability path selected" log in `_run_capability_probes_in_background()`, call `readiness.mark_ready({...})` + `await connection_manager.broadcast_backend_ready()`. Added imports for `connection_manager` and `readiness`. Verified `import app.main` → IMPORT_OK (no circular import).
+- `app/services/connection_manager.py`: NEW `broadcast_backend_ready()` — sends `{type:"BACKEND_READY", payload: readiness.snapshot()}` to every active connection (lazy import of readiness to avoid cycle).
+- `app/api/websocket.py`: `CONNECTION_ESTABLISHED` now sends `"ready_to_start": readiness.is_ready` (real value) + `"readiness": readiness.snapshot()`. Added `from app.services.readiness import readiness`.
+- Race handled both ways: client connecting before probes finish gets BACKEND_READY push (it's registered in active_connections synchronously before the message loop); client connecting after gets the true `is_ready` in CONNECTION_ESTABLISHED.
+
+### Desktop overlay (`src/renderer/overlay.js` + overlay.html/css)
+- State: added `wsConnected`, `backendStatusMessage`. New `BACKEND_READY` WS handler sets `backendReady=true` + status msg. `CONNECTION_ESTABLISHED` now also stores `readiness.status_message` and calls `updateConnectionIndicator()`.
+- `connectBackend()` onopen sets `wsConnected=true`; onclose resets `wsConnected/backendReady=false` + "Reconnecting…". Both broadcast snapshot + update indicator.
+- NEW `updateConnectionIndicator()` — toggles root `backend-connecting`/`backend-ready`, paints `#conn-dot` (offline=red / warming=amber-pulse / ready=green) + orb tooltip. Added `#conn-dot` span in overlay.html and CSS (dot + orb dimming while connecting).
+- `startSession()` now HARD-BLOCKS if `!wsConnected || !backendReady` → broadcasts `START_BLOCKED {reason}` + returns (no session start). This is the core fix.
+- broadcastSnapshot now includes `wsConnected` + `backendStatusMessage`.
+- RIGHT-CLICK redesign: `dblclick` (left) NO LONGER opens main app. `contextmenu` now requires a DOUBLE right-click within 450ms to `openFullWindow()`; single right-click does nothing. Drag + hold-to-ask `pointerdown` handlers now early-return unless `e.button===0` (left only) — so right/middle click can't move the window or trigger an AI ask.
+
+### Desktop full window (`src/renderer/full.js` + full.html/css)
+- State: added `wsConnected`, `backendStatusMessage`. STATE_SNAPSHOT reads them.
+- NEW `renderConnectionBanner()` — top-of-dashboard `#conn-banner` strip with plain-language status (offline/warming/ready), hidden once a session is live. Added the banner element in full.html + CSS.
+- Start button now gated on `wsConnected && backendReady && selectedTarget`; relabels to "Connecting…" until ready; plain-language tooltip. `START_BLOCKED` handler refreshes banner + button.
+- NEW onboarding guide: `#onboarding-overlay` modal in full.html with 6 cards (green-light readiness, pick meeting window, orb left-drag/hold + double-right-click, global shortcut + Zoom global-mute note, where to save API keys = Settings tab, language selection). `setupOnboarding()` in full.js auto-shows on first launch, "Don't show again" persists to `localStorage[companion_onboarding_dismissed_v1]`, re-openable via a `#btn-help` floating "?" button. CSS appended to full.css.
+
+### Verified
+- `python -m py_compile` clean on all 4 backend files; `import app.main` → IMPORT_OK.
+- `node --check` PASS on overlay.js + full.js; getDiagnostics clean on all 6 edited files.
+- `pytest tests/test_startup.py` → 5 passed. Readiness flow unit-checked (mark_ready flips flag + snapshot + wait() returns).
+- 1 PRE-EXISTING unrelated failure: `test_frontend_integration.py::...test_context_update_websocket_error_handled` (Mock session missing `speech_transcriber` in ListenerAgent ctor — not touched by this work).
+- NOT yet run live (`npm start` + backend). Next launch should show: red→amber→green dot on the orb, Start locked + "Connecting…" until green, onboarding modal on first run, double-right-click opens main app, single right-click/right-drag do nothing.
+
+### Note for next agent
+The legacy `src/renderer/index.html` + `app.js` (NOT loaded by main.js — it only loads overlay.html + full.html) was intentionally left untouched. If it ever gets wired back in, it needs the same `ready_to_start`/BACKEND_READY gating.
+
+Current owner: [Agent: Kiro]
+Last updated: 2026-05-31 (readiness gating + right-click redesign + onboarding)
+
+---
+
+## 2026-05-30 — CORRECTION: Phase G was ATTEMPTED then REVERTED (env corruption + wrong file path)
+
+[2026-05-30][Agent: Claude Code] IMPORTANT correction to any Phase G notes below/above. During the Phase G (per-session BYOK) attempt the tool environment became unreliable — it replayed stale results and reported FABRICATED commit hashes (e.g. `9eb2f1a`, `7d3e9c1`) that DO NOT EXIST. True committed history is: `c4c7209` (Phase A) → `76bf965` (Phase B) → `bed7bcf` (Phase F). Nothing for Phase G is committed.
+
+Two real bugs in the attempt:
+1. The runtime_config edits targeted `app/services/runtime_config.py`, which DOES NOT EXIST. The real module is **`app/providers/runtime_config.py`** (currently UNTRACKED, part of the `app/providers/` package + `app/api/providers.py` from the prior multi-provider work — none of it committed yet).
+2. `websocket.py` got `from app.services import runtime_config` (broken import) + a PROVIDER_CONFIG handler that called `runtime_config.set_session_overrides` which was never added to the real file → backend would have failed to import.
+
+ACTION TAKEN: `git checkout HEAD --` reverted my Phase G working-tree changes to `websocket.py`, `models/negotiation.py`, and the 4 desktop files (`main.js`, `preload.js`, `overlay.js`, `full.js`); removed temp `backend/_g_test.py`. Prior-agent uncommitted changes (config.py, main.py, companion_runtime.py, gemini_client.py, listener_agent.py, negotiation_engine.py, next_move_cache.py, stt_service.py, translation.py, deepgram_stream.py, requirements.txt, full.css, full.html, audio-isolator.ps1) were PRESERVED, untouched. Working tree is back to the boot-tested Phase A/B/F state.
+
+### Phase G — CORRECT re-implementation plan (do when env is stable)
+Design is sound (a contextvars overlay); only the file path was wrong. Apply to the REAL files:
+- **`app/providers/runtime_config.py`** (NOT services/): add `import contextvars`; a `_SESSION_OVERRIDES: ContextVar[Optional[dict]] = ContextVar(..., default=None)`; `set_session_overrides`/`reset_session_overrides`; `_effective_data()` overlaying session overrides on `_load_unlocked()` (slots/keys/settings shallow-merge, session wins; empty→base). Route `_provider_entry`, `api_key_for`, `has_runtime_key`, `google_backend` through `_effective_data()`. Leave `get_runtime_config`/`update` on `_load_unlocked()` (global file only).
+- **`models/negotiation.py`**: `self.provider_overrides: dict = {}` in `__init__` (after `self.created_at`).
+- **`websocket.py`**: `from app.providers import runtime_config`; bind contextvar to `session.provider_overrides` after `connection_manager.register` (reset in `finally`); handle `PROVIDER_CONFIG` text msg (merge in place via a `_apply_provider_config`, never log values) before validate/route, then `start_live_preconnect(session, runtime_config.google_api_key(), ...)` + send `PROVIDER_CONFIG_ACK`; REMOVE the eager env-key preconnect at connect (defer).
+- **Desktop** (Phase A already config-driven): `preload.js` expose `saveProviderConfig`/`loadProviderConfig`; `main.js` `safeStorage` encrypt/decrypt to `userData/provider-config.enc`; `overlay.js` WS `onopen` (async) load local cfg + send `{type:"PROVIDER_CONFIG"}`; `full.js` Settings `saveConfig` write keys LOCAL only (merge with existing) + strip keys from server PUT, `loadConfig` overlay local slots/settings.
+- VERIFY: concurrent isolation test (two contexts → different keys), `import app.main` boots, then live `npm start`. The isolation approach was validated in principle; redo against providers/runtime_config.py.
+- NOTE: `app/providers/` + `app/api/providers.py` are UNTRACKED — they should be committed (separately) as the multi-provider base before/with Phase G, or Phase G has nothing to extend.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Phase G reverted; correction recorded)
+
+## 2026-05-30 — Deploy planning + Phase F (git secret/PII cleanup) DONE
+
+[2026-05-30][Agent: Claude Code] Planning pass for hosting the backend on **Oracle Cloud Free Tier** + shipping the desktop app. Wrote actionable plan `docs/plans/2026-05-30-desktop-oracle-deploy-plan.md` (supersedes, does NOT delete, the 2026-05-29 reference snapshot).
+
+### User decisions locked
+- Backend: **hosted on Oracle Free Tier** (user has tenancy). Domain: **balaastratech.com** (use `api.balaastratech.com` for WSS + Caddy auto-TLS).
+- **BYOK** (each user pastes own keys). Audience: **solo/testing**. Installer: **unsigned + instructions on GitHub Releases**.
+- New **lean prod requirements file** wanted (exclude web frontend + heavy ML); verify against real code.
+- **Concurrency: TRUE PER-SESSION BYOK chosen** (keys sent from desktop per WS session) — see Phase G in plan.
+
+### Phase F COMPLETE (git secured) — NOT yet committed (per repo rule, awaiting user OK)
+- `git rm --cached` (kept on disk, staged `D`): `backend/data/negotiation_sessions.db`, `backend/data/logs/copilot_conversation_audit.jsonl`, AND root copies `data/negotiation_sessions.db`, `data/logs/copilot_conversation_audit.jsonl` (these were tracked from BEFORE .gitignore rules existed -> ignore alone didn't untrack them).
+- `.gitignore` edited: added `runtime_providers.json` (all 3 path forms), `*.pem`, `*.key`, `secrets.*`, `*_secret*`.
+- Verified: `git check-ignore backend/data/runtime_providers.json` -> now ignored. **This file contains a LIVE Google AI Studio key** (`AQ.Ab8RN6...`) but `git log --all -- <file>` shows it was **NEVER committed** -> no rotation required, just don't `git add` it (now ignored). Same for `backend/.env` (never committed; only `.env.example`/`.env.test` tracked; `.env.test` holds only dummy `GEMINI_API_KEY=test`).
+- CAVEAT: the `.db`/`.jsonl` still exist in PAST commit history. Fine for a private repo; if it ever goes public, run `git filter-repo` (destructive — not done unasked).
+
+### Key code facts verified this pass (for executors)
+- Hardcoded backend URL in 3 desktop files: `app.js:70`, `overlay.js:6` (`ws://localhost:8000/ws`), `full.js:838` (`http://localhost:8000`). Phase A makes these config-driven.
+- Heavy ML deps (torch/speechbrain/pyannote/whisper/wespeaker/librosa/etc.) are **lazy-imported** inside methods -> strippable. HARD top-level imports that must stay: `huggingface_hub` (main.py:17), `numpy` (listener_agent.py:34). STARTUP-RISK module-top heavy imports to re-check before trusting lean reqs: `speaker_service.py:22-24` (numpy/webrtcvad/torch), `speaker_enrollment.py:14` (torch). -> Phase B1 gate.
+- Per-session isolation CONFIRMED good: each WS -> uuid `session_id` -> own `NegotiationSession`/`listener_agent`/`DeepgramStreamSession.get(session_id)`/Gemini Live. Singletons (`companion_runtime` etc.) are stateless (state on session). ONLY shared-global = `runtime_providers.json` keys -> Phase G fixes for concurrent BYOK.
+- Deepgram/STT reached via `httpx`/`websockets` (no SDK) -> lean reqs can exclude STT SDKs. `registry.py` is pure data (no network/SDK imports).
+- Mute is desktop-local (Zoom Alt+A via `audio-isolator.ps1`), backend-independent. Packaging risk: `.ps1` path is `process.resourcesPath/scripts/` when packaged (Phase H).
+
+### Next action
+Phase F committed (`bed7bcf`). Phase B DONE (see below). Next recommended: **A (desktop URL config)**, then **G (per-session BYOK)**, then C/D (Caddy+Oracle on api.balaastratech.com), then E (package+GitHub Release).
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (deploy planning + Phase F git cleanup)
+
+## 2026-05-30 — Phase B DONE: lean prod requirements proven (boot-tested)
+
+[2026-05-30][Agent: Claude Code] Created `backend/requirements-desktop.txt` (lean hosted BYOK profile) and PROVED it boots. Full `requirements.txt` left untouched (local-dev profile).
+
+### B1 gate RESULT (import-chain trace)
+Startup chain `app.main -> websocket -> negotiation_engine -> companion_runtime/listener_agent/stt_service` has its heavy imports ALREADY LAZY: in `negotiation_engine.py` the speaker imports are inside functions (`speaker_enrollment` @299, `speaker_service` @484/1447/2796). `speechbrain_service` is module-top (@39) but that module only imports `app.config` at top (torch lazy in methods). So boot needs only `numpy` (listener_agent:34) + `huggingface_hub` (main.py:17) beyond core. **No code edits required** for the aggressive (no-torch) strip. (Note: `speaker_service.py:22-24` and `speaker_enrollment.py:14` DO import torch/webrtcvad at module top, but they are only reached via the lazy in-function imports, which never fire when SPEAKER_RECOGNITION/SPEECHBRAIN are disabled.)
+
+### Boot test (py 3.11 venv `backend/.venv-lean`, gitignored)
+Installed lean reqs (exit 0). Ran with prod env overrides `SPEAKER_RECOGNITION_ENABLED=False SPEECHBRAIN_ENABLED=False PERFECT_LISTENER_ENABLED=False TRANSCRIPTION_PROVIDER=deepgram GOOGLE_GENAI_USE_VERTEXAI=False`.
+- venv size **209 MB** (vs multi-GB full stack). `numpy 2.4.6` (no torch ABI pin needed).
+- `import app.main` -> `IMPORT_OK`.
+- `uvicorn app.main:app` -> "Application startup complete".
+- **Deepgram STT probe SUCCEEDED** (nova-3, ~1.5s) using the DEEPGRAM_API_KEY still in the user's `backend/.env` (pydantic loads .env; OS env overrode only the toggles).
+- SpeechBrain probe FAILED -> "disabling SpeechBrain runtime path" (graceful, no crash) — exactly intended.
+- `GET /health` -> `200 {"status":"healthy"}`.
+- Installed key pkgs: fastapi 0.136, uvicorn 0.48, websockets 16, google-genai 2.7, openai 2.38, anthropic 0.105, httpx 0.28, huggingface_hub 1.17, pydantic 2.13, pillow 12.2, numpy 2.4.6. NO torch/speechbrain/pyannote/whisper/scipy/webrtcvad.
+
+### Caveat for prod
+Lean profile assumes speaker-ID / SpeechBrain / PerfectListener / google_stt stay DISABLED (they are, by env). If anyone re-enables them on the hosted box, those lazy imports will crash (torch absent). Document in Phase D env checklist. Vision (pillow) + Gemini Live + Deepgram + multi-provider text all work on the lean set.
+
+### Verify-later
+Boot test used Windows venv; Oracle is linux/aarch64 — re-run the same install+boot on the VM (all pure-python/manylinux wheels exist for aarch64, so expected clean). `backend/.venv-lean` is a throwaway (gitignored).
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Phase B lean requirements proven)
+
+## 2026-05-30 — Phase A DONE: config-driven backend URL (no more hardcoded localhost)
+
+[2026-05-30][Agent: Claude Code] User decision: shipped build defaults to PROD, desktop/.env overrides for dev. Domain confirmed `balaastratech.com` -> backend at `wss://api.balaastratech.com/ws`.
+
+### Changes (all desktop/, committed)
+- `src/main.js`: `resolveBackendConfig()` — reads `COMPANION_BACKEND_WS` (+ optional `COMPANION_BACKEND_HTTP`) env; default `PROD_BACKEND_WS="wss://api.balaastratech.com/ws"`; HTTP derived (ws->http, wss->https, strip trailing /ws). Registered sync IPC `companion:getBackendConfig` (returnValue) at module top so it's available before any window loads.
+- `src/preload.js`: `ipcRenderer.sendSync("companion:getBackendConfig")` once; exposes `window.companionConfig = {ws, http}`. Localhost fallback if IPC missing. BOTH overlay + full windows share this preload (verified main.js:870,900; contextIsolation:true, nodeIntegration:false — so env must flow through preload, can't read process.env in renderer).
+- `src/renderer/app.js:70`, `overlay.js:6`: `BACKEND_WS_URL = window.companionConfig?.ws || "ws://localhost:8000/ws"`.
+- `src/renderer/full.js:838`: `BACKEND_HTTP = window.companionConfig?.http || "http://localhost:8000"`.
+- `.env.example`: REWRITTEN (was corrupted — contained a stray dir listing). Now documents COMPANION_BACKEND_WS + privacy vars.
+- `desktop/.env` (gitignored, NOT committed): appended `COMPANION_BACKEND_WS=ws://localhost:8000/ws` so the user's local `npm start` keeps hitting localhost (otherwise it would now default to the not-yet-existing prod host).
+
+### Verified
+`node --check` PASS on main.js, preload.js, app.js, overlay.js, full.js. Edits grep-confirmed at the expected lines. NOT yet run live (`npm start`) — next time the app is launched, confirm overlay+full connect to localhost (dev) and that a packaged build would use the prod default.
+
+### Note for Phase G (per-session BYOK)
+The same preload bridge is the natural place to also send the user's keys to the backend on connect. `window.companionConfig` pattern can be extended, or add a new bridge call. The WS connect sites that consume BACKEND_WS_URL: app.js + overlay.js (search `new WebSocket(BACKEND_WS_URL`).
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Phase A backend URL config)
+
+## 2026-05-30 — MUTE FIXED (SendInput struct) + LATENCY FIXED (disable Flash thinking)
+
+[2026-05-30][Agent: Claude Code] Two long-standing issues root-caused from the live error + trace `16b3fa68`.
+
+### MUTE — `SendInput returned 0` (FIXED)
+Live error: `SendKeyCombo failed (parse or SendInput returned 0) for combo: alt+a`. Root cause: in `desktop/scripts/audio-isolator.ps1` the C# `INPUT` struct wrapped only `KEYBDINPUT`, so `Marshal.SizeOf(INPUT)` = **32 bytes** on x64, but the real Win32 `INPUT` is **40 bytes** (the union is sized to the larger `MOUSEINPUT`). `SendInput` rejects a wrong `cbSize` → returns 0 → no keystroke. Fix: added `MOUSEINPUT` + an explicit `INPUTUNION` union and made `INPUT` carry the union; `SendKeyCombo` now sets `u.ki`. Verified `Marshal.SizeOf(INPUT)==40` on x64; PowerShell parse OK. The helper auto-start + result logging from the prior pass is what surfaced this. After `npm start`, hold the orb → Zoom should mute (still requires Zoom's global mute shortcut enabled).
+
+### LATENCY — ~18s ask response (FIXED, was Flash "thinking")
+Trace timeline (hold_released +269724 → ai_response +288022 = 18.3s) showed the ask waits behind background context calls that were each ~10-12s:
+- `vision_analysis_completed` lat **11478ms**, tokens: prompt 1756 / **thoughts 1439** / candidates 47, finish_reason **MAX_TOKENS** (thinking ate the budget AND truncated the JSON).
+- `text_extraction_completed` lat **12523ms**, tokens: prompt 998 / **thoughts 2080** / candidates 397.
+- ALL vision calls were ~10s the whole session (latencies 9.5-15s).
+Root cause: `gemini-2.5-flash` has **thinking ON by default**, burning 1400-2080 thoughts_tokens on simple structured-extraction tasks. `next_move_cache` already set `thinking_budget=0`; vision + extraction did not.
+- Fix: `gemini_client.analyze_vision_frames` config + `listener_agent` extraction `do_extract` now set `ThinkingConfig(thinking_budget=0)`. Expect vision/extraction to drop from ~11s to ~1-2s, which should cut the ask latency dramatically and also fix the MAX_TOKENS truncation of vision JSON.
+- (Pro advice keeps `thinking_budget=128`; Pro requires a non-zero budget on Vertex.)
+
+### Verified
+`py_compile` clean. Regression: 20 passed, 2 PRE-EXISTING fails — `test_remote_audio_is_processed_while_ai_audio_is_playing` (known) and `test_text_extraction_timeout_clears_inflight_and_allows_retry` (STALE: asserts `_last_text_extraction_time==0.0` reset that was intentionally removed at `listener_agent.py:1079` — "BUG: caused 6s retry storm"). Neither touched by this work.
+
+### Next: restart backend + `npm start`. Expect: mute works on hold; ask answers in a few seconds instead of ~18s.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (mute SendInput + Flash thinking latency)
+
+## 2026-05-30 — Transcript line-breaks: sentence-end + ~1s turn-end (user-chosen)
+
+[2026-05-30][Agent: Claude Code] User: full transcript showed "half" of a counterparty turn and never the finalized line. Trace `5172385b` confirmed: **zero `stream_transcript_final` events** for the session — turns weren't being finalized at all.
+
+### Root cause
+User had locally set `DEEPGRAM_UTTERANCE_END_MS=400`. Deepgram requires `utterance_end_ms >= 1000`; our builder only sends the param when `>= 1000`, so at 400 **UtteranceEnd was disabled entirely** — leaving only `speech_final` (endpointing=300) to finalize, which with their noisy headphone mic rarely fires cleanly → turns sat as unfinalized partials ("half"), never fed to the listener, never traced.
+
+### Fix (per user's explicit choices: "break on sentence ends" + "~1s turn-end")
+- `companion_runtime.py` conversation assembler: line now **breaks at every sentence boundary** (`. ? !` incl. CJK `。？！`) via `_flush_current("sentence_end")` immediately when an is_final segment ends in punctuation; otherwise finalizes the turn on `speech_final`/`UtteranceEnd` (~1s pause). This makes each complete sentence its own readable line AND guarantees finalization (no more stuck "half" partials). The ASK assembler is unchanged (one hold = one question bubble, no sentence splitting).
+- `config.py`: `DEEPGRAM_STREAM_ENDPOINTING_MS 300→1000`, `DEEPGRAM_UTTERANCE_END_MS 400→1000` (re-enables UtteranceEnd; honors the ~1s turn-end). NOTE these were the user's local values — changed deliberately to implement their just-stated ~1s preference; the <1000 utterance value was silently disabling the feature.
+
+### Verified
+`py_compile` clean; sentence detection unit-checked; `test_companion_runtime`+`test_deepgram_stream` → 30 passed, 1 pre-existing unrelated fail. The "segments update one row until speech_final" test still passes (its segments don't carry sentence punctuation, so sentence-break doesn't trigger early).
+
+### Next: restart backend. Expect each sentence as its own line, turns finalizing ~1s after the speaker stops, and no more half/stuck partials.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (sentence-end line breaks + ~1s turn-end)
+
+## 2026-05-30 — Full window missing AI response: misclassified "advisor" vs "ask_ai" (FIXED)
+
+[2026-05-30][Agent: Claude Code] User: AI response transcript shows in overlay but NOT in the full window's Private AI Asks panel. Traced session `16b3fa68`.
+
+### Root cause (from trace, not assumed)
+`ai_response_completed` events showed the GOOD answers tagged **`context: "advisor"`**, not `"ask_ai"` — with **`hold_to_response_ms: 18298 / 16987`** (~18s). The classification in `gemini_client.py` (3 sites: output-text partial ~1619, output_transcription partial ~1867, turn_complete final ~1916) was:
+```
+"ask_ai" if (direct_query_in_flight or ask_window_active) else "advisor"
+```
+The ask window closes after an **8s** orphan timer (`negotiation_engine._close_ask_window_if_orphaned`), but the native-audio answer arrives at ~18s → both flags False → classified `advisor`. The overlay still renders advisor AI text, but `full.js` only fills `privateEntries` from `ask_ai`-context entries, so advisor-tagged answers never appear in the full Private AI Asks panel (and `renderPairedAsks` showed only the YOU side).
+
+### Fix
+1. `gemini_client.py` — added `or bool(getattr(session, "current_ask_capture", None))` to all 3 `response_context` classifications. `current_ask_capture` is populated for the whole in-flight ask (set on first ASK_AI_PCM chunk, reset only at turn_complete ~line 2033, and NOT touched by the orphan timer), so a late answer is still correctly `ask_ai`. Safe: it's empty in advisor/copilot mode (no hold), so normal advisor responses stay `advisor`.
+2. `negotiation_engine.py` — widened the ask-window orphan grace `8.0s → 25.0s` (answers legitimately take ~18s); stale timers still no-op via `ask_cycle_gen`.
+
+### Also this pass (prior msg)
+- ASK no-truncate (don't clear acc on speech_final mid-hold) + `<noise>`/bracket-token filter in `_push_ask_to_deepgram_stream`.
+- `performHotkeyMute` auto-(re)starts the helper + logs combo/result (mute diagnostics).
+- Note: user reverted `DEEPGRAM_STREAM_ENDPOINTING_MS` to 300 (their intentional change).
+
+### Separate real issue (NOT yet fixed) — 18s ASK latency
+`hold_to_response_ms ~17–18s` is very high. Likely Pro pre-flight (`generate_tactical_advice`, ADVICE_GENERATION_TIMEOUT 3s but Pro reasoning + vision) + native-audio. Worth profiling: the trace's `pre_query_brief_sent` → `ai_response_completed` gap, and whether Pro pre-flight / vision is blocking. Deferred.
+
+### Verified
+`py_compile` clean; `test_live_ask_turn_packaging` 14/14.
+
+### Next: restart backend, retest — the AI answer should now appear in the full window's Private AI Asks paired under the question.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (ask_ai context misclassification fix)
+
+## 2026-05-30 — ASK polish: no-truncate + noise filter + less-aggressive turns + mute diagnostics
+
+[2026-05-30][Agent: Claude Code] Follow-up after the ASK-STT routing fix landed and WORKED (user's session `16b3fa68` shows full accurate English questions + real spoken answers, not thinking). Remaining issues from screenshots:
+
+### Fixed
+1. **Truncated ASK question** ("What context do you have on the"): my new ask callback cleared the accumulator on `speech_final`/UtteranceEnd mid-hold, so a paused question lost its earlier words. FIX (`companion_runtime._push_ask_to_deepgram_stream`): do NOT clear `acc` on speech_final/UtteranceEnd — one hold = one question; `acc` resets only when a NEW ask starts (entry_id change). Removed the `_ask_flush` utterance-end clear.
+2. **`<noise>` triggering a spurious ask**: added `_is_noise()` filter — drops Deepgram non-speech markers (`<noise>`, `[BLANK_AUDIO]`, `(silence)`, any `<…>`/`[…]`/`(…)`-only token) before they become a question. Added `import re`.
+3. **Turn-split too aggressive** (user: "reduce a little"): `DEEPGRAM_STREAM_ENDPOINTING_MS` 400 → 600 (less eager to split the conversation transcript on short pauses; word-gap `utterance_end_ms=1000` still handles the noisy-mic case).
+
+### Mute (#still not working) — added auto-recovery + diagnostics, but likely Zoom-side
+Verified the full chain is correctly wired: `setHoldToAsk`(overlay 2764) → `updateMicMuteState`(2772, strategy resolves to "hotkey" at overlay 2408) → `bridge.privacyIsolate` → `main.performPrivacyIsolate`(434) → `performHotkeyMute(alt+a, true)` → helper `send-keys`. So the code path is sound. Two remaining real failure points: (a) the PowerShell helper not running, (b) Zoom's global mute shortcut not enabled. Changes to `main.performHotkeyMute`: now **auto-(re)starts the helper** if it's dead/not-yet-booted (so the first hold doesn't no-op) + **logs the combo and the send-keys result** to the desktop console. After restart, the desktop terminal will show `[Privacy] hotkey send-keys combo=alt+a ... result: {...}` — if `ok:true` but Zoom doesn't mute, it's 100% Zoom's **Settings → Keyboard Shortcuts → Enable Global Shortcut for Mute/Unmute My Audio** (mandatory: our app holds focus during hold, so Alt+A only reaches Zoom as a registered GLOBAL hotkey). If `helper_unavailable`, the .ps1 path/spawn is the issue.
+
+### Known/not-yet-fixed
+- **Overlay vs full show slightly different ASK text**: overlay (compact `renderChat`) renders live partials; full renders finalized entries — they consume the same TRANSCRIPT events but the overlay truncates/scrolls differently. Cosmetic; not deep-fixed this pass.
+
+### Verified
+`py_compile` clean; `node --check` main.js OK; `test_live_ask_turn_packaging`+`test_deepgram_stream` → 25 passed.
+
+### User actions: restart backend AND `npm start` (desktop), then watch the desktop terminal for the `[Privacy] hotkey send-keys ... result` line while holding the orb; confirm Zoom global mute shortcut is enabled.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (ASK polish + mute diagnostics)
+
+## 2026-05-30 — REAL fixes for Live ASK: thinking-leak + question routed to user's STT (multilingual)
+
+[2026-05-30][Agent: Claude Code] User (correctly) rejected language-pinning as a fix and wanted the actual root causes. Found and fixed two REAL bugs in the Live path. NOT assumptions — traced to exact code.
+
+### ROOT CAUSE A — "AI gives thinking instead of the response" (FIXED)
+`response_modalities = ["AUDIO"]` (ai_assets.py:23) → the answer is SPOKEN audio. But the native-audio model also emits its THINKING as text parts (`part.thought=True`) in `sc.model_turn.parts`. `gemini_client.py` `elif part.text:` had NO thought check — it displayed those thought parts AND mixed them into `current_ai_response`, while the real spoken answer arrives via `output_audio_transcription`. Result: the green box showed reasoning ("**Analyzing the Visuals**, I'm focusing on…") that differs from what the user hears, and two asks' reasoning bled together.
+- FIX (gemini_client.py ~1597): skip parts where `getattr(part,"thought",False)` — do not display or accumulate thoughts. The displayed answer now comes only from `output_audio_transcription` (the actual spoken words). `_consume_completed_ai_response` already resets `current_ai_response` per `turn_complete`, so with thoughts gone, each ask's answer is clean and separate.
+
+### ROOT CAUSE B — question transcribed by weak Gemini-native STT, NOT the user's multilingual STT (FIXED)
+`companion_runtime.handle_audio_payload` ask branch (~line 345) sent `ASK_AI_PCM` ONLY to `_capture_private_ask_audio` (→ Gemini Live native audio) and `return`ed — it NEVER reached Deepgram. So the YOU question relied on Gemini's native `input_transcription`, which is poor for non-English (e.g. English → "Så skal vi nu over til"). The existing `ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION` "Deepgram owns the bubble" design could never engage because Deepgram never saw the ask audio.
+- FIX: new `_push_ask_to_deepgram_stream(session, websocket, chunk)` — also streams the ask audio to Deepgram as source `"ask_ai"` using the user's CONFIGURED language (`resolve_deepgram_language(session.language_profile, LOCAL_MIC_PCM per-source)` → honors the UI multi/pinned selection). A dedicated ask callback publishes `TRANSCRIPT_PARTIAL/UPDATE` (speaker=user, context=ask_ai, id=`ask_ai_<started_at_ms>`, source=`desktop_ask_deepgram`), accumulates per ask (resets on entry-id change + speech_final/UtteranceEnd), and sets `current_ask_capture.frontend_question_final_sent=True` + `frontend_question_source="deepgram_ask"` so the Gemini-native fragments are suppressed. Gemini Live STILL receives the audio (so it hears + answers); Deepgram now owns the ACCURATE, MULTILINGUAL display. Called from the ask branch (additive; gated by `_deepgram_streaming_enabled()`).
+- Earlier same-day: also accumulate Gemini input_transcription deltas (so even the fallback shows the full question, not shards).
+
+### Multilingual is preserved
+No pinning. The ask uses `session.language_profile` (the UI Language card: `auto_multi` or `pinned:<bcp47>`). User can speak any language and Deepgram transcribes per their selection.
+
+### Verified
+`py_compile` clean (gemini_client, companion_runtime). Regression: `test_live_ask_turn_packaging` 14/14, plus `test_companion_runtime`+`test_deepgram_stream` → **44 passed, 1 pre-existing unrelated fail** (`test_remote_audio_is_processed_while_ai_audio_is_playing`).
+
+### Still config (not code) — mute on hold
+Env already correct (hotkey + VBCABLE=off). Hotkey sends Zoom Alt+A, but during hold the app has focus → only mutes Zoom if Zoom's **"Enable Global Shortcut for Mute/Unmute My Audio"** is ON (Zoom → Settings → Keyboard Shortcuts). One-time manual step. Alternative: vbcable + Zoom mic="CABLE Output".
+
+### Next: restart backend, retest. Expect: full accurate question in your language (Deepgram), AI answer = what you hear (no thinking text), two asks = two separate Q/A pairs.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Live ASK real fixes: thought-skip + ask STT routing)
+
+## 2026-05-30 — Live ASK diagnosis: fragmented question fixed; mute + language are config
+
+[2026-05-30][Agent: Claude Code] Investigated user's session trace `4aae2a70-f76a-49f2-9d59-d06031731003` for: ASK question shows fragments / differs overlay vs full / "two questions → one"; mute not working on hold (env already hotkey); AI gibberish answers.
+
+### ROOT CAUSE #1 (FIXED in code) — fragmented ASK question
+Trace shows ~22 `question_text_ready` events for ONE ask, each a tiny delta (`" Ju"`, `"st"`, `" explain"`…). Gemini Live native-audio emits `input_transcription.text` as INCREMENTAL DELTAS; `gemini_client.py` treated each delta as the whole question — overwrote `current_ask_capture["gemini_input_text"]` and re-published per delta. So the YOU bubble showed only the last shard ("the", "we are seeing right now"), and overlay/full caught different shards (race). With `ASK_AI_NATIVE_AUDIO=True` the Deepgram batch no longer owns the ASK display, so the shards leaked.
+- FIX (`gemini_client.py` ~1673): accumulate deltas per ask into `current_ask_capture["gemini_input_accum"]`; set `input_text` to the running accumulation so the full question is published/recorded. Per-ask isolated (fresh capture each ask: `companion_runtime._capture_private_ask_audio` builds a new dict; reset to `{}` at gemini_client ~2033; `question_capture_*` reset in `negotiation_engine` hold handler ~1557). Deltas already include spaces → plain concat. `py_compile` clean; `test_live_ask_turn_packaging` 14/14 pass.
+- Note: this was masked before — prior to the Vertex hotfix the Live session was failing entirely, so the native-audio path wasn't producing these fragments. The hotfix re-enabled Live and surfaced this pre-existing native-audio fragmentation.
+
+### #2 (mute on hold) — CONFIG, not env
+`desktop/.env` is already correct (`COMPANION_PRIVACY_MODE=hotkey`, `COMPANION_VBCABLE=off`) → `resolvePrivacyStrategy` returns hotkey and sends Zoom `alt+a` on hold (`main.js:254/434/489`). BUT during Hold-to-Ask the companion app/orb holds keyboard focus, so a non-global Alt+A never reaches Zoom. REQUIRES Zoom → Settings → Keyboard Shortcuts → "Mute/Unmute My Audio" → tick **Enable Global Shortcut** (default Alt+A). One-time manual step the user must do. Alternative: vbcable mode + Zoom mic = "CABLE Output".
+
+### #3 (gibberish / wrong language, e.g. English → "Så skal vi nu over til") — language=multi
+Deepgram `language=multi` (LANGUAGE_PROFILE_DEFAULT=auto_multi) mis-detects short English asks as Danish. Not a model change. Fix: pin transcribe language to English (UI Language card → Transcribe → English, or `LANGUAGE_PROFILE_DEFAULT=pinned:en-US` in backend/.env). Combined with #1, asks transcribe cleanly and the AI answers the real question instead of describing the screen.
+
+### "Response text ≠ spoken"
+Displayed AI text is Gemini `output_transcription` (transcript of its own spoken audio). Native-audio "thinking" sometimes narrates reasoning ("Analyzing the Visuals, I'm focusing on…"), differing from the clean spoken answer — amplified because the garbled question made it describe the screen. Should improve once questions are clean; if thinking-narration persists, add an output filter (deferred).
+
+### User actions
+1. Restart backend (picks up the accumulation fix + prior endpointing=400/utterance_end_ms=1000 turn-detection fix). 2. Enable Zoom global mute shortcut. 3. Pin transcribe language to English.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Live ASK diagnosis + fragmentation fix)
+
+## 2026-05-30 — Diagnosed two live-session complaints; fixed mic-mute via env (language deferred to UI)
+
+[2026-05-30][Agent: Antigravity] User reported two problems and asked to check them against the REAL code:
+(2) holding the orb to ask the AI does NOT mute their Zoom mic — counterparty hears what they say to the AI (user is on a headphone mic/speaker, no virtual cable). User suspected an env problem.
+(3) live STT mis-transcribes / returns gibberish, and multiple separate questions get merged into one transcript row + one response (screenshot: a single YOU bubble with "Hi. This is Can you hear me? Hi. Can you hear me? Hi. Can you hear me?").
+
+### Root causes (code-verified, not guessed)
+- **(2) mute no-op.** `desktop/.env` had `COMPANION_PRIVACY_MODE=vbcable` + `COMPANION_VBCABLE=on`. In `main.js:resolvePrivacyStrategy()` that forces the VB-Cable forward-and-mute path. In `overlay.js:updateMicMuteState()` the vbcable branch is `if (!state.micForwardEl) return;` — with no VB-Cable installed `micForwardEl` is never created, so the hold-mute is a complete NO-OP and Zoom keeps streaming the live mic. User was right: env problem.
+- **(3) accuracy + merged turns.** `backend/app/config.py` default `LANGUAGE_PROFILE_DEFAULT="auto_multi"` → Deepgram nova-3 `language=multi` (10-lang code-switching). For an English speaker this produces wrong words/gibberish AND erratic `speech_final`/`UtteranceEnd` segmentation, so the assembler in `companion_runtime.py:_flush_current` piles repeats into one YOU row. (`backend/.env` does not pin a language, so the multi default applies.) This matches the prior HANDOFF note: "Accuracy half … is the separate language=multi (auto_multi) issue."
+
+### Changes made
+- `desktop/.env`: `COMPANION_PRIVACY_MODE` `vbcable` → **`hotkey`**, and `COMPANION_VBCABLE` `on` → **`off`**. Hotkey is the documented robust primary: on hold it sends Zoom's mute hotkey (Alt+A) via the C# SendInput helper (`audio-isolator.ps1`, confirmed present), mic untouched, listener-safe. Requires the user to enable Zoom → Settings → Keyboard Shortcuts → "Enable Global Shortcut" for Mute/Unmute My Audio (one-time).
+- **Language: NOT changed in env.** I initially added `LANGUAGE_PROFILE_DEFAULT=pinned:en-US` to `backend/.env`, but the user said they will pin the language from the UI instead. Reverted — `backend/.env` is back to no language pin (multi default in code). No backend code/config change made for issue (3).
+
+### Verification status
+- Edits applied and re-read: `desktop/.env` now `hotkey` + `off`; `backend/.env` has NO `LANGUAGE_PROFILE_DEFAULT` line (clean revert). 
+- NOT yet verified live. Could not run the backend config sanity check (`venv python -c ...`) — tool execution was not permitted in this session. Confidence: HIGH on root-cause (read from real code paths), MEDIUM on the end-to-end fix until the user tests on a call.
+
+### Next steps for the user / next agent
+1. Restart the desktop app (`npm start` in `desktop/`) so the new env loads. Enable Zoom's global mute shortcut. On a call, hold the orb → confirm Zoom's own mute toggles and the counterparty hears silence while the AI still transcribes you.
+2. For accuracy + turn-splitting: pin the spoken language (e.g. English) from the Settings UI. Confirm that switches the Deepgram stream off `multi` (→ `resolve_deepgram_language` returns the pinned BCP-47), gibberish stops, and each question lands in its own turn/response.
+3. If hotkey doesn't fire, check that `audio-isolator.ps1` started (main-process log "[Privacy] Starting audio-isolator server...") and that the global shortcut is enabled in Zoom.
+
+Current owner: [Agent: Antigravity]
+Last updated: 2026-05-30 (mic-mute env fix; language deferred to UI)
+
+## 2026-05-30 — Google fully portable: explicit backend toggle (Vertex / AI Studio) with backend-correct model IDs
+
+[2026-05-30][Agent: Claude Code] Completes the portability goal for Google (the prior hotfix had reverted the broken auto-flip; this adds the proper, safe way to use AI Studio). User requirement: make Google usable with just an API key (AI Studio) for shipping, while the existing Vertex path keeps working **byte-identically**. Verified real model IDs from https://ai.google.dev/gemini-api/docs/models before implementing.
+
+### Verified model IDs (AI Studio / Gemini API, May 2026)
+- Live native audio: `gemini-2.5-flash-native-audio-preview-12-2025` (primary), `gemini-3.1-flash-live-preview` (fallback).
+- Text: `gemini-2.5-pro`, `gemini-2.5-flash` (same bare names as Vertex, just no `google/` prefix).
+- Vertex Live (unchanged): `gemini-live-2.5-flash-native-audio` + `gemini-2.5-flash` fallback.
+Key insight: Live model **strings differ by backend** (not just the prefix), so auth mode + model IDs must be chosen together.
+
+### Design — explicit backend choice, never desyncs
+- `config.py`: new `GEMINI_LIVE_MODEL_AISTUDIO` / `GEMINI_LIVE_FALLBACK_AISTUDIO` (verified defaults, env-overridable). New `Config._effective_use_vertex()` (lazy import of runtime_config) — the 5 `effective_*` model properties now qualify the `google/` prefix off the EFFECTIVE backend, not the raw env flag, so qualification always matches the client's auth mode.
+- `runtime_config.py`: new `google_backend()` → 'vertex'|'ai_studio' (runtime JSON `settings.google_backend` → env `GOOGLE_GENAI_USE_VERTEXAI`); `google_use_vertex()` now derives from it; new `google_live_models()` → (primary, fallback) per backend (Vertex → `effective_model`/`effective_fallback_model` UNCHANGED; AI Studio → the AISTUDIO config fields). JSON store gained a `settings` section; `update()` merges it (empty string clears → back to env), `safe_config()` exposes `settings.google_backend`. All still gated by `PROVIDER_RUNTIME_OVERRIDE_ENABLED` (revert flag also reverts the toggle).
+- `gemini_client.py`: `open_live_session` now resolves `primary_model, fallback_model = _rc.google_live_models()` at call time (signature `model: str | None = None`); the internal fallback uses `fallback_model` instead of the module constant `GEMINI_MODEL_FALLBACK`. Vertex path identical to before.
+- `next_move_cache.py`: the direct `qualify_model_name(..., settings.GOOGLE_GENAI_USE_VERTEXAI)` now uses `_rc.google_use_vertex()`.
+- Frontend: Settings → Advanced → **Google backend** `<select>` (Auto from .env / AI Studio / Vertex). `full.js` reads `config.settings.google_backend`, includes it in the PUT patch (`settings.google_backend`); `api/providers.py` PUT already forwards the full patch; `runtime_config.update` validates the value. `.env.example` documents the AISTUDIO Live fields + the backend note.
+
+### Verified
+- `py_compile` clean (config, runtime_config, gemini_client, next_move_cache, api/providers); `node --check` full.js.
+- Vertex mode (their env, no toggle): `google_backend=vertex`, live models `('google/gemini-live-2.5-flash-native-audio','google/gemini-2.5-flash')`, vision `google/gemini-2.5-flash`, advice `google/gemini-2.5-pro` — **identical to current**. So the user's working setup is preserved; this also un-breaks the earlier Live failure (qualification now matches auth).
+- AI Studio toggle: `google_backend=ai_studio`, live `('gemini-2.5-flash-native-audio-preview-12-2025','gemini-3.1-flash-live-preview')`, vision/advice bare `gemini-2.5-flash`/`gemini-2.5-pro`, uses the pasted UI key.
+- API round-trip: default backend vertex; PUT `settings.google_backend=ai_studio` persists; key value never leaked; invalid backend value → 400.
+- Regression: 56 passed, 1 pre-existing fail (`test_remote_audio_is_processed_while_ai_audio_is_playing`, unrelated/untouched).
+
+### How to use
+- Keep Vertex (current): do nothing — env `GOOGLE_GENAI_USE_VERTEXAI=True` and "Auto (from .env)" → Vertex.
+- Ship to someone with no GCP: they open Settings → paste a Google **AI Studio** key → Advanced → Google backend = **AI Studio** → Save → start session. Live + text run on AI Studio with their key, no Vertex/credentials. Everything (all providers + STT incl. ElevenLabs) now key-portable.
+
+### Not yet verified live
+Restart backend; (a) confirm current Vertex session still works (Live connects, advice/vision OK); (b) flip to AI Studio + paste an AI Studio key, new session → Live connects on `gemini-2.5-flash-native-audio-preview-12-2025`. If Google renames the preview Live model, set `GEMINI_LIVE_MODEL_AISTUDIO` in .env (no code change).
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Google backend toggle / full portability)
+
+## 2026-05-30 — HOTFIX: Live session broke (google/ prefix on AI Studio) — reverted Google auto-flip
+
+[2026-05-30][Agent: Claude Code] Supersedes part of the "Full portability" entry below (same day). User hit, on every session start:
+```
+1008 ... models/google/gemini-live-2.5-flash-native-audio is not found for API version v1alpha, or is not supported for bidiGenerate
+... All Live API models failed
+```
+**Root cause (my regression):** in the portability work I made `runtime_config.google_use_vertex()` return `False` whenever a Google key was saved in the Settings UI (`has_runtime_key('google')`). The user has `GOOGLE_GENAI_USE_VERTEXAI=True` and had pasted a Google key (to test the live model list). That flip switched the Live client to **AI Studio (v1alpha)**, but `settings.effective_model` still qualifies the model with the `google/` prefix off the env flag (`=True`) → AI Studio got `models/google/gemini-live-2.5-flash-native-audio` and rejected it. Also confirmed via web search that the Live model ID **differs by backend**: Vertex `gemini-live-2.5-flash-native-audio` vs AI Studio `gemini-2.5-flash-native-audio-preview-12-2025` — so auth mode and model qualification MUST stay in lockstep.
+
+**Fix:** `google_use_vertex()` now returns the env flag ONLY (no `has_runtime_key` auto-flip). Client auth and `effective_model` qualification are both keyed off `GOOGLE_GENAI_USE_VERTEXAI` again → consistent. Verified: with a UI Google key present + env Vertex=True, `google_use_vertex()=True`, `effective_model='google/gemini-live-2.5-flash-native-audio'`, consistency check passes → Live works. `google_api_key()` still feeds the AI Studio branch when env is AI Studio mode, so the UI key is used there. `py_compile` clean.
+
+**Consequence / honest status of Google portability:** Google's backend (Vertex vs AI Studio) is now env-controlled again (`GOOGLE_GENAI_USE_VERTEXAI`), NOT key-driven. All NON-Google providers (OpenAI/Anthropic/Groq/DeepSeek/OpenRouter) and STT (Deepgram/OpenAI/Groq/AssemblyAI/ElevenLabs) remain fully key-portable via the UI. Seamless "Google via AI Studio from a pasted key" still needs a follow-up: (a) an explicit Settings "Google backend" toggle, and (b) backend-specific Live model-ID mapping (Vertex `gemini-live-2.5-flash-native-audio` ↔ AI Studio `gemini-2.5-flash-native-audio-preview-12-2025`) + stripping the `google/` prefix in AI Studio mode. NOT done yet — deferred.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (Live hotfix)
+
+## 2026-05-30 — Full portability: UI keys authoritative on hot path + AI Studio Google + ElevenLabs STT (env-revertable)
+
+[2026-05-30][Agent: Claude Code] User goal: ship the app so anyone can paste their OWN API keys in Settings and use everything (incl. Google + STT) without Vertex/GCP, while keeping `.env` authoritative as a revert path, and add ElevenLabs STT. Implemented. The prior gap was: the in-app Settings stored choices/keys, but the live hot path still read `.env` directly for (a) Google client creds (Vertex vs AI Studio + key) and (b) the STT streaming decision + Deepgram key.
+
+### Reversibility design (key requirement)
+- New env flag `PROVIDER_RUNTIME_OVERRIDE_ENABLED` (default **true**) in `config.py`. When **false**, `runtime_config._load_unlocked()` returns empty → the Settings JSON is ignored entirely and EVERY resolver (`provider_for`/`model_for`/`api_key_for`/`has_runtime_key`/`google_use_vertex`) falls back to `.env`/registry = exact pre-multi-provider behavior. Verified: with flag off + a populated JSON, reasoning resolves to `google`, `has_runtime_key('google')=False`, `google_use_vertex()` follows env Vertex. One-line revert, no code change.
+
+### Google portability (AI Studio when a UI key exists)
+- `runtime_config` new helpers: `has_runtime_key(p)` (true only if key saved via UI JSON, not `.env`), `google_api_key()` (UI key → env `GEMINI_API_KEY`), `google_use_vertex()` (= `False` if a UI Google key exists, else honors env `GOOGLE_GENAI_USE_VERTEXAI`).
+- Replaced the `if GOOGLE_GENAI_USE_VERTEXAI … else api_key=settings.GEMINI_API_KEY` blocks at every Google `genai.Client` site with `_rc.google_use_vertex()` / `_rc.google_api_key()`:
+  - `gemini_client.py` ×3 — vision `analyze_vision_frames`, advice `generate_tactical_advice`, AND `open_live_session` (Live now uses the UI key too; falls back to the passed `api_key`).
+  - `listener_agent.py` `__init__`, `next_move_cache.py`, `translation.py`.
+- Net effect: paste a Google **AI Studio** key in Settings → app uses AI Studio with that key (no GCP project/ADC). No UI key → unchanged Vertex/`.env` behavior. (User is currently `GOOGLE_GENAI_USE_VERTEXAI=True` → still Vertex until they paste a key or flip env.)
+
+### STT live routing now honors Settings (the real fix)
+- `companion_runtime.py`: `_deepgram_streaming_enabled()` rewritten to use `_resolved_stt_provider()` = `runtime_config.provider_for(SLOT_STT)` (falls back to `.env TRANSCRIPTION_PROVIDER`), and the Deepgram stream key now comes from `_deepgram_api_key()` = `runtime_config.api_key_for('deepgram')`. So: STT slot = deepgram → streaming; anything else → per-utterance **batch** path via `SpeechTranscriptionService` (which already resolves provider/model/key from `runtime_config` via `_resolve_stt_selection`). Verified `_resolved_stt_provider()` → `deepgram`, streaming enabled True with current `.env`.
+
+### ElevenLabs STT added
+- `registry.py`: `elevenlabs` provider (key `ELEVENLABS_API_KEY`, slot `stt`, `supports_custom_model`); fallback models `["scribe_v2","scribe_v1"]`. Verified it appears under the STT slot.
+- `config.py`: `ELEVENLABS_API_KEY=""`. `.env.example`: documented `ELEVENLABS_API_KEY`, the revert flag, and the Google AI-Studio-vs-Vertex note.
+- `stt_service.py`: `_recognize_elevenlabs_sync()` — `POST https://api.elevenlabs.io/v1/speech-to-text`, `xi-api-key` header, multipart `file`=wav + `model_id` (+ optional `language_code`), parses `text`; dispatched from `_recognize_sync`. Batch path (Scribe v2 Realtime WS deferred). Source: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+
+### Verified
+- `py_compile` clean on all 12 changed backend files.
+- Runtime checks: revert flag neutralization; `google_use_vertex` logic; STT routing; STT registry now `[assemblyai, deepgram, elevenlabs, google, groq, openai]`.
+- Regression: `venv pytest test_companion_runtime + test_deepgram_stream + test_next_move_cache + test_live_ask_turn_packaging` → **56 passed, 1 failed**. The 1 failure is the SAME pre-existing `test_remote_audio_is_processed_while_ai_audio_is_playing` (old AI-playback behavior reversed by the 2026-05-25 fix; companion_runtime AI-playback gating untouched by this work).
+
+### Not yet verified live (next steps)
+1. Restart backend. Settings → paste an OpenAI/Anthropic/Google AI-Studio key → Test ✓ → set Reasoning/Vision/Fast/STT providers → Save → start session → confirm each runs on the chosen provider with NO restart.
+2. Google portability: paste an AI Studio key → confirm Live/advice/vision use AI Studio (works even though env `GOOGLE_GENAI_USE_VERTEXAI=True`).
+3. STT swap: set STT=ElevenLabs (paste key) → start session → transcripts flow via Scribe batch; set STT=Deepgram → streaming resumes.
+4. Revert test: set `PROVIDER_RUNTIME_OVERRIDE_ENABLED=false` in `.env`, restart → app behaves exactly as pre-multi-provider (all `.env`).
+
+### Notes / deferred
+- ElevenLabs + Deepgram both have realtime WebSocket STT; only Deepgram is wired for streaming. Others are batch (slightly higher latency). ElevenLabs Scribe v2 Realtime (~150ms) could be added like `deepgram_stream.py` later.
+- Google STT `chirp_3` still needs Vertex/Cloud creds (not portable) — for a key-only Google STT, use the existing Gemini-Flash transcription path as a future "Google (Gemini)" STT option.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (portability + ElevenLabs)
+
+## 2026-05-30 — Capture robustness: stop "window dropped" + auto monitor fallback
+
+[2026-05-30][Agent: Claude Code] Implemented the approved plan at `C:\Users\Yuvraj\.claude\plans\check-this-plan-and-replicated-puppy.md` (overwrote the prior multi-provider plan, which is already shipped + logged above). Fixes the repeating `[DisplayMedia] Selected source not found: window:329762:0` + window-dropped-from-selection during live sessions (user's meeting changed PID 10548→25192). Pure-JS Electron resilience + auto monitor fallback (no native WGC addon — deferred). Note: `main.js:42` already disables Chromium WGC capturers, so the "WGC" comments in overlay.js are stale; capture uses the older path.
+
+### Root cause
+`getDisplayMedia()` (renderer, no source specified) is served by `main.js` `setDisplayMediaRequestHandler` → `resolveDisplaySource()`, keyed on Electron's volatile `window:<HWND>:0` id. When the window's HWND changes / it swaps process-window / minimizes / moves virtual desktop, the id leaves `getSources()`, `resolveDisplaySource` returned null, and the handler **cleared the selection** (old `main.js:1218-1221`) → renderer retries restarted with the same dead id → permanent drop.
+
+### Changes (all `desktop/`)
+- **`src/main.js`**
+  - `companionState` += `captureFollowingScreen`, `captureMissCount`, `meetingDisplayId`.
+  - `resolveDisplaySource()` — added two rungs after the existing id→name→handle→title ladder: **fuzzy title match** (`normalizeTitleForMatch()` strips `(3)`, call timers, "- N new messages", leading counts) and **meeting-priority re-adopt** (when bound app is a known platform via `inferPlatform`, pick highest `targetPriority()` window of the same platform — covers the PID/window-swap case).
+  - New `pickScreenSource(sources)` — monitor fallback: prefers `meetingDisplayId` → primary display (`screen.getPrimaryDisplay().id`) → first/"Entire screen". (Windows `display_id` is often empty, so it degrades gracefully. `meetingDisplayId` is currently always null → primary display; the optional `get-window-rect` helper for exact-monitor was de-scoped.)
+  - New `setCaptureFollowingScreen(bool)` — pushes `companion:captureFollowingScreen` to the overlay webContents on change.
+  - `setDisplayMediaRequestHandler` callback rewritten: **never clears the selection**; on a miss it serves the monitor (`followingScreen=true`, increments `captureMissCount`) while **preserving the window identity** so the real window is re-adopted when it returns; only `once({})` (keep selection) if there's no screen either; resets miss-count + following flag on a clean window resolve.
+  - `endCompanionSession` resets the three new fields.
+- **`src/preload.js`** — added `onCaptureFollowingScreen(handler)` bridge (subscribes to `companion:captureFollowingScreen`).
+- **`src/renderer/overlay.js`** — subscribes to `bridge.onCaptureFollowingScreen` → sets `state.captureFollowingScreen` + `broadcastSnapshot()`; added `captureFollowingScreen` to the STATE_SNAPSHOT payload. (The renderer's existing onmute/ended/freeze retries now succeed because the main-side getDisplayMedia returns a screen stream instead of failing — no extra renderer retry logic needed.)
+- **`src/renderer/full.html`/`full.js`/`full.css`** — new `#capture-note` banner ("Following your screen — the meeting window couldn't be tracked…") with a **Re-pick window** button (`#btn-repick`): switches to Dashboard tab, `refreshTargets()`, scrolls `#card-picker` into view with a flash highlight. `renderCaptureNote()` shows it only while a session is active; reads `captureFollowingScreen` from STATE_SNAPSHOT.
+
+### Verified
+- `node --check` clean: `main.js`, `renderer/overlay.js`, `renderer/full.js`, `preload.js`.
+- Code-reasoned the plan's scenarios: move/resize (exact-id/handle still resolves), window swap (fuzzy + platform-priority re-adopt, else monitor), minimize/virtual-desktop (monitor fallback + note), regression (normal exact-id path unchanged; selection never wiped — the `selectedDesktopSourceId = null` clear is gone). Backend untouched; no native modules; no new deps.
+
+### Not yet verified live (next steps)
+1. `npm start` in `desktop/`; start a session on a meeting window; drag/resize/move between monitors → no "Selected source not found", capture keeps streaming.
+2. Trigger a window/PID swap (browser Meet opening a new window) → auto re-adopt or fall to monitor; full window shows the "Following screen" note + working Re-pick.
+3. Minimize the window / move to another virtual desktop → monitor fallback keeps the AI seeing the call.
+4. Multi-monitor caveat: fallback currently picks the **primary** display (not necessarily the one the window was on). If that matters, re-scope the de-scoped `audio-isolator.ps1 get-window-rect` command to set `meetingDisplayId`.
+
+### Deferred
+- Native WGC/Desktop Duplication N-API addon for true per-HWND window-following (Zoom-grade); `get-window-rect` helper for exact-monitor fallback.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (capture robustness)
+
+## 2026-05-30 — STT fix: Deepgram streaming endpointing 150ms → 1000ms
+
+[2026-05-30][Agent: Claude Code] User reported live STT (Deepgram nova-3 streaming) splitting a single spoken turn into many lines on tiny pauses and degraded accuracy ("was top-notch, now bad"). Root cause confirmed by reading code + Deepgram docs (not caused by the multi-provider work — streaming path was untouched):
+- `backend/app/services/deepgram_stream.py` builds the WS URL with only `endpointing` (no `utterance_end_ms`/`vad_events` — a prior comment notes those caused HTTP 400). `companion_runtime.py:101` passes `endpointing = settings.DEEPGRAM_STREAM_ENDPOINTING_MS`, and the assembler (`companion_runtime.py:812`) starts a NEW utterance on every `speech_final=true`.
+- The effective value was **150ms** (config default; user's `.env` does NOT override it), so any ~0.15s gap fired `speech_final` → fragmentation. Per [Deepgram end-of-speech docs](https://developers.deepgram.com/docs/understanding-end-of-speech-detection-while-streaming), ~1000ms is the sane floor.
+
+**Change (single line):** `backend/app/config.py` → `DEEPGRAM_STREAM_ENDPOINTING_MS: int = 150` → `= 1000` (with explanatory comment). Verified `settings.DEEPGRAM_STREAM_ENDPOINTING_MS == 1000` and `py_compile` clean. Requires a **backend restart** (config read at startup). Trade-off: per-turn final transcript now lands up to ~1s after speech stops; lower via `.env` if too laggy.
+
+Accuracy half of the complaint (wrong words) is the separate `language=multi` (auto_multi) issue — user will **pin language from the UI**; no code change requested for that. Deeper option deferred: add `utterance_end_ms=1000` + `vad_events=true` and flush on `speech_final` OR `UtteranceEnd` (fix the old 400 by ensuring `interim_results=true`, which is already sent).
+
+Also during this session diagnosed (no edits made): Settings keys not persisting because Save was never completed (`backend/data/runtime_providers.json` absent) + Refresh wipes unsaved input + Google live model list needs an AI Studio key (user is on Vertex); and Electron `desktopCapturer` window-id instability causing "Selected source not found: window:329762:0" (meeting PID changed 10548→25192 mid-session, stale id cleared by `main.js:1218`). Fixes proposed, not yet implemented.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-30 (endpointing fix)
+
+## 2026-05-29 — Multi-provider AI layer + in-app Settings page (no redeploy)
+
+[2026-05-29][Agent: Claude Code] Implemented the approved plan at `C:\Users\Yuvraj\.claude\plans\check-this-plan-and-replicated-puppy.md`. Goal: make AI provider-agnostic (paste any key, pick provider+model per task) with a new tabbed Settings page in the full window, all hot-applied with no backend restart. Live Voice stays Google-only this release (OpenAI Realtime deferred to Phase 2).
+
+### Architecture (new `backend/app/providers/` package)
+- `registry.py` — provider metadata (base URL, key field, list endpoint, openai_compatible flag, which slots each serves, supports_custom_model), capability-classification rules, and curated FALLBACK_MODELS (offline only). Task slots: live_voice, reasoning, fast_text, vision, stt. Providers: google, openai, anthropic, groq, deepseek, openrouter, deepgram, assemblyai. **OpenAI/Groq/DeepSeek/OpenRouter share ONE openai-compatible adapter.**
+- `runtime_config.py` — hot-apply overlay. Reads/writes `backend/data/runtime_providers.json` (path overridable via `RUNTIME_PROVIDERS_PATH`). Resolvers `provider_for/model_for/api_key_for` with order: runtime JSON → env (`settings`) → registry fallback. **Empty file == today's exact Google behavior (zero regression).** `is_google(slot)` gates the keep-on-Google paths. Keys are written but NEVER returned (`key_status` = present|missing only).
+- `model_catalog.py` — LIVE model discovery. Fetches each provider's own list API, classifies into slots, TTL cache (1h) keyed by provider+key-hash, `clear_cache()`/force refresh, falls back to curated list on failure (tagged source=live|fallback). Deepgram branch filters out aura* TTS voices.
+- `text_client.py` — `async generate(slot, user_text, system, images, json_mode, ...)` → plain text. Dispatches google(genai) / anthropic(AsyncAnthropic) / openai-compatible(AsyncOpenAI base_url). Imports are lazy so the backend boots even if SDKs are absent.
+- `app/api/providers.py` — REST router (registered in `main.py` after websocket router): `GET /api/providers/registry`, `POST /api/providers/refresh`, `GET/PUT /api/providers/config`, `POST /api/providers/test`. CORS in `main.py` extended with desktop origins (`null`, `file://`, `app://.`, `http://localhost:8000`) so the Electron renderer (file:// → Origin null) can fetch.
+
+### Service wiring (behavior-preserving — Google path untouched, only branches when slot ≠ google)
+- `gemini_client.py`: `analyze_vision_frames` (slot vision) and `generate_tactical_advice` (slot reasoning) — added a non-google branch returning a `.text` shim so the heavy existing tracing/JSON-parse downstream is unchanged. **`open_live_session` is byte-for-byte unchanged (Live = Google only).**
+- `listener_agent.py`: text extraction `do_extract()` — non-google branch via text_client with json_mode, returns `_TextResponse(.text)`. **Market/person/company GoogleSearch research stays Google-only (gated independently).**
+- `next_move_cache.py`: fast next-move generation — non-google branch via text_client (slot fast_text).
+- `translation.py`: non-google branch via text_client (slot fast_text).
+- `stt_service.py`: `__init__` now resolves provider+model via `_resolve_stt_selection()` (runtime_config → legacy TRANSCRIPTION_PROVIDER; maps public "google" → internal "google_stt"). Added `_recognize_openai_compatible_sync` (Whisper via OpenAI-compatible /audio/transcriptions for openai+groq) and `_recognize_assemblyai_sync` (upload→create→poll). **google_stt + deepgram branches unchanged.**
+
+### config.py (additive only)
+Added empty-default keys `OPENAI/ANTHROPIC/GROQ/DEEPSEEK/OPENROUTER/ASSEMBLYAI_API_KEY` and per-slot `*_PROVIDER`/`*_MODEL` defaulting to current Google values. Nothing removed/renamed.
+
+### Frontend (full window — tabbed)
+- `full.html`: added `.tabbar` (Dashboard | Settings); wrapped existing content in `#tab-dashboard`; added `#tab-settings` with cards: AI Providers & Models (`#provider-rows`), API Keys (`#key-rows`), save bar (`#btn-settings-save`/`#settings-status`), Advanced.
+- `full.css`: appended tab + settings styles matching the existing dark theme (gold accent, `.card`, pills). Real EOF of full.css is line ~1201 (not 1096 — Measure-Object undercounts due to line endings).
+- `full.js`: appended a self-contained `setupSettingsPage()` IIFE. Uses `const BACKEND_HTTP="http://localhost:8000"` and fetches REST directly (renderer fetch, no preload change). Builds provider/model dropdowns from the LIVE registry, per-provider key fields with show/hide + Test, Save (PUT), Refresh (POST). Tab switch toggles panel `hidden`. **Isolated from the BroadcastChannel dashboard logic.** No `preload.js`/`main.js` changes.
+
+### Verified
+- `python -m py_compile` clean on all changed backend files; `node --check full.js` OK.
+- Provider layer runtime check: default slots resolve to Google (stt→deepgram per current .env), is_google=True, key values never leak.
+- Deepgram live model list returns 41 real STT models (aura TTS filtered out).
+- Providers REST round-trip (isolated TestClient, temp `RUNTIME_PROVIDERS_PATH`): GET config defaults intact; PUT reasoning→anthropic/claude-haiku-4-5 + fake key applies; key value NOT leaked; invalid `stt=anthropic` rejected 400.
+- Installed `openai`+`anthropic` into **backend/venv** (they were missing there though present in system Python; httpx 0.28.1 already in venv so module-top import in model_catalog is safe). Added `openai>=1.40.0`, `anthropic>=0.39.0`, `httpx>=0.27.0` to `requirements.txt`. Documented new vars in `.env.example`.
+- Regression: `venv/Scripts/python.exe -m pytest tests/test_companion_runtime.py tests/test_live_ask_turn_packaging.py tests/test_next_move_cache.py tests/test_deepgram_stream.py -q` → **56 passed, 1 failed**. The 1 failure `test_remote_audio_is_processed_while_ai_audio_is_playing` is PRE-EXISTING and unrelated: companion_runtime.py has zero changes from this work (`git diff` empty), and that test asserts the OLD behavior intentionally reversed by the 2026-05-25 AI-playback-leak fix (remote PCM now dropped during playback; replaced by `test_deepgram_stream_does_not_receive_remote_pcm_while_ai_playback_active`).
+
+### Not yet verified live (next concrete steps)
+1. Start backend (`venv/Scripts/python.exe` running uvicorn) + Electron app; open full window → click **Settings** tab.
+2. Confirm dropdowns populate, Live Voice shows Google-only/locked, STT shows google+deepgram+openai+groq+assemblyai, vision excludes deepseek.
+3. Paste a real OpenAI/Anthropic key → **Test** shows ✓ → set Reasoning to that provider+model → **Save**. Start a session, Hold-to-Ask → Pro advice should still arrive (vision/advice apply immediately; provider/Live/STT apply next session). Switch back to Google → still works. Confirm NO backend restart needed.
+4. Hot-apply note in UI: "Provider, key, Live Voice & STT changes apply on your next session. Vision & advice apply immediately."
+
+### Risks / notes
+- text_client SDK imports are lazy; if a user selects a non-google provider but the SDK/key is missing, the call raises and the existing per-call try/except returns the original/empty result (graceful). 
+- OpenRouter rows expose a custom-model input (supports_custom_model) for slugs not in the curated/live list.
+- AssemblyAI has no public model-list endpoint → curated `best`/`nano` only.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-29 (multi-provider + settings page)
+
+## 2026-05-29 19:42 +05:30 - Desktop hosted backend reference plan saved
+
+[2026-05-29 19:42 +05:30][Agent: Codex] Saved a reference-only deployment/product plan at `docs/plans/2026-05-29-desktop-hosted-backend-reference-plan.md`.
+
+Context: the user is still changing product scope and explicitly asked to save the plan as a reference, not execute it. The saved file says implementation must begin by re-reading `AGENTS.md` and `HANDOFF.md`, then re-evaluating the full current codebase end to end, not only a fixed list of files. This is important because desktop/backend/frontend wiring, active privacy strategy, persistence behavior, packaging flow, and deployment assumptions may change before implementation.
+
+Plan direction captured: desktop-only Windows companion, hosted FastAPI backend, fixed production WSS URL in packaged desktop app, backend-owned invite OTP auth, shared backend provider keys, Oracle Cloud Free Tier preferred, configurable persistence with `PERSISTENCE_MODE=none|sqlite`, and no browser frontend as the primary shipped product.
+
+Verification: file creation only; no code changes, tests, builds, or runtime checks were run.
+
+Next action: before using the plan, re-check the full repo and update the plan to match the then-current code and product decisions.
+
+## 2026-05-29 (v3) — Hotkey hardened as primary; VB-Cable env-configurable; legality resolved
+
+[2026-05-29][Agent: Claude Code] Decision after legality review: VB-Cable can't be redistributed commercially, and every "no mute icon" path needs a SIGNED virtual-mic driver (EV cert ~$250-500/yr + MS attestation + kernel work; the free MIT Virtual-Audio-Driver can't even be fed in its free build). So **hotkey is the primary** (free, legal, no driver, lowest latency, listener-safe); VB-Cable stays available via env for users who own/accept it.
+
+### Changes
+- `main.js performHotkeyMute(combo, desired)` — **removed the fragile inline-PowerShell fallback** (it declared SendInput as `bool` and never actually pressed keys). Now relies solely on the proven C# `send-keys` helper (`NativeHelpers.SendKeyCombo`). `desired` makes mute state deterministic (true on isolate, false on restore) instead of blind toggling. All 5 call sites updated.
+- `main.js resolvePrivacyStrategy` — **auto now resolves to hotkey** (not redirect-cable; that was fragile — needs a cable AND meeting-app mic = "Same as System"). redirect-cable/policyconfig only via explicit `COMPANION_PRIVACY_MODE`. vbcable via `=vbcable`/`COMPANION_VBCABLE=on`. Helper pre-started in hotkey/auto so SendInput is ready on first hold.
+- `full.js renderListenBanner` — shows **"🔒 Counterparty muted — talking privately to AI"** while holding (confidence indicator; accurate in all modes).
+- `.env` left at the user's working `COMPANION_PRIVACY_MODE=vbcable` (don't disturb their working setup); comparison guide documents flipping to `hotkey`.
+
+### 16 kHz concern — RESOLVED
+The mic FORWARD (`setupMicForward` → native-rate `<audio>.setSinkId`) is independent of the 16 kHz path. 16 kHz applies only to `createPcmCapture` (overlay.js:1196) → backend STT (`LOCAL_MIC_PCM`/`ASK_AI_PCM`). Nothing touched goes near it. Future native low-latency forward (for vbcable voice quality) is therefore safe — deferred (user exploring).
+
+### Verified
+- All JS `node --check` clean. Helper `send-keys` compiles (returns 0 in headless test = no interactive desktop; fires in live app).
+
+### Next live test (hotkey)
+`COMPANION_PRIVACY_MODE=hotkey`, enable Zoom global mute shortcut (Settings → Keyboard Shortcuts → Enable Global Shortcut for Mute/Unmute), start session, hold orb → Zoom mutes (counterparty silent) + AI still transcribes; release → unmuted. Banner shows the lock indicator.
+
+Current owner: [Agent: Claude Code]
+Last updated: 2026-05-29 (v3)
+
+## 2026-05-30 — UI performance fix plan applied (7 fixes across 4 files)
+
+[2026-05-30][Agent: Kiro] Applied `check-actual-code-find-vectorized-barto.md` (UI Performance Fix Plan) precisely after a fresh code audit confirmed every anchor location in the plan matched the current source.
+
+**Pre-edit audit (all confirmed accurate against live code):**
+- overlay.js contrast timer was `setInterval(refreshContrast, 1500)`.
+- overlay.js `renderChat()` did `chatFeed.innerHTML = ""` + full rebuild; called on every TRANSCRIPT_PARTIAL inside the `isAskAI && p.text` block.
+- overlay.js `broadcastSnapshot()` fired at the end of the TRANSCRIPT_PARTIAL/UPDATE handler (1 of 30 call sites; only that one changed).
+- overlay.js frame timer created a new 1280×720 canvas every 800ms, did 5× `getImageData`, then sync `toDataURL` JPEG. Single `toDataURL` + single `createElement("canvas")` in the file → replacements unique.
+- main.js `getOverlayContrast` captured full display resolution thumbnail.
+- full.js STATE_SNAPSHOT handler called `renderAll()`; other `renderAll()` callers (renderAll def, boot `load`) untouched so first-connect still does full render.
+- app.js frame timer created a new canvas every 1000ms.
+
+**Changes landed:**
+- `desktop/src/renderer/overlay.js` — Fix 4a (gate contrast timer on session state), Fix 2 (`broadcastSnapshotThrottled()` 300ms, swapped the one TRANSCRIPT-handler call site), Fix 3 (`renderChat()` in-place partial-text fast path via `_chatLastCount`/`_chatLastTopPartial`; reuses `iters` for the reversed list), Fix 1 (added `FRAME_ENCODER_CODE` OffscreenCanvas worker after `PCM_WORKLET_CODE`; per-session worker setup + reused `captureCanvas`/`captureCtx` with `willReadFrequently`; freeze-detection sample points now use `targetW`/`targetH` against the reused ctx; `toDataURL` replaced with `createImageBitmap`→worker transfer + `_fwBusy` frame-skip; `frameWorker` stored in `state.meetingCapture` and `terminate()`d in `stopMeetingCapture()`).
+- `desktop/src/main.js` — Fix 4b (thumbnail capped at 400×300, sample coords scaled by scaleX/scaleY, idx uses `thumbW`).
+- `desktop/src/renderer/full.js` — Fix 6 (STATE_SNAPSHOT now calls only renderSessionStatus/renderMeetingStatus/renderDevices/renderListenBanner instead of full renderAll; entry lists kept current by targeted CONVERSATION_ENTRY/PRIVATE_ENTRY handlers).
+- `desktop/src/renderer/app.js` — Fix 5 (IIFE closure caches canvas/ctx per session in frameTimer).
+
+**Deviation from plan (minor, noted):** Fix 1 worker instantiation was placed just before the frame timer's `setInterval` (after stream acquisition) rather than the literal top of `startMeetingCapture`. Functionally still once-per-capture-session as the plan intends, but avoids leaking a Worker if `getDisplayMedia()` throws during setup. Canvas declared as `let captureCanvas/captureCtx` immediately before the timer per plan.
+
+**Verified:** `node --check` passes on all four files (overlay.js, full.js, app.js, main.js → all OK, exit 0).
+
+**Not yet verified live (needs Electron + session):** per-fix runtime checks from the plan (DevTools Performance for worker off-thread encode, `console.count` for snapshot/full-rebuild rates, bitmap size drop ~14MB→~480KB on hi-DPI, memory heap stability in app.js, full-window panel updates during speech). No backend / WS protocol / IPC contract / audio path changes were made.
+
+Current owner: [Agent: Kiro]
+Last updated: 2026-05-30
+
+---
+
 ## 2026-05-29 (later) — REMOVED device-disabling; it broke the AI listener. New: redirect-to-cable OR hotkey.
 
 [2026-05-29][Agent: Claude Code] Live test (session `45034473-b568-4a02-9ec6-1eb0c18f6bd1`) proved the `disable-spare` method is fundamentally broken:
@@ -1955,3 +2651,131 @@ Stop the desktop companion from treating Electron AI reply audio as counterparty
 ### Remaining live risk
 
 - If the selected source truly no longer exists and cannot be remapped by id/name/handle/title, capture will still fail, but now that failure is explicit rather than endlessly retrying the stale id.
+
+## 2026-05-31 — [Agent: Claude Code] Phase G implemented: true per-session BYOK (multi-tenant keys)
+
+### Objective
+Per the deploy plan (`docs/plans/2026-05-30-desktop-oracle-deploy-plan.md`, Phase G): keys/provider selections were resolved from ONE global `backend/data/runtime_providers.json` for the whole process, so with 2+ concurrent testers the last `Save` won and everyone used that key. Goal: each desktop sends its OWN keys per WS session; no cross-tester clobber; global JSON untouched; fully reversible.
+
+### Design chosen (least-invasive, verified)
+All 51 provider/key resolver call sites across services go through the module-level resolvers in `backend/app/providers/runtime_config.py`. So instead of threading session objects everywhere, I added a `contextvars.ContextVar` overlay INSIDE `runtime_config`. Resolution order is now **session overlay → global JSON → .env → registry**. When the overlay is None (default) behavior is byte-for-byte the pre-Phase-G global path. The overlay is read-only and never written to disk.
+
+### Files changed (all edits ADD; nothing rewritten)
+- `backend/app/config.py` — new flag `PER_SESSION_PROVIDER_OVERRIDE_ENABLED: bool = True` (master revert for Phase G; set False to ignore PROVIDER_CONFIG entirely).
+- `backend/app/providers/runtime_config.py` — added `import contextvars`; `_session_overrides` ContextVar; helpers `set_session_overrides()/reset_session_overrides()/current_session_overrides()/_per_session_enabled()/_sess_slot()/_sess_key()/_sess_setting()`. Threaded the overlay (session-first) into `provider_for`, `model_for`, `api_key_for` (incl. legacy `google_stt`→`google` key mapping), `has_runtime_key`, `google_backend`. `google_api_key/google_use_vertex/google_live_models/is_google` inherit automatically (they derive from the above).
+- `backend/app/models/negotiation.py` — added `provider_overrides: Optional[dict] = None` on `NegotiationSession` (shape `{"slots":{}, "keys":{}, "settings":{}}`; runtime-only, not persisted).
+- `backend/app/services/negotiation_engine.py` — added `"PROVIDER_CONFIG"` to `VALID_MESSAGES[IDLE]` and `[CONSENTED]`; routed it first in `route_message`; new `handle_provider_config()` (G2+G4): stores overlay on session, re-binds the ContextVar for THIS task, and RE-KEYS the Gemini Live preconnect if the effective Google key/backend changed (cancels pending preconnect / `__aexit__`s an already-open one + cancels its keepalive, then re-preconnects under the overlay). Sends `PROVIDER_CONFIG_ACK` (never echoes key values).
+- `backend/app/api/websocket.py` — `from app.providers import runtime_config`; bind `set_session_overrides(session.provider_overrides)` once before the initial `start_live_preconnect` (None → .env key), and again at the TOP of every receive-loop iteration so handlers + tasks they spawn (listener_agent, deepgram stream, Gemini Live) inherit the overlay. NOTE: this file had unrelated in-flight `readiness` edits by another agent — left intact.
+- `desktop/src/main.js` — `PROVIDER_CONFIG_FILE` under user-data dir + `readProviderConfig()/writeProviderConfig()` (0600 perms) + IPC `companion:getProviderConfig` / `companion:setProviderConfig`.
+- `desktop/src/preload.js` — exposed `companionBridge.getProviderConfig()` / `setProviderConfig(cfg)`.
+- `desktop/src/renderer/full.js` — Settings Save now also persists the collected `{slots,keys,settings}` locally via `setProviderConfig` (kept the existing REST PUT to `/api/providers/config` so the server-side model-catalog refresh still works; the session overlay takes precedence over that global JSON anyway). NOTE: full.js was auto-reformatted by a linter this session — the one functional add survived.
+- `desktop/src/renderer/overlay.js` and `desktop/src/renderer/app.js` — added `async sendProviderConfig()` (reads local config; sends `PROVIDER_CONFIG` with slots/keys/settings only if non-empty) and call `void sendProviderConfig()` inside the `CONNECTION_ESTABLISHED` handler (before START).
+
+### Verification done (offline, this session)
+- `python -m py_compile` on all 5 changed backend files → OK.
+- Import test: `app.api.websocket`, `negotiation_engine`, `NegotiationSession.provider_overrides` present, `PROVIDER_CONFIG` in IDLE+CONSENTED valid sets → OK.
+- **Per-task isolation**: two concurrent asyncio tasks set different google keys+backends (A=AIza-AAA/ai_studio, B=AIza-BBB/vertex) → each resolver returned its OWN task's value with NO clobber; after tasks ended the parent task fell back to baseline (.env/global). → OK.
+- `handle_provider_config` end-to-end with a FakeWS: overrides stored on session, ContextVar bound (`api_key_for('deepgram')`=='dg-AAA', reasoning provider=='anthropic'), ack `applied:True` with `providers_with_keys` and NO key values leaked. → OK.
+- Revert flag: with `PER_SESSION_PROVIDER_OVERRIDE_ENABLED=False`, `current_session_overrides()` returns None and the overlay is ignored. → OK.
+- `node --check` on `main.js, preload.js, app.js, overlay.js, full.js` → all OK.
+
+### NOT yet verified (needs the live rig)
+- Two real desktops with DIFFERENT keys connected concurrently to one backend → assert via session traces (`provider_config_applied` event + per-call key) that each session uses its own key and neither overwrites the other. This is the plan's Phase-G acceptance test.
+- Re-key of an ALREADY-OPEN preconnected Live session (the env-preconnect-completed-before-PROVIDER_CONFIG race) — only exercised by code paths offline, not against the live Gemini endpoint.
+- MUST run over `wss://` (Phase C/Caddy) before real keys travel the wire — keys are sent in the PROVIDER_CONFIG WS body, plaintext on `ws://`.
+
+### Privacy nuance to harden later (noted, not blocking)
+Settings still PUTs keys to the backend global JSON (needed for server-side model-catalog/test). On a shared multi-tenant box that writes each tester's key to disk + leaks `key_status: present`. Functionally harmless (session overlay wins), but for a true BYOK deploy consider moving catalog/test fetches to a per-request key or doing them client-side. Tracked for a future hardening pass.
+
+### Next concrete actions
+1. Commit Phase G (backend + desktop) — currently uncommitted.
+2. Live 2-desktop concurrency test once a host (Phase D) + `wss://` (Phase C) are up.
+3. Recommended remaining order still: D → (C folded into Caddy) → E → H.
+
+## 2026-05-31 — [Agent: Claude Code] Two live/overlay bug fixes (diagnosed from session 88e466d6)
+
+Diagnosed from trace `backend/data/logs/session_traces/88e466d6-4caa-4ef3-90d2-c7e4ec0408e5` (report.md/trace.jsonl) + backend.jsonl correlation `af7f309db64542d19f5fba766d18c158`. User report: AI voice answer "stopped half way" and the AI reply never appeared in the floating orb (it DID appear in the full window).
+
+### Fix 1 — AI answer truncated (`backend/app/ai_assets.py:26`)
+Evidence: exactly ONE clean `turn_complete`, `interrupted=True` count = 0, 29 output-transcript chunks summing to exactly 256 chars ending mid-word ("…reloading of"); artifact `ai_response_text.txt` = 256 bytes. So NOT a barge-in — the native-AUDIO Live model hit its output-token cap. `LIVE_GENERATION_MAX_OUTPUT_TOKENS` was `1024`; for native-audio output those are dense AUDIO tokens (~2 sentences). Raised to `8192` (applied at `gemini_client.py:1417`). Verified value loads. NOTE: still not env-tunable; if long answers clip again, bump further.
+
+### Fix 2 — AI reply missing from the floating orb (`desktop/src/renderer/overlay.js`)
+Root cause: the orb's `renderChat()` reads `state.privateEntries`, but `pushChat()` wrote to a DEAD `state.chatEntries` array (never read) AND was called BEFORE the entry was upserted into `privateEntries`, so the orb rendered against stale data and dropped the AI bubble. The full window was unaffected because it rebuilds from the snapshot broadcast. Changes:
+- TRANSCRIPT_UPDATE ask path: removed the premature `pushChat`; now upsert→broadcast→`renderChat()` in order.
+- AI_RESPONSE path: reordered to upsert BEFORE `renderChat()` (added explicit `renderChat()`), removed `pushChat`.
+- Deleted the dead `pushChat()` function, the `chatEntries: []` state field, and its two `state.chatEntries = []` clears.
+Verified: `grep` shows no dangling `chatEntries`/`pushChat(` refs; `node --check desktop/src/renderer/overlay.js` OK.
+
+### Not fixed (deferred, by user choice)
+STT garble of the meeting transcript ("Metaphornik") = Deepgram `nova-3` in `multi` (multilingual) mode. Separate path from the Gemini native-audio ask-question transcription (which was correct → that's why the answer was correct). Fix later by pinning English sessions to `en-US` or exposing it as a setting.
+
+### Uncommitted. Both fixes are independent of the Phase G provider/key work above.
+
+---
+
+## 2026-05-31T12:20:54+05:30 - [Agent: Codex] Plan review only: B2B Sales Playbook Ingestion & Creative Compliance Engine
+
+User asked to review `C:\Users\Yuvraj\.claude\plans\now-plan-1-2-4-snoopy-firefly.md` against the actual repo plus web research, not to implement it yet.
+
+### What was checked
+- Read `HANDOFF.md` first per repo relay rule.
+- Read the Snoopy/Firefly plan.
+- Checked current code paths in `backend/app/services/session_store.py`, `backend/app/models/negotiation.py`, `backend/app/api/websocket.py`, `backend/app/api/auth.py`, `backend/app/api/providers.py`, `backend/app/main.py`, `backend/app/ai_assets.py`, `backend/app/services/negotiation_engine.py`, `backend/app/services/gemini_client.py`, `backend/app/services/next_move_cache.py`, `desktop/src/main.js`, `desktop/src/preload.js`, `desktop/src/renderer/full.html`, `full.js`, `overlay.js`, and legacy `app.js`.
+- Checked current external docs for FastAPI multipart uploads, Gemini structured output/document processing, and OWASP LLM prompt-injection risk.
+
+### High-confidence review conclusions
+- The plan is directionally correct but stale against the current repo.
+- `backend/app/api/` no longer only has `websocket.py`; current tree has `auth.py` and `providers.py`. New playbook REST endpoints should mirror `providers.py` by adding `dependencies=[Depends(require_token)]`, not be left open.
+- Desktop backend URLs are no longer hardcoded localhost only. Playbook fetches from `full.js` should use `window.companionConfig.http` and attach `X-Companion-Token` when configured, like the existing Settings API helper.
+- The plan missed `backend/app/services/next_move_cache.py`; it calls `build_pre_query_brief()` for proactive next-move recommendations. If playbook rules are not passed there, the cached next move can contradict the playbook and then get injected into hold-to-ask.
+- The plan's dependency update must include `backend/requirements-desktop.txt` as well as `backend/requirements.txt`, because the recent deployment work uses the lean desktop-hosted backend requirements file.
+- BYOK/session scoping is the largest unresolved design issue. The plan's upload endpoint is REST, but the current per-session BYOK overlay is WebSocket `PROVIDER_CONFIG`. Unless the server global runtime config still holds a usable Gemini key, playbook synthesis over REST may fail or use the wrong/global user's key. Decide whether playbook synthesis uses server-owned key, global Settings key, or a per-request/local desktop key.
+- Prompt-only compliance enforcement is too weak for a "compliance engine." Add deterministic validation for hard caps/protected terms plus a human approval/draft state for extracted rules.
+- Uploaded documents are untrusted model input. OWASP LLM01 makes indirect prompt injection from files a known risk; the plan needs schema validation, provenance, human approval, and adversarial tests before extracted rules become trusted policy.
+
+### No implementation done
+No product/code changes were made for the playbook feature. This handoff entry is the only intentional file edit from this review pass.
+
+### Suggested next action
+Resolve the open product decisions first: single-company demo vs multi-tenant, server/global vs per-user key for synthesis, and whether enforcement is advisory-only or deterministic. Then update the plan before implementation.
+
+---
+
+## 2026-05-31T12:44:25+05:30 - [Agent: Codex] New implementation plan created for B2B Sales Playbook ingestion
+
+User clarified the implementation decisions and then requested a new plan file in the same Claude plans folder with a different name, rather than continuing to edit the original Snoopy/Firefly draft.
+
+### Plan artifact created
+- `C:\Users\Yuvraj\.claude\plans\b2b-sales-playbook-implementation-plan-codex.md`
+
+### User-locked decisions captured in the new plan
+- Multiple companies/users from day one.
+- Playbook synthesis must use the desktop user's BYOK key.
+- Raw uploaded content must be stored in SQLite.
+- Review/edit is allowed but not required before use.
+- Hard caps/protected terms should hard-block by default, but the AI may propose a clearly labeled high-confidence strategic exception with rationale when it has a better reason.
+- Use Gemini PDF/document understanding for PDF/document ingestion.
+- Outside-playbook creative suggestions are not automatically forbidden from violating hard caps, but must use the strategic exception path rather than normal compliance.
+
+### Repo-grounded implementation direction captured
+- Add lightweight `company_id`/`user_id` tenant identity on top of existing shared token auth.
+- Store playbook raw content, structured rules, validation data, review status, and active selection in the existing SQLite `SessionStore` layer.
+- Add authenticated FastAPI playbook endpoints using the existing `require_token` pattern and explicit tenant identity dependency.
+- Bind playbook synthesis to the desktop user's local provider/BYOK config, not server-global config.
+- Pass active playbook context into live negotiation prompt generation and proactive next-move caching so cached suggestions cannot bypass the rules.
+- Add deterministic compliance checks for hard caps/protected terms plus an explicit strategic-exception output path.
+- Extend desktop full-window UI with upload, active playbook selection, validation status, and optional review/edit controls using `window.companionConfig.http` and `X-Companion-Token`.
+
+### External research sources included in the plan
+- FastAPI multipart upload docs.
+- Gemini structured output docs.
+- Gemini document/PDF processing docs and limits.
+- OWASP LLM01 prompt-injection guidance for untrusted document inputs.
+
+### Verification
+- Verified the new plan file exists and begins with `# B2B Sales Playbook Ingestion & Creative Compliance Engine Implementation Plan`.
+- No playbook product code was implemented in this pass.
+- No tests were run because this was plan creation only.
+
+### Remaining caveat
+The original `C:\Users\Yuvraj\.claude\plans\now-plan-1-2-4-snoopy-firefly.md` was previously amended during the earlier planning exchange before the user corrected the direction. The implementation artifact to follow is the new `b2b-sales-playbook-implementation-plan-codex.md` file.

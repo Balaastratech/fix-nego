@@ -273,10 +273,29 @@ public static class NativeHelpers {
         public IntPtr dwExtraInfo;
     }
 
+    // MOUSEINPUT is the LARGEST member of the INPUT union — its size determines
+    // sizeof(INPUT). Without it, Marshal.SizeOf(INPUT) is too small (32 vs 40 on
+    // x64) and SendInput rejects cbSize and returns 0 (the reported bug).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT {
+        public int    dx;
+        public int    dy;
+        public uint   mouseData;
+        public uint   dwFlags;
+        public uint   time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct INPUTUNION {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT {
         public uint       type;       // INPUT_KEYBOARD = 1
-        public KEYBDINPUT ki;
+        public INPUTUNION u;          // union: sized to MOUSEINPUT → correct cbSize
     }
 
     public const uint  INPUT_KEYBOARD    = 1;
@@ -474,11 +493,11 @@ public static class NativeHelpers {
         var order = new List<ushort>(vks); order.Add(mainKey); // modifiers then main
         var inputs = new List<INPUT>();
         foreach (var vk in order) {
-            var d = new INPUT { type = INPUT_KEYBOARD, ki = new KEYBDINPUT { wVk = vk } };
+            var d = new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = vk } } };
             inputs.Add(d);
         }
         for (int i = order.Count - 1; i >= 0; i--) {
-            var u = new INPUT { type = INPUT_KEYBOARD, ki = new KEYBDINPUT { wVk = order[i], dwFlags = KEYEVENTF_KEYUP } };
+            var u = new INPUT { type = INPUT_KEYBOARD, u = new INPUTUNION { ki = new KEYBDINPUT { wVk = order[i], dwFlags = KEYEVENTF_KEYUP } } };
             inputs.Add(u);
         }
         var arr = inputs.ToArray();
