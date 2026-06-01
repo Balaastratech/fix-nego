@@ -304,8 +304,13 @@ ipcMain.handle("companion:logout", async () => {
   // Step 2: Wipe all locally stored tokens.
   clearAuthTokens();
 
-  // Step 3: Close overlay + full windows, show the login window.
-  // This is the full sign-out: no renderer reload tricks, actual window teardown.
+  // Step 3: Show the login window FIRST, THEN tear down the app windows.
+  // ORDER MATTERS: on Windows, destroying the last open window fires
+  // 'window-all-closed' → app.quit(). If we destroy overlay+full before the
+  // login window exists, there is a zero-window instant and the whole app quits
+  // (the "logout closes the app" bug). Creating the login window first guarantees
+  // a window always exists, so the app stays alive on the Clerk sign-in page.
+  createLoginWindow({ forceSignout: true });
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.destroy();
     overlayWindow = null;
@@ -314,7 +319,6 @@ ipcMain.handle("companion:logout", async () => {
     fullWindow.destroy();
     fullWindow = null;
   }
-  createLoginWindow({ forceSignout: true });
   return true;
 });
 
