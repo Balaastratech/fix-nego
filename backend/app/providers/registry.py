@@ -299,6 +299,33 @@ def classify_openrouter(model: dict) -> set[str]:
     return slots
 
 
+_GOOGLE_STT_AVAILABLE: bool | None = None
+
+
+def _google_cloud_stt_available() -> bool:
+    """True only if Google Cloud Speech-to-Text can actually run here.
+
+    Unlike the other STT providers (Deepgram/AssemblyAI/ElevenLabs/OpenAI/Groq),
+    which are reached over HTTP with a pasted BYOK key, the "google" STT path uses
+    the ``google.cloud.speech_v2`` SDK with GCP credentials (ADC) — it is NOT
+    key-only / BYOK-portable. On the lean hosted profile that SDK is intentionally
+    not installed, so offering "google" in the STT dropdown there would only lead
+    to an ImportError at session time. We gate on SDK presence (a lightweight
+    ``find_spec`` — no actual import, keeps this module SDK-free) so Google STT
+    shows on a full local/Vertex install and is hidden on the lean hosted box.
+    """
+    global _GOOGLE_STT_AVAILABLE
+    if _GOOGLE_STT_AVAILABLE is None:
+        try:
+            import importlib.util
+            _GOOGLE_STT_AVAILABLE = (
+                importlib.util.find_spec("google.cloud.speech_v2") is not None
+            )
+        except Exception:
+            _GOOGLE_STT_AVAILABLE = False
+    return _GOOGLE_STT_AVAILABLE
+
+
 def slot_providers(slot: str, *, include_phase2: bool = False) -> list[str]:
     """Providers that can serve a slot at all (ignores key presence)."""
     out = [pid for pid, meta in PROVIDERS.items() if slot in meta["slots"]]
@@ -306,6 +333,11 @@ def slot_providers(slot: str, *, include_phase2: bool = False) -> list[str]:
         out = ["google"]
         if include_phase2:
             out += [p for p in LIVE_VOICE_PHASE2 if p not in out]
+    elif slot == SLOT_STT and not _google_cloud_stt_available():
+        # Hide Google Cloud STT where its SDK isn't installed (lean hosted profile).
+        # The 5 BYOK/HTTP STT providers remain. Google still serves the other slots
+        # (live voice / reasoning / vision / fast text) via the AI-Studio key.
+        out = [p for p in out if p != "google"]
     return out
 
 

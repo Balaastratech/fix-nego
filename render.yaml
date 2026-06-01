@@ -33,9 +33,10 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.9"
 
-      # ── Auth: OFF for first boot. Flip True + set the token below in phase 2. ──
+      # ── Auth: ON. Clerk + JWT values are set as dashboard secrets (not in git).
+      # Per-user login required; the shared token below is the operator admin bypass. ──
       - key: AUTH_REQUIRED
-        value: "False"
+        value: "True"
       # Shared bearer token — leave UNSET here; set it in the dashboard (Secret)
       # when you lock the box down. sync:false keeps it out of git.
       - key: COMPANION_SHARED_TOKEN
