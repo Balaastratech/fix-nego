@@ -1122,6 +1122,20 @@ function createFullWindow() {
     fullWindow.show();
     fullWindow.minimize();
   });
+
+  // Closing the dashboard (the X button) = full shutdown: tear down the floating
+  // overlay and quit the whole app. MINIMIZE is a separate event ('minimize',
+  // handled via companion:minimizeFullWindow) and does NOT fire 'close', so
+  // minimizing the dashboard keeps the app + overlay running (tuck-away-to-orb).
+  // Logout uses fullWindow.destroy(), which does NOT emit 'close', so sign-out is
+  // unaffected by this handler.
+  fullWindow.on("close", () => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      try { overlayWindow.destroy(); } catch (_) {}
+      overlayWindow = null;
+    }
+    app.quit();
+  });
 }
 
 // ── Login window (shown when no valid auth tokens are stored) ─────────────────
