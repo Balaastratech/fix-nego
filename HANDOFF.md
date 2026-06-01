@@ -2,6 +2,175 @@
 
 ---
 
+## 2026-06-01T10:54:36+05:30 - [Agent: Codex] Repair after session 19359915 ask regression
+
+User reported session `19359915-5351-449f-9ea4-eb6331614707`: text injection was not happening, AI answered mostly from vision, and private ask transcript rows were still wrong/mixed.
+
+### What the log showed
+- Session trace: `backend/data/logs/session_traces/19359915-5351-449f-9ea4-eb6331614707/report.md`.
+- First ask had correct text by Deepgram/Gemini, but AI answered name from visible UI (`yoonjj`) instead of conversation name (`Johan`), confirming native Live was leaning on vision/audio rather than an exact injected question.
+- Second hold had ordering race:
+  - `overlay.hold_started` at +77228ms.
+  - `question_text_ready` from Deepgram `What is my name?` at +77699ms.
+  - `ask_deepgram_reset` only after that at +77709ms.
+  - Later Gemini partials for the same/new ask had `ask_entry_id: null` and progressively repaired the row to `When you see...`, causing wrong visible rows and audit updates.
+- Root cause: reset in `handle_user_addressing_ai()` can run too late because `ASK_AI_PCM` chunks may arrive before hold-state processing. Also `update_hold_state()` kept old `started_at` across active transitions, and Gemini input transcript payloads could lack stable ask IDs.
+
+### Changes landed
+- `backend/app/services/companion_runtime.py`
+  - `update_hold_state()` now resets `started_at` when transitioning inactive -> active.
+  - `_capture_private_ask_audio()` resets the Deepgram `ask_ai` stream on the first ask audio chunk, before pushing that chunk to Deepgram. This closes the race where STT finalizes before the hold handler reset.
+  - First chunk initializes `current_ask_capture` with stable `entry_id`.
+- `backend/app/services/negotiation_engine.py`
+  - Hold-state handler now preserves an already-started current capture only if it belongs to the current hold timestamp; otherwise it resets normally.
+  - Native mode now injects `[PRIVATE ASK TRANSCRIPT]` into Gemini Live with `turn_complete=False` once release transcription text is available. This keeps Gemini native audio as the answer source while giving Live exact text context so it does not answer from vision alone.
+  - Trace event added: `ask_ai.native_question_text_injected`.
+- `backend/app/services/gemini_client.py`
+  - Gemini private input transcription now uses stable `ask_entry_id()` instead of only `started_at_ms`, preventing `ask_entry_id: null` updates.
+- `backend/app/services/ask_transcript_state.py`
+  - Removed the broad rule allowing a different-start Gemini text to replace a Deepgram final. That rule caused `What is my name?` to be overwritten by `When you see...`.
+- `backend/tests/test_ask_transcript_state.py`
+  - Updated focused tests to assert different-question Gemini text does not replace a Deepgram final.
+
+### Verification
+- Passed: `python -m py_compile .\backend\app\services\ask_transcript_state.py .\backend\app\services\companion_runtime.py .\backend\app\services\gemini_client.py .\backend\app\services\negotiation_engine.py .\backend\app\config.py`
+- Passed: `.\backend\venv\Scripts\python.exe -m pytest backend\tests\test_ask_transcript_state.py -q` (3 passed).
+- No broad pytest run, per user request to stop unnecessary testing.
+
+### Next live check
+- Start a new live session and verify trace order:
+  1. first ask audio chunk -> `ask_deepgram_reset` with `reason=first_ask_chunk`
+  2. release -> `native_question_text_injected`
+  3. Gemini transcript updates all have stable `ask_entry_id`
+  4. AI answer references both exact private question and screen/conversation context.
+
+---
+
+## 2026-06-01T10:42:22+05:30 - [Agent: Codex] Native ask transcript repair without answer delay
+
+User reported session `6c8d8280-4c4e-42c1-8c24-f67f5c8d3022`: private YOU bubbles were mixed/truncated across asks, and AI audio must start immediately on orb release. User explicitly corrected that live vision must still be available while holding the orb; do not block live vision frames during hold-to-ask because screen context is required for accurate answers.
+
+### Root cause from log
+- Deepgram private ask stream for `ask_ai` leaked prior-turn tail text into a later hold. In the bad third ask, current Gemini input began `Okay, that sounds good...`, but Deepgram final began `It to me what you are seeing right now...`, then the higher Deepgram priority caused the wrong YOU text/audit row to win.
+- Some asks were finalized from early/truncated text before later Gemini/Deepgram text arrived.
+- The configured `ASK_AI_TRANSCRIPT_SETTLE_SECONDS=1.25` conflicted with the product requirement that Gemini native audio answer immediately on release.
+
+### Changes landed
+- Added `backend/app/services/ask_transcript_state.py` as per-ask transcript candidate state and source arbitration. It now suppresses short private partials, rejects Latin-script Deepgram finals that clearly start with a different current ask than Gemini/snapshot, and lets longer same-ask Gemini text repair a truncated Deepgram final.
+- `backend/app/services/companion_runtime.py` now logs Deepgram ask partial/final traces and rejects cross-ask Deepgram finals before they can overwrite the UI/audit row.
+- `backend/app/services/negotiation_engine.py` resets the Deepgram `ask_ai` stream and callback registration at each new hold start so accumulator/socket state does not carry into the next question.
+- `backend/app/config.py` now defaults `ASK_AI_TRANSCRIPT_SETTLE_SECONDS` to `0.0`; release handling no longer sleeps for transcript settling in native-audio mode. Late transcript improvements update the same row/audit asynchronously instead of delaying the answer.
+- A brief experiment to stop live vision sends during ask was removed after user clarification. Current code still allows live vision frames through during hold-to-ask.
+- Added focused unit coverage in `backend/tests/test_ask_transcript_state.py` for the exact cross-ask Deepgram-tail pattern and truncated-Deepgram repair.
+
+### Verification
+- Passed: `python -m py_compile .\backend\app\services\ask_transcript_state.py .\backend\app\services\companion_runtime.py .\backend\app\services\negotiation_engine.py .\backend\app\config.py`
+- Passed: `.\backend\venv\Scripts\python.exe -m pytest backend\tests\test_ask_transcript_state.py -q` (3 passed)
+- A broader `backend\tests\test_live_ask_turn_packaging.py -q` run was started but the user interrupted it and asked to stop unnecessary testing. Do not claim it passed.
+- Attempted to inspect lingering pytest processes with `Get-CimInstance Win32_Process ...`; sandbox returned `Access denied`.
+
+### Remaining risk / next
+- Need a live run to confirm Deepgram final private ask traces now show per-hold reset and no cross-ask contamination.
+- If response latency is still high after transcript fixes, investigate send-lock contention or Live-model behavior without removing live vision during hold.
+
+---
+
+## 2026-06-01T10:03:07+05:30 - [Agent: Codex] Tinker docs fit check for live copilot
+
+User asked whether Thinking Machines Tinker is a better alternative to Google/Gemini Live and how it could be used in this system.
+
+### Doc findings
+- Tinker docs describe a post-training platform, not a realtime voice/live interaction model. Main APIs are training/sampling primitives: `forward_backward()`, `optim_step()`, `sample()`, and weight save/load.
+- Tinker supports LoRA fine-tuning of open-weight text and vision-language models, including VLMs, and can export/download weights for another inference provider.
+- Tinker has an OpenAI-compatible inference endpoint, but the docs say it is beta, intended for testing/internal low-traffic use while training, with latency/throughput varying by model; production-grade inference is not the current target.
+- No docs found for realtime bidirectional audio, websocket live voice, native TTS, speech-to-text, or low-latency audio turn-taking. Therefore it cannot replace Gemini Live in the current hold-to-ask audio loop.
+
+### Repo mapping
+- Current provider registry in `backend/app/providers/registry.py` explicitly keeps Live Voice Google-only for this release. Other providers are routed into reasoning/fast_text/vision/STT slots, not live voice.
+- `backend/app/providers/text_client.py` already has an OpenAI-compatible chat-completions adapter. Tinker OpenAI-compatible inference could fit there as an additional text provider if we accept beta/internal limitations.
+- Best product use: offline/async training and evaluation loop for negotiation/advisor behavior. Use session traces and `copilot_conversation_audit.jsonl` to build SFT/preference/RL data, train LoRA with Tinker, then either sample via Tinker for internal evals or export/deploy weights through a production inference provider.
+- Practical near-term integration: add `tinker` as reasoning/fast_text/possibly vision provider only, not live_voice. Keep Gemini Live or another realtime API for native audio interaction, and keep Deepgram/Google STT for transcript display.
+
+### Suggested implementation order
+1. Add provider metadata/settings for `tinker` with key field `TINKER_API_KEY`, base URL `https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1`, slots `reasoning`, `fast_text`, and only `vision` if the selected checkpoint is VLM-capable.
+2. Extend `text_client._generate_openai_compatible` use via registry; custom model value should be a `tinker://.../sampler_weights/...` path.
+3. Add config fields and UI key/model entry; do not put Tinker under `live_voice`.
+4. Build a dataset exporter from session traces/audit logs, then run Tinker SFT/RL experiments offline.
+5. Evaluate tuned checkpoint against existing `backend/scripts/run_copilot_eval.py` style flows before trying it in live sessions.
+
+### Verification status
+- No product code changed in this pass.
+- No tests run; this was a docs/code-fit investigation.
+
+---
+
+## 2026-06-01T09:57:46+05:30 - [Agent: Codex] Live hold-to-ask transcript race investigation
+
+User reported live private-ask transcription showing random/partial text while AI answers were correct. Investigated session `14730dac-5c2b-41b5-b1ee-f6ab4a644fb8`.
+
+### What happened in the trace
+- Session trace report: `backend/data/logs/session_traces/14730dac-5c2b-41b5-b1ee-f6ab4a644fb8/report.md`.
+- First hold started at +38316ms and released at +45563ms. At release the backend finalized/displayed `describe me`, but Gemini native input transcription continued after release and reached `describe me what you are seeing on the screen and explain me properly what you are seeing.` by +47509ms. A later partial transcription upgrade emitted `Describe me what you are seeing on the screen and explain me properly` at +49570ms.
+- Second hold started at +84895ms and released at +90763ms. At release the backend finalized/displayed `explain`, but Gemini native input transcription continued after release and reached `explain me what you are saying right now.` by +92175ms.
+- `backend/data/logs/copilot_conversation_audit.jsonl` confirms the audit log stored the early release snapshots: first ask as `describe me`, second ask as `explain`, even though AI responses were correct and trace later had fuller question text.
+
+### Root cause
+- The AI answer path is Gemini native audio plus screen/context, so it can answer correctly even when the displayed transcript is wrong.
+- The displayed/audited `YOU` private-ask text is finalized too early on hold release in `backend/app/services/negotiation_engine.py`.
+- Release snapshots `session.current_ask_capture["gemini_input_text"]` immediately (`fallback_text = gemini_input_text or session.companion_partial_text.get("ask_ai", "").strip()`) and starts `_handle_question(...)`, which sends `TRANSCRIPT_UPDATE` and writes the audit row before late/final STT has settled.
+- `backend/app/services/gemini_client.py` correctly accumulates Gemini Live `input_transcription` deltas, but those deltas keep arriving after release. Publishing is mostly suppressed because Deepgram is intended to own the display transcript.
+- `backend/app/services/companion_runtime.py` has Deepgram ask streaming intended to own the accurate `YOU` bubble (`desktop_ask_deepgram`), but this session did not show enough trace/audit evidence that a Deepgram final beat the release-time Gemini partial. The Deepgram callback lacks trace logging, so this is hard to verify from logs.
+- Short partials such as `uh`/`ex` can appear because frontend displays `TRANSCRIPT_PARTIAL` for `context="ask_ai"` while holding, and final cleanup only removes partial entries when a final with compatible speaker/id lands.
+
+### Correct implementation direction
+- Keep Gemini native audio as the source for answering; do not send redundant text turn when `ASK_AI_NATIVE_AUDIO=True`.
+- Introduce a single per-ask transcript state keyed by the ask entry id. Track candidate text, source, confidence, final/partial status, and audit update status.
+- On hold release, do not immediately finalize/audit a short Gemini snapshot. Mark the private entry as processing and wait a small settle window, around 1.0-1.5s, for Deepgram final or stable accumulated Gemini text.
+- Source priority for display/audit should be: Deepgram final > high-quality batch/snapshot final > stable Gemini native accumulated transcript > partial/interim. The answer path remains Gemini native audio.
+- If better text arrives late, update the same UI row and also update/repair the audit/session trace reference instead of leaving the original short row as the stored question.
+- Add trace logging in `_push_ask_to_deepgram_stream` for partial/final ask transcripts, otherwise future debugging cannot prove whether Deepgram owned the ask bubble.
+- Suppress very short private partial display (`uh`, `ex`, `de`) or render them only as a temporary listening placeholder until at least a few words or a final result arrives.
+
+### Verification status
+- No product code changed in this pass.
+- No tests run; this was a log/code-path investigation.
+- Preserve unrelated dirty work: `backend/app/services/gemini_client.py` already has uncommitted language compatibility changes from the prior pass, and `xr-application/` is untracked.
+
+---
+
+## 2026-06-01T09:41:35+05:30 - [Agent: Codex] Gemini Live language pinning docs check
+
+User asked to verify against current docs why AI Studio/Gemini API Live native audio cannot be pinned with a language config, and how to implement language pinning properly.
+
+### Current doc findings
+- Official Gemini Live capabilities docs checked on 2026-06-01: native-audio output models support multilingual behavior and can switch languages naturally, but explicitly setting a language code is not supported for native-audio models. The same docs say language restriction for native audio should be done through system instructions.
+- Official Gemini API Live WebSocket reference checked: `AudioTranscriptionConfig` has no fields in the Gemini API reference, so `input_audio_transcription` / `output_audio_transcription` only enable transcripts; they do not provide a supported AI Studio language pin.
+- Vertex AI docs checked: non-native Live models can use `speech_config.language_code`; native audio still relies on auto language behavior plus system instructions. Vertex-side SDKs may expose richer transcription config, but that is not portable to AI Studio.
+- Google AI Developers Forum corroborates the same behavior: native audio rejects explicit language-code configuration for some model/language combinations and Google guidance is to put the language requirement into the prompt/system instruction.
+
+### Repo reality found
+- `backend/app/services/gemini_client.py` already has an uncommitted change that tries `AudioTranscriptionConfig(language_codes=[...])` only when `runtime_config.google_use_vertex()` is true, and uses empty `AudioTranscriptionConfig()` on AI Studio. That is the correct compatibility split; trying to send `language_codes` to AI Studio is expected to fail.
+- `speech_config.language_code` is already omitted when `"native-audio" in model`, and only set for non-native Live models. That matches the official docs.
+- `backend/app/ai_assets.py::build_live_system_instruction()` is the correct AI Studio-native control surface for pinning the response language. It currently emits a language rule when `response_language` is set.
+- `backend/app/services/negotiation_engine.py::handle_set_language_profile()` already mirrors pinned transcript language into `session.response_language` and injects a refreshed system instruction into an open Live session.
+- `desktop/src/renderer/full.html` already exposes pinned languages, including Gujarati and Tamil, plus separate AI reply language.
+
+### Implementation direction
+- Do not try to force AI Studio native-audio language through `speech_config.language_code` or `AudioTranscriptionConfig.language_codes`; both are wrong for Gemini API native audio.
+- Proper AI Studio behavior is:
+  1. For native-audio model IDs, omit `speech_config.language_code`.
+  2. Keep `input_audio_transcription={}` and `output_audio_transcription={}` only as transcript toggles.
+  3. Pin the spoken reply via strong system instruction, generated from the user's pinned language / AI reply selection.
+  4. For transcript accuracy, rely on Deepgram/Google STT pinned-language path for meeting transcripts; Gemini native-audio transcript text can remain auto-detected on AI Studio.
+  5. If strict API-level transcript language pinning is mandatory, use Vertex/non-native model paths or external STT; AI Studio native audio does not expose that control.
+
+### Verification status
+- No product code was changed in this pass.
+- No tests were run because this was a docs/code investigation.
+- Important existing modified file before this pass: `backend/app/services/gemini_client.py` is dirty with a language pinning compatibility change; preserve it unless deliberately replacing that approach.
+
+---
+
 ## 2026-05-31 — Full auth system implemented (Clerk + JWT, end to end)
 
 [2026-05-31][Agent: Claude Code] Implemented the complete authentication plan from `C:\Users\Yuvraj\.claude\plans\can-we-implement-actual-golden-naur.md`. Auth is default-OFF (`AUTH_REQUIRED=False`) so localhost dev is completely unchanged. All the code is committed-ready; nothing is live yet until you: (1) create a Clerk app, (2) fill `.env` with the Clerk keys + `JWT_SECRET_KEY`, (3) flip `AUTH_REQUIRED=True`.
@@ -2779,3 +2948,100 @@ User clarified the implementation decisions and then requested a new plan file i
 
 ### Remaining caveat
 The original `C:\Users\Yuvraj\.claude\plans\now-plan-1-2-4-snoopy-firefly.md` was previously amended during the earlier planning exchange before the user corrected the direction. The implementation artifact to follow is the new `b2b-sales-playbook-implementation-plan-codex.md` file.
+
+---
+
+## [Agent: Claude Code] 2026-06-01 — Live-ask ignored live transcript: root cause + fix
+
+**Objective:** User reported that in a live companion session the AI "responds only to my question + visible context, ignores the live transcribed conversation; nothing like transcribe/query-builder/research triggers."
+
+**Investigation (evidence-based, session 613ae8dd-5cdb-45d3-9953-8c820d8fee87):**
+Read `backend/data/logs/session_traces/613ae8dd-.../trace.jsonl`. The premise "nothing triggered" is FALSE — all subsystems fired:
+- 4x `stream_transcript_final` (Deepgram nova-3 multi) — live transcription worked. NOTE: all 4 were `desktop_local_mic` (user); ZERO counterparty `remote_app` audio captured the whole session (possible separate remote-capture-binding issue, NOT investigated/fixed here).
+- 4x `text_extraction_triggered`+`completed`, `pro_advice`, `next_move_cache_ready/pro_upgrade` — extraction + research fired.
+- `pre_query_brief_sent` shows `has_context:true`, `transcript_chars:275` — transcript WAS injected into the ask.
+
+Real root cause = prompt FRAMING, not missing wiring. Three asks proved it:
+- "Just repeat what I just said." → "Say: 'Just repeat what I just said.'" (treated as coaching line)
+- "What transcribing do you have right now?" → generic capabilities pitch (ignored held transcript)
+- "What is my name?" → "...your name is Yovraj" pulled from VISIBLE email draft, not conversation.
+The brief demoted transcript to "Use this as private background context only…Answer only the user's next question", and the system instruction said "Do not recite the intel back" — together they made the model answer from vision/persona instead of the live conversation.
+
+**User's desired behavior (clarified twice):** Answer the user's ACTUAL question, grounded in ALL context (transcript + vision + research). Context must inform the answer — it must NOT be treated as the question or as a standalone instruction.
+
+**Files edited:**
+- `backend/app/ai_assets.py` `build_pre_query_brief` (~L829): replaced "private background context only / answer only the user's next question" with framing that context "is CONTEXT to ground your answer. It is NOT the question and NOT an instruction… Always answer the user's actual spoken question; use this context only to inform that answer… Never respond to this brief on its own."
+- `backend/app/ai_assets.py` system instruction QUESTION ANSWERING (~L238): "Do not recite the intel back" → answer the question using ALL context; reciting is correct ONLY when the user explicitly asks what was said/repeat/what's on screen; otherwise synthesize, don't recite.
+- `backend/app/services/negotiation_engine.py` (~L2164 legacy text path): "Use the intel briefing above as background only." → "Use the live transcript, on-screen context, market research, and recommendations above as authoritative context — synthesize across all of it to answer." (legacy path; native-audio path uses the brief.)
+- `backend/tests/test_live_ask_turn_packaging.py`: updated 2 exact-string assertions for the new legacy `question_msg`; added `test_pre_query_brief_treats_transcript_as_authoritative_not_background_only`.
+
+**Verification status:** Edits applied. Test re-run was started then SKIPPED at user's request ("skip unnecessary testing"). Tests NOT yet confirmed green this session.
+**Next action for incoming agent:** if desired, run `backend/venv/Scripts/python.exe -m pytest tests/test_live_ask_turn_packaging.py tests/test_next_move_cache.py -q` to confirm. Consider separately investigating why remote_app (counterparty) audio produced zero transcripts in this session.
+
+---
+
+## [Agent: Claude Code] 2026-06-01 — Ask transcription garbling: REAL root cause + single-STT-source fix (session 5bd570fd)
+
+**Context:** User reported (a) held-question transcription is inaccurate/truncated (YOU bubble froze on "Tell me what I just spoke when the"), and (b) AI still answers from vision/screen, ignoring the spoken transcript — even when the user said "not the vision". User confirmed backend WAS restarted after the prior prompt fix, so prompt change was live yet vision still won. User wants: ONE STT source for the ask, and the model to "consider all context AND the actual question, answer correctly" (NO source suppression for the answer logic).
+
+**Evidence (trace 5bd570fd-1847-45e5-a9cb-6771c8068269/trace.jsonl):**
+- Live conversation transcript WAS injected: pre_query_brief_sent transcript_chars=149,149,192; has_context=True; vision_present=False (so screen came via Gemini's NATIVE vision frames, not the brief).
+- question_text_ready sequence proves a DUAL-WRITER RACE on the YOU bubble: Gemini native injection ("Tell me what I just spoke" / "Not the vision. What do you see in") publishes first, then Deepgram rebuilds from scratch ("Te"→"Tell"→…→"Tell me what I just spoke and the transcribe.") and overwrites the same entry_id. The two disagree ("when the" vs "and the transcribe") → garbled/truncated display.
+
+**REAL ROOT CAUSE (Problem 1):** Config is ASK_AI_NATIVE_AUDIO=True + ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION=true + TRANSCRIPTION_PROVIDER=deepgram, i.e. Deepgram is meant to be the sole YOU-bubble owner. But gemini_client.py had an escape hatch `publish_missing_native_ask` (and `publish_upgrade_native_ask`) that lets Gemini's native input_transcription publish whenever Deepgram hasn't set frontend_question_final_sent yet. At hold-release Gemini's live deltas ALWAYS beat Deepgram's ~1s-endpointed final, so the hatch fires every time → Gemini publishes, Deepgram overwrites → race/garble. This also corrupts the question the model effectively answers (Problem 2 partly downstream of this).
+
+**Fix applied:** `backend/app/services/gemini_client.py` (~L1835-1875): computed `_deepgram_owns_ask = _deepgram_streaming_enabled()` (local import from companion_runtime, no cycle) and added `and not _deepgram_owns_ask` to BOTH `publish_missing_native_ask` and `publish_upgrade_native_ask`. Result: when Deepgram ask-streaming is the live STT it is the SOLE display source; Gemini native transcript stays server-side (still used for model audio understanding). Fallback publish only when Deepgram is NOT the owner (e.g. google_stt) so the bubble is never empty.
+- Unit-test impact: NONE — in tests TRANSCRIPTION_PROVIDER defaults to google_stt with no Deepgram key, so `_deepgram_owns_ask`=False and the existing native-audio publish tests behave unchanged. (Not re-run; user asked to skip unnecessary testing.)
+
+**Problem 2 (vision dominance) — NOT yet separately fixed.** With native audio ON the model answers from heard audio + native vision frames + brief. The garbled question (now fixed) was feeding it a corrupted ask, which contributed to wrong/vision answers. RECOMMENDED NEXT STEP: user re-tests with restarted backend now that BOTH the prompt fix and the single-source fix are in. If the model STILL ignores the spoken transcript / "not the vision" with a CLEAN question, the remaining issue is Gemini Live's native-vision prior — which needs a non-suppressive grounding lever (per user: do NOT hard-suppress vision; make it answer the actual question using all context). Decide approach AFTER the clean re-test.
+
+**Files edited this batch:** backend/app/services/gemini_client.py.
+
+---
+
+## [Agent: Claude Code] 2026-06-01 — REVERSAL: native model = sole ask transcriber; dropped Deepgram+snapshot from ask (session 610caa8d)
+
+**User decisions this turn (explicit):**
+- AI VOICE is FINE — user had accidentally switched the speaker output. NOT a code issue; my diff never touched audio modality (LIVE_RESPONSE_MODALITIES=["AUDIO"] at ai_assets.py:23, untouched). Voice investigation dropped.
+- Ask transcription: use the NATIVE Gemini live model as the SOLE ask transcriber; DROP Deepgram from the ask. This REVERSES my prior "Deepgram owns the bubble" change.
+
+**Evidence (trace 610caa8d-0ef0-423b-8029-2b3217fe8c97):**
+- Native produced the accurate ask ("What is my name?", src=gemini_live_input); ZERO deepgram ask partials.
+- Stale carryover confirmed: 2nd hold at 12:44:15.555 emitted question_text_ready src=deepgram_ask "What is my name?" (the PREVIOUS question) at 12:44:15.944 — BEFORE the user spoke and BEFORE ask_deepgram_reset (12:44:15.953/.994). => carryover is a Deepgram-ask-stream reset-race artifact.
+- Vision dominance STILL present: FULL TRANSCRIPT had "My name is Yuraj, y u v r a j" yet AI answered name "yoonij" from the screen username. (User narrowed scope to "just fix transcribing" this turn, so vision dominance was NOT addressed — still open.)
+
+**Changes applied (all reversible via ASK_AI_NATIVE_ONLY_TRANSCRIPTION):**
+- `backend/app/config.py`: added `ASK_AI_NATIVE_ONLY_TRANSCRIPTION: bool = True`; flipped `ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION` default True→False (native must publish/own the bubble).
+- `backend/.env`: added `ASK_AI_NATIVE_ONLY_TRANSCRIPTION=true`; set `ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION=false`.
+- `backend/app/services/companion_runtime.py`: (1) gated the Deepgram ask push (`_push_ask_to_deepgram_stream`) behind `not settings.ASK_AI_NATIVE_ONLY_TRANSCRIPTION`; (2) gated the Google-STT snapshot ask transcriber (`_emit_partial_question_transcript` spawn) behind the same flag. Deepgram STILL powers the public FULL TRANSCRIPT conversation panel (non-ask branch untouched).
+- `backend/app/services/gemini_client.py`: REVERTED the `_deepgram_owns_ask` gate added last turn (now dead/contrary). With SUPPRESS=False, `suppress_for_native_ask`=False so native publishes via the normal path.
+
+**Verification:** AST parse OK for all 3 edited py files; settings load confirmed NATIVE_ONLY=True, SUPPRESS_NATIVE=False, NATIVE_AUDIO=True, provider=deepgram. No dangling `_deepgram_owns_ask` refs in source (only stale .pyc). Live re-test by user still pending (requires backend restart).
+
+**Net effect expected:** native model is the only ask transcriber → no multi-writer race (no garble/truncation), and no Deepgram-driven stale-question carryover on orb re-click. Non-English ask accuracy now depends on native input_transcription (weaker than Deepgram for non-Latin scripts — accepted tradeoff per user's explicit choice).
+
+**STILL OPEN:** vision dominance — AI answers from the screen instead of the spoken transcript (name). Prompt edits from earlier did not beat Gemini Live's native vision prior. Revisit after user confirms transcription is fixed; user wants NO hard vision suppression — model must weigh all context and answer the actual question.
+
+**Next action for incoming agent:** user restarts backend and re-tests asks (accuracy + no carryover). Then tackle vision dominance with a non-suppressive grounding approach.
+
+---
+
+## [Agent: Claude Code] 2026-06-01 — Vision precedence rule + ask-truncation settle (session 304ff114)
+
+**Evidence (trace 304ff114-8288-40e8-917d-7cb838402546):**
+- VISION still wins: FULL TRANSCRIPT "Hi. My name is Uraj..."; briefs had transcript_chars=88, vision_present=False (screen seen via NATIVE frames, not the [VISION_INTEL] text block). Both asks "Tell me what is my name?" answered "yoonhj" from the on-screen username. Earlier generic prompt edit ("use all context") did NOT beat Gemini's native-vision prior for an identity question.
+- TRUNCATION mechanism: ask1 released 12:55:16.838, full "Tell me what is my name?" landed 12:55:18.091 (+1.25s) — late native input_transcription deltas DO arrive post-release and the bubble upgrades. ask2 released 12:55:40.963, only "Tell me what is my" ever emitted (missing "name?"). Root cause: activity_end is sent IMMEDIATELY on release (negotiation_engine ~L1907), telling Gemini to stop input + answer; when its input_transcription lags, the tail is never emitted under native-only (no backup transcriber). The model still UNDERSTOOD the full audio (answered about "my name") — truncation is display-only.
+
+**Fixes applied:**
+- `backend/app/ai_assets.py` ADVISOR_SYSTEM_PROMPT (after QUESTION ANSWERING): added "SOURCE PRECEDENCE — WHAT THE USER SAYS OVERRIDES WHAT IS ON SCREEN" block. Explicitly: on-screen usernames/profile/handles are NOT the user's identity; a personal fact the user STATES out loud is authoritative and overrides the screen; concrete example ("my name is Uraj" vs screen "yoonhj" → answer Uraj). Non-suppressive (vision still usable when the user never stated the fact). Verified present in build_live_system_instruction output.
+- `backend/app/config.py`: added `ASK_AI_ACTIVITY_END_DELAY_SECONDS: float = 0.4` — settle window between orb-release and activity_end so the tail audio lands and Gemini finishes the full question before pivoting to the answer.
+- `backend/app/services/negotiation_engine.py` (~L1907 release handler): `await asyncio.sleep(ASK_AI_ACTIVITY_END_DELAY_SECONDS)` (outside the gemini_send_lock) before sending activity_end.
+
+**Verification:** AST OK for all 3 files; settings load (ACTIVITY_END_DELAY=0.4, NATIVE_ONLY=True); precedence rule confirmed in the live system instruction string.
+
+**IMPORTANT caveats for next agent / user:**
+1. System instruction is applied at SESSION START — user must start a NEW session (not just restart backend mid-session) for the vision precedence rule to take effect.
+2. Truncation fix is BEST-EFFORT: it gives Gemini more time, but native-only display is still at the mercy of Gemini input_transcription completeness. If half-questions persist, the robust fix is a backup DISPLAY transcriber — which conflicts with the user's native-only choice. Re-discuss that tradeoff if 0.4s isn't enough (can raise ASK_AI_ACTIVITY_END_DELAY_SECONDS).
+3. If the vision precedence rule STILL loses to native frames, next lever (non-suppressive) is reducing vision-frame cadence during the ask window or injecting an explicit "USER-STATED FACTS" block above the screen — discuss before implementing.
+
+**Files edited this batch:** backend/app/ai_assets.py, backend/app/config.py, backend/app/services/negotiation_engine.py.

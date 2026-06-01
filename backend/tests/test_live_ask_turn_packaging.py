@@ -40,6 +40,31 @@ def test_pre_query_brief_and_mode_instruction_avoid_control_markers():
     assert "wait for it" not in command_mode.lower()
 
 
+def test_pre_query_brief_treats_transcript_as_authoritative_not_background_only():
+    """Regression for session 613ae8dd: the live transcript was injected but framed
+    as 'private background context only', so the AI answered ask questions from the
+    visible screen / generic capabilities instead of the live conversation. The brief
+    must now instruct full-context synthesis and allow answering meta questions
+    (what was said, repeat that) directly from the transcript."""
+    brief = build_pre_query_brief(
+        context={"item": "iPhone 15 Pro Max", "negotiation_type": "sale"},
+        market_info="$750-$820",
+        transcript_text="User: Hi. Can you hear me properly?",
+        vision_observation=None,
+    )
+    lowered = brief.lower()
+    # Old demotions that caused the model to ignore the live conversation are gone.
+    assert "background context only" not in lowered
+    assert "answer only the user's next question." not in lowered
+    # Context now grounds the answer, but the user's actual question stays primary
+    # and context must never be mistaken for the question/instruction.
+    assert "context to ground your answer" in lowered
+    assert "not the question and not an instruction" in lowered
+    assert "always answer the user's actual spoken question" in lowered
+    # The live transcript must still be present in the brief.
+    assert "Hi. Can you hear me properly?" in brief
+
+
 def test_live_system_prompt_preserves_advisor_prompt_without_spoken_mode_labels():
     system_instruction = build_live_system_instruction("Desktop companion virtual meeting session")
 
@@ -72,6 +97,29 @@ async def test_press_opens_ask_window(monkeypatch):
             session, {"active": True}, websocket
         )
     assert session.ask_window_active is True
+
+
+@pytest.mark.asyncio
+async def test_press_resets_private_deepgram_ask_stream(monkeypatch):
+    from app.config import settings as _settings
+    monkeypatch.setattr(_settings, "ASK_AI_NATIVE_AUDIO", False)
+
+    session = NegotiationSession(session_id="test-session", state=NegotiationState.ACTIVE)
+    session.live_session = Mock()
+    session.live_session.send_client_content = AsyncMock()
+    session._dg_cb_ask_ai = True
+    fake_dg = Mock()
+    fake_dg.reset_source = AsyncMock()
+
+    websocket = AsyncMock()
+    with patch("app.services.deepgram_stream.DeepgramStreamSession.get", return_value=fake_dg):
+        with patch("app.services.negotiation_engine.session_store.persist_session"):
+            await NegotiationEngine.handle_user_addressing_ai(
+                session, {"active": True}, websocket
+            )
+
+    fake_dg.reset_source.assert_awaited_once_with("ask_ai")
+    assert session._dg_cb_ask_ai is False
 
 
 @pytest.mark.asyncio
@@ -422,6 +470,7 @@ async def test_native_audio_late_empty_batch_does_not_send_retry_after_ai_answer
 async def test_native_audio_release_prefers_gemini_input_transcript_over_batch(monkeypatch):
     from app.config import settings as _settings
     monkeypatch.setattr(_settings, "ASK_AI_NATIVE_AUDIO", True)
+    monkeypatch.setattr(_settings, "ASK_AI_TRANSCRIPT_SETTLE_SECONDS", 0.01)
 
     session = NegotiationSession(session_id="native-gemini-transcript", state=NegotiationState.ACTIVE)
     session.user_addressing_ai = True
@@ -522,7 +571,9 @@ async def test_release_sends_explicit_user_turn_with_question_hint(monkeypatch):
         "[USER'S EXACT QUESTION]: What should I do?\n"
         "Answer this specific question directly. "
         "Do not give a generic strategy overview. "
-        "Use the intel briefing above as background only."
+        "Use the live transcript, on-screen context, market research, "
+        "and recommendations above as authoritative context — synthesize "
+        "across all of it to answer."
     )
     assert send_call.kwargs["turns"].parts[0].text == expected_msg
 
@@ -598,7 +649,9 @@ async def test_release_uses_audio_transcription_when_hint_missing(monkeypatch):
         "[USER'S EXACT QUESTION]: Should I sell my iPhone 15 Pro Max for $800?\n"
         "Answer this specific question directly. "
         "Do not give a generic strategy overview. "
-        "Use the intel briefing above as background only."
+        "Use the live transcript, on-screen context, market research, "
+        "and recommendations above as authoritative context — synthesize "
+        "across all of it to answer."
     )
     assert send_call.kwargs["turns"].parts[0].text == expected_msg
 

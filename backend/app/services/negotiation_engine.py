@@ -30,6 +30,12 @@ from app.services.gemini_client import (
     handle_gemini_text,
 )
 from app.services.audio_buffer import AudioBuffer
+from app.services.ask_transcript_state import (
+    ask_entry_id,
+    best_candidate,
+    compact_ask_text,
+    record_candidate,
+)
 from app.services.listener_agent import ListenerAgent
 from app.services.stt_service import SpeechTranscriptionService
 from app.services.utterance_types import FinalizedUtterance
@@ -1653,10 +1659,49 @@ class NegotiationEngine:
             # frontend's upsertEntry() OVERWRITES the previous YOU bubble in place
             # instead of appending a new one — observed in user's screenshot where
             # only the latest YOU question survived among 5+ AI responses.
-            session.question_capture_id = None
-            session.question_capture_started_at = None
-            session.question_capture_chunk_count = 0
-            session.question_capture_last_chunk_at = None
+            hold_started_at = float((getattr(session, "hold_state", {}) or {}).get("started_at") or time.time())
+            capture_started_at = float(getattr(session, "question_capture_started_at", 0.0) or 0.0)
+            ask_audio_already_started = bool(
+                capture_started_at >= hold_started_at - 0.5
+                and getattr(session, "question_capture_chunk_count", 0)
+            )
+            if not ask_audio_already_started:
+                session.question_capture_id = None
+                session.question_capture_started_at = None
+                session.question_capture_chunk_count = 0
+                session.question_capture_last_chunk_at = None
+                session.current_ask_capture = {}
+                try:
+                    from app.services.deepgram_stream import DeepgramStreamSession
+                    dg = DeepgramStreamSession.get(session.session_id)
+                    if dg:
+                        await dg.reset_source("ask_ai")
+                    setattr(session, "_dg_cb_ask_ai", False)
+                    try:
+                        from app.utils.session_trace import get_session_trace
+                        trace = get_session_trace(session.session_id)
+                        if trace:
+                            trace.record(
+                                category="ask_ai",
+                                name="ask_deepgram_reset",
+                                summary="Reset Deepgram private ask stream at hold start",
+                                data={"reason": "new_hold"},
+                            )
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    logger.debug(
+                        "[ask-stt] Deepgram ask stream reset skipped [session=%s]: %s",
+                        session.session_id,
+                        exc,
+                    )
+            else:
+                logger.info(
+                    "[ask-stt] Preserving ask capture already started before hold-state handling [session=%s entry_id=%s chunks=%s]",
+                    session.session_id,
+                    getattr(session, "question_capture_id", None),
+                    getattr(session, "question_capture_chunk_count", 0),
+                )
 
             try:
                 response_mode = getattr(session, 'response_mode', 'command')
@@ -1861,6 +1906,15 @@ class NegotiationEngine:
             # question still follows below as belt-and-suspenders.
             if settings.ASK_AI_NATIVE_AUDIO and session.ask_audio_activity_open:
                 try:
+                    # Settle window: let the final ask audio land and let Gemini's
+                    # native input_transcription finish the full question before we
+                    # tell it to stop input and answer. Prevents the half-question
+                    # YOU bubble (e.g. "Tell me what is my" missing "name?"). Done
+                    # OUTSIDE the send lock so in-flight audio chunks can still be
+                    # streamed during the wait.
+                    _ask_end_delay = float(getattr(settings, "ASK_AI_ACTIVITY_END_DELAY_SECONDS", 0.0) or 0.0)
+                    if _ask_end_delay > 0:
+                        await asyncio.sleep(_ask_end_delay)
                     async with session.gemini_send_lock:
                         await session.live_session.send_realtime_input(
                             activity_end=types.ActivityEnd()
@@ -1879,10 +1933,22 @@ class NegotiationEngine:
                     session.ask_audio_activity_open = False
 
             ask_capture_snapshot = dict(getattr(session, "current_ask_capture", {}) or {})
+            question_entry_id = ask_entry_id(session, ask_capture_snapshot)
+            ask_capture_snapshot["entry_id"] = question_entry_id
+            ask_capture_snapshot["released_at_ms"] = int(time.time() * 1000)
+            session.current_ask_capture = ask_capture_snapshot
             gemini_input_text = (ask_capture_snapshot.get("gemini_input_text") or "").strip()
-            # Native Gemini input transcription is the same audio path that the AI
-            # answered, so it is more trustworthy than the display-only batch path.
-            fallback_text = gemini_input_text or session.companion_partial_text.get("ask_ai", "").strip()
+            if gemini_input_text:
+                record_candidate(
+                    session,
+                    text=gemini_input_text,
+                    source="gemini_live_input",
+                    entry_id=question_entry_id,
+                    is_final=False,
+                )
+            fallback_text = "" if settings.ASK_AI_NATIVE_AUDIO else (
+                gemini_input_text or session.companion_partial_text.get("ask_ai", "").strip()
+            )
             # Clean up stale cached partial text, but do NOT cancel an in-flight
             # partial task. A late partial can still rescue a bad native Gemini
             # transcript by upgrading the same ask row after release.
@@ -1895,10 +1961,19 @@ class NegotiationEngine:
             # not just the general context.
             question_audio = session.question_capture_bytes
             session.question_capture_bytes = b""
+            if settings.ASK_AI_NATIVE_AUDIO:
+                try:
+                    await websocket.send_json({
+                        "type": "AI_THINKING",
+                        "payload": {"context": "ask_ai", "id": question_entry_id},
+                    })
+                except Exception:
+                    pass
 
             async def _handle_question(
                 q_audio: bytes,
                 fallback_q_text: str = "",
+                entry_id: str = question_entry_id,
                 live_session=session.live_session,
                 listener=session.listener_agent,
                 lock=session.gemini_send_lock,
@@ -1910,8 +1985,22 @@ class NegotiationEngine:
                     q_text_source = "partial"
                     if gemini_input_text and q_text == gemini_input_text:
                         q_text_source = "gemini_live_input"
+                    if settings.ASK_AI_NATIVE_AUDIO:
+                        # Do not delay the native-audio answer path for transcript
+                        # settling. Late Deepgram/Gemini callbacks repair the same
+                        # UI row and audit record after Gemini has already started.
+                        latest_capture = dict(getattr(sess, "current_ask_capture", {}) or {})
+                        candidate = best_candidate(latest_capture, allow_partial=False)
+                        if candidate:
+                            q_text = compact_ask_text(candidate.get("text"))
+                            q_text_source = candidate.get("source") or "gemini_live_input"
+                        if not q_text:
+                            candidate = best_candidate(latest_capture, allow_partial=True)
+                            if candidate:
+                                q_text = compact_ask_text(candidate.get("text"))
+                                q_text_source = candidate.get("source") or "partial"
                     if q_text:
-                        logger.info(f"[Engine] Audio transcription empty, falling back to real-time partial: '{q_text}'")
+                        logger.info(f"[Engine] Ask transcript selected after release: source={q_text_source} text='{q_text}'")
                     elif (
                         q_audio
                         and len(q_audio) >= 3200
@@ -1928,6 +2017,13 @@ class NegotiationEngine:
                             q_text = (q_text or "").strip()
                             if q_text:
                                 q_text_source = "batch_transcription"
+                                record_candidate(
+                                    sess,
+                                    text=q_text,
+                                    source=q_text_source,
+                                    entry_id=entry_id,
+                                    is_final=True,
+                                )
                         except asyncio.TimeoutError:
                             logger.warning(
                                 "[Engine] Ask-AI batch transcription timed out [session=%s audio_bytes=%s timeout_s=%.2f]; using local retry if no partial exists",
@@ -1954,9 +2050,10 @@ class NegotiationEngine:
 
                     if not q_text:
                         latest_capture = dict(getattr(sess, "current_ask_capture", {}) or {})
-                        q_text = (latest_capture.get("gemini_input_text") or "").strip()
-                        if q_text:
-                            q_text_source = "gemini_live_input"
+                        candidate = best_candidate(latest_capture, allow_partial=False)
+                        if candidate:
+                            q_text = compact_ask_text(candidate.get("text"))
+                            q_text_source = candidate.get("source") or "gemini_live_input"
                     if not q_text and settings.ASK_AI_NATIVE_AUDIO:
                         logger.info(
                             "[Engine] Native ask audio released without display transcript yet; Gemini audio path owns the turn [session=%s]",
@@ -1996,11 +2093,8 @@ class NegotiationEngine:
                     # Show what the user asked in the sidebar transcript
                     if q_text:
                         try:
-                            question_entry_id = None
                             capture = getattr(sess, "current_ask_capture", {}) or {}
-                            started_at_ms = capture.get("started_at_ms")
-                            if started_at_ms:
-                                question_entry_id = f"ask_ai_{started_at_ms}"
+                            question_entry_id = capture.get("entry_id") or entry_id
                             await ws.send_json({
                                 "type": "TRANSCRIPT_UPDATE",
                                 "payload": {
@@ -2021,6 +2115,8 @@ class NegotiationEngine:
                             capture["frontend_question_source"] = q_text_source
                             if question_entry_id:
                                 capture["entry_id"] = question_entry_id
+                            capture["transcript_audit_logged"] = True
+                            capture["transcript_audit_text"] = q_text
                             sess.current_ask_capture = capture
                         except Exception:
                             pass
@@ -2078,7 +2174,9 @@ class NegotiationEngine:
                             f"[USER'S EXACT QUESTION]: {q_text}\n"
                             "Answer this specific question directly. "
                             "Do not give a generic strategy overview. "
-                            "Use the intel briefing above as background only."
+                            "Use the live transcript, on-screen context, market research, "
+                            "and recommendations above as authoritative context — synthesize "
+                            "across all of it to answer."
                         )
                         logger.info(f"[Engine] Sending question to Live AI: '{q_text[:80]}'")
                     else:
@@ -2098,9 +2196,53 @@ class NegotiationEngine:
                     # flag handles classification, and a safety timer (set by the
                     # release-handler below) closes the window if Gemini never replies.
                     if settings.ASK_AI_NATIVE_AUDIO:
+                        try:
+                            native_hint = (
+                                "[PRIVATE ASK TRANSCRIPT]\n"
+                                f"{question_msg}\n"
+                                "Treat this text as the user's exact private question if the live audio is unclear. "
+                                "Use the current screen and conversation context to answer it."
+                            )
+                            async with lock:
+                                await live_session.send_client_content(
+                                    turns=types.Content(
+                                        role="user",
+                                        parts=[types.Part(text=native_hint)],
+                                    ),
+                                    turn_complete=False,
+                                )
+                            capture = dict(getattr(sess, "current_ask_capture", {}) or {})
+                            capture["native_text_hint_sent"] = True
+                            capture["native_text_hint_text"] = q_text
+                            capture["native_text_hint_source"] = q_text_source
+                            sess.current_ask_capture = capture
+                            try:
+                                from app.utils.session_trace import get_session_trace
+                                trace = get_session_trace(sess.session_id)
+                                if trace:
+                                    trace.record(
+                                        category="ask_ai",
+                                        name="native_question_text_injected",
+                                        summary="Injected private ask transcript into Gemini Live native-audio turn",
+                                        data={
+                                            "question_text": q_text,
+                                            "question_chars": len(q_text),
+                                            "source": q_text_source,
+                                            "ask_entry_id": question_entry_id,
+                                            "turn_complete": False,
+                                        },
+                                    )
+                            except Exception:
+                                pass
+                        except Exception as exc:
+                            logger.warning(
+                                "[Engine] Native ask transcript hint injection failed [session=%s]: %s",
+                                sess.session_id,
+                                exc,
+                            )
                         logger.info(
                             "[Engine] ASK_AI_NATIVE_AUDIO=True — audio already streamed, "
-                            "skipping redundant text-question send (q_text=%r)",
+                            "native transcript hint sent with turn_complete=False (q_text=%r)",
                             q_text[:80],
                         )
                     else:
@@ -2116,7 +2258,7 @@ class NegotiationEngine:
                 except Exception as e:
                     logger.warning(f"[Engine] Question handling failed: {e}")
 
-            asyncio.create_task(_handle_question(question_audio, fallback_text))
+            asyncio.create_task(_handle_question(question_audio, fallback_text, question_entry_id))
 
             # Safety: if Gemini never responds (audio rejected, transient error),
             # close the ask window after a grace period so the next non-ask AI

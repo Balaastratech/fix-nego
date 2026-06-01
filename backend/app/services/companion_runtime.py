@@ -12,6 +12,13 @@ from fastapi import WebSocket
 
 from app.config import settings
 from app.models.companion import CaptureHealth, CompanionHoldState, MeetingBinding, ParticipantOrigin, SourceMode
+from app.services.ask_transcript_state import (
+    ask_entry_id,
+    is_short_private_partial,
+    looks_cross_ask_contaminated,
+    record_candidate,
+    should_replace_frontend_text,
+)
 from app.services.session_store import session_store
 from app.services.stt_service import SpeechTranscriptionService
 from app.services.utterance_types import FinalizedUtterance
@@ -240,13 +247,17 @@ class CompanionRuntime:
         return current
 
     def update_hold_state(self, session: Any, payload: dict[str, Any]) -> CompanionHoldState:
+        previous = CompanionHoldState.model_validate(session.hold_state or {})
         current = CompanionHoldState.model_validate(
             {
                 **(session.hold_state or {}),
                 **(payload or {}),
             }
         )
-        if current.active and current.started_at is None:
+        if current.active and not previous.active:
+            current.started_at = time.time()
+            current.released_at = None
+        elif current.active and current.started_at is None:
             current.started_at = time.time()
         if not current.active:
             current.released_at = time.time()
@@ -351,12 +362,17 @@ class CompanionRuntime:
                 chunk=chunk,
                 now=now,
             )
-            # Also transcribe the ask audio with the user's CONFIGURED STT (Deepgram,
-            # multi/pinned per the UI language selection) for an accurate, MULTILINGUAL
-            # question transcript. Gemini Live still receives the audio above (to hear
-            # and answer); this Deepgram transcript owns the YOU bubble and is far more
-            # accurate than Gemini's native input_transcription for non-English.
-            if _deepgram_streaming_enabled():
+            # Native-only ask transcription (ASK_AI_NATIVE_ONLY_TRANSCRIPTION):
+            # the native Gemini live model is the SOLE transcriber of the YOU
+            # bubble. We deliberately skip the Deepgram ask stream here because
+            # running it alongside the native transcript produced (a) a
+            # multi-writer race at hold-release (garbled/truncated question text)
+            # and (b) a stale-question carryover when the Deepgram stream fired a
+            # leftover into the next ask before its reset completed. Deepgram still
+            # powers the public conversation transcript (handled in the non-ask
+            # branch above). Flip ASK_AI_NATIVE_ONLY_TRANSCRIPTION=false to restore
+            # the Deepgram ask stream.
+            if not settings.ASK_AI_NATIVE_ONLY_TRANSCRIPTION and _deepgram_streaming_enabled():
                 try:
                     await self._push_ask_to_deepgram_stream(session, websocket, chunk)
                 except Exception as exc:
@@ -501,6 +517,36 @@ class CompanionRuntime:
         session.question_capture_bytes += chunk
         session.question_capture_chunk_count += 1
         session.question_capture_last_chunk_at = now
+        first_chunk = session.question_capture_chunk_count == 1
+        if first_chunk:
+            session.current_ask_capture = {}
+            try:
+                from app.services.deepgram_stream import DeepgramStreamSession
+                dg = DeepgramStreamSession.get(session.session_id)
+                if dg:
+                    await dg.reset_source("ask_ai")
+                setattr(session, "_dg_cb_ask_ai", False)
+                setattr(session, "_dg_ask_reset_capture_id", session.question_capture_id)
+                try:
+                    trace = get_session_trace(session.session_id)
+                    if trace:
+                        trace.record(
+                            category="ask_ai",
+                            name="ask_deepgram_reset",
+                            summary="Reset Deepgram private ask stream at first ask audio chunk",
+                            data={
+                                "reason": "first_ask_chunk",
+                                "ask_entry_id": session.question_capture_id,
+                            },
+                        )
+                except Exception:
+                    pass
+            except Exception as exc:
+                logger.debug(
+                    "[ask-stt] Deepgram ask stream first-chunk reset skipped [session=%s]: %s",
+                    session.session_id,
+                    exc,
+                )
         # The original design (transcribe-then-send text) was written for the
         # browser surface where mic + counterparty share one mixed PCM stream.
         # Desktop companion mode captures ASK_AI_PCM on its own dedicated lane
@@ -524,15 +570,16 @@ class CompanionRuntime:
                 )
 
         capture = session.current_ask_capture or {}
-        first_chunk = session.question_capture_chunk_count == 1
         if not capture:
             capture = {
                 "transport": "desktop_ask_ai_pcm",
                 "started_at_ms": int(session.question_capture_started_at * 1000),
+                "entry_id": session.question_capture_id,
                 "chunk_count": 0,
                 "audio_bytes": 0,
                 "gemini_input_transcription": False,
                 "frontend_question_final_sent": False,
+                "transcript_candidates": {},
             }
         if first_chunk:
             session.session_metrics["ask_capture_dedicated_count"] = session.session_metrics.get("ask_capture_dedicated_count", 0) + 1
@@ -546,9 +593,14 @@ class CompanionRuntime:
         capture["last_chunk_at_ms"] = int(now * 1000)
         session.current_ask_capture = capture
 
+        # Native-only ask transcription: skip the Google-STT snapshot partial
+        # transcriber too, so the native Gemini live model is the single source
+        # of the YOU bubble (no competing partials, no priority fights). Flip
+        # ASK_AI_NATIVE_ONLY_TRANSCRIPTION=false to restore snapshot partials.
         ask_ai_partial_task = session.companion_partial_tasks.get("ask_ai")
         if (
-            len(session.question_capture_bytes) >= 3200
+            not settings.ASK_AI_NATIVE_ONLY_TRANSCRIPTION
+            and len(session.question_capture_bytes) >= 3200
             and (ask_ai_partial_task is None or ask_ai_partial_task.done())
         ):
             session.companion_partial_tasks["ask_ai"] = asyncio.create_task(
@@ -664,20 +716,54 @@ class CompanionRuntime:
             )
             if not text:
                 return
+            capture = dict(getattr(session, "current_ask_capture", {}) or {})
+            entry_id = capture.get("entry_id") or session.question_capture_id or "ask_ai_live"
+            record_candidate(
+                session,
+                text=text,
+                source="snapshot_transcription",
+                entry_id=entry_id,
+                is_final=False,
+                timestamp_ms=int(started_at * 1000),
+            )
+            if is_short_private_partial(text):
+                logger.debug(
+                    "Suppressed short private ask partial [session=%s text=%r]",
+                    session.session_id,
+                    text,
+                )
+                return
             if session.companion_partial_text.get("ask_ai") == text:
                 return
             session.companion_partial_text["ask_ai"] = text
             capture = dict(getattr(session, "current_ask_capture", {}) or {})
             capture["frontend_question_partial_sent"] = True
-            capture["entry_id"] = session.question_capture_id or "ask_ai_live"
+            capture["entry_id"] = entry_id
             existing_final_sent = bool(capture.get("frontend_question_final_sent"))
             existing_text = (capture.get("frontend_question_text") or "").strip()
             existing_source = capture.get("frontend_question_source")
             session.current_ask_capture = capture
-            if existing_final_sent and _should_upgrade_question_text(existing_text, existing_source, text, "partial"):
+            if existing_final_sent and should_replace_frontend_text(existing_source, "snapshot_transcription", existing_text, text):
                 capture["frontend_question_text"] = text
-                capture["frontend_question_source"] = "partial"
+                capture["frontend_question_source"] = "snapshot_transcription"
                 session.current_ask_capture = capture
+                if capture.get("transcript_audit_logged") and text != capture.get("transcript_audit_text"):
+                    log_conversation_event(
+                        session_id=session.session_id,
+                        event="ai_query_update",
+                        speaker="user",
+                        text=text,
+                        timestamp_ms=int(time.time() * 1000),
+                        context="ask_ai",
+                        response_mode=getattr(session, "response_mode", None),
+                        metadata={
+                            "ask_entry_id": capture.get("entry_id"),
+                            "source": "snapshot_transcription",
+                            "replaces_text": capture.get("transcript_audit_text"),
+                        },
+                    )
+                    capture["transcript_audit_text"] = text
+                    session.current_ask_capture = capture
                 try:
                     trace = get_session_trace(session.session_id)
                     if trace:
@@ -688,7 +774,7 @@ class CompanionRuntime:
                             data={
                                 "question_text": text,
                                 "question_chars": len(text),
-                                "source": "partial",
+                                "source": "snapshot_transcription",
                                 "ask_shape": _classify_ask_shape(text),
                                 "ask_entry_id": capture["entry_id"],
                                 "native_audio": settings.ASK_AI_NATIVE_AUDIO,
@@ -970,11 +1056,7 @@ class CompanionRuntime:
             state = {"last_id": None}
 
             def _ask_entry_id() -> str:
-                cap = getattr(session, "current_ask_capture", None) or {}
-                sa = cap.get("started_at_ms")
-                if sa:
-                    return f"ask_ai_{sa}"
-                return getattr(session, "question_capture_id", None) or f"ask_ai_{int(time.time() * 1000)}"
+                return ask_entry_id(session)
 
             def _is_noise(t: str) -> bool:
                 # Deepgram emits non-speech markers like "<noise>", "[BLANK_AUDIO]",
@@ -999,6 +1081,39 @@ class CompanionRuntime:
                     state["last_id"] = entry_id
                 if not is_final:
                     disp = " ".join(acc + [text]).strip()
+                    record_candidate(
+                        session,
+                        text=disp,
+                        source="partial",
+                        entry_id=entry_id,
+                        is_final=False,
+                        confidence=confidence,
+                    )
+                    if is_short_private_partial(disp):
+                        logger.debug(
+                            "[ask-stt] suppressed short Deepgram partial session=%s text=%r",
+                            session.session_id,
+                            disp,
+                        )
+                        return
+                    try:
+                        trace = get_session_trace(session.session_id)
+                        if trace:
+                            trace.record(
+                                category="ask_ai",
+                                name="ask_deepgram_partial",
+                                summary="Deepgram private ask partial transcript",
+                                data={
+                                    "question_text": disp,
+                                    "question_chars": len(disp),
+                                    "source": "deepgram_ask",
+                                    "ask_entry_id": entry_id,
+                                    "confidence": confidence,
+                                    "lang": detected_language,
+                                },
+                            )
+                    except Exception:
+                        pass
                     await websocket.send_json({"type": "TRANSCRIPT_PARTIAL", "payload": {
                         "id": entry_id, "speaker": "user", "text": disp,
                         "timestamp": int(time.time() * 1000), "context": "ask_ai",
@@ -1008,14 +1123,88 @@ class CompanionRuntime:
                     return
                 acc.append(text)
                 disp = " ".join(acc).strip()
+                capture_before = dict(getattr(session, "current_ask_capture", {}) or {})
+                if looks_cross_ask_contaminated(capture_before, disp, "deepgram_ask"):
+                    logger.warning(
+                        "[ask-stt] rejected cross-ask Deepgram final session=%s entry_id=%s text=%r",
+                        session.session_id,
+                        entry_id,
+                        disp,
+                    )
+                    try:
+                        trace = get_session_trace(session.session_id)
+                        if trace:
+                            trace.record(
+                                category="ask_ai",
+                                name="ask_deepgram_rejected",
+                                summary="Rejected Deepgram private ask transcript that did not match the current ask start",
+                                data={
+                                    "question_text": disp,
+                                    "question_chars": len(disp),
+                                    "source": "deepgram_ask",
+                                    "ask_entry_id": entry_id,
+                                    "confidence": confidence,
+                                    "lang": detected_language,
+                                    "gemini_reference": capture_before.get("gemini_input_text"),
+                                },
+                            )
+                    except Exception:
+                        pass
+                    acc.clear()
+                    return
                 # Tell the Gemini-native path that Deepgram owns this question now.
-                cap = dict(getattr(session, "current_ask_capture", {}) or {})
+                cap = record_candidate(
+                    session,
+                    text=disp,
+                    source="deepgram_ask",
+                    entry_id=entry_id,
+                    is_final=True,
+                    confidence=confidence,
+                )
                 cap["frontend_question_final_sent"] = True
                 cap["frontend_question_source"] = "deepgram_ask"
                 cap["frontend_question_text"] = disp
                 cap["entry_id"] = entry_id
                 cap["ask_question_text"] = disp
                 session.current_ask_capture = cap
+                if cap.get("transcript_audit_logged") and disp != cap.get("transcript_audit_text"):
+                    log_conversation_event(
+                        session_id=session.session_id,
+                        event="ai_query_update",
+                        speaker="user",
+                        text=disp,
+                        timestamp_ms=int(time.time() * 1000),
+                        context="ask_ai",
+                        response_mode=getattr(session, "response_mode", None),
+                        metadata={
+                            "ask_entry_id": entry_id,
+                            "source": "deepgram_ask",
+                            "replaces_text": cap.get("transcript_audit_text"),
+                        },
+                    )
+                    cap["transcript_audit_text"] = disp
+                    session.current_ask_capture = cap
+                try:
+                    trace = get_session_trace(session.session_id)
+                    if trace:
+                        event = trace.record(
+                            category="ask_ai",
+                            name="question_text_ready",
+                            summary="Private ask question text prepared from Deepgram ask stream",
+                            data={
+                                "question_text": disp,
+                                "question_chars": len(disp),
+                                "source": "deepgram_ask",
+                                "ask_shape": _classify_ask_shape(disp),
+                                "ask_entry_id": entry_id,
+                                "native_audio": settings.ASK_AI_NATIVE_AUDIO,
+                                "confidence": confidence,
+                                "lang": detected_language,
+                            },
+                        )
+                        session.trace_refs["last_question_event_id"] = event["event_id"]
+                except Exception:
+                    pass
                 await websocket.send_json({"type": "TRANSCRIPT_UPDATE", "payload": {
                     "id": entry_id, "speaker": "user", "text": disp,
                     "timestamp": int(time.time() * 1000), "context": "ask_ai",

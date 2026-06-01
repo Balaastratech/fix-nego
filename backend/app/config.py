@@ -212,7 +212,29 @@ class Config(BaseSettings):
     # final turn-completer — belt-and-suspenders so a failure on either lane
     # doesn't kill the ask. Easy revert: set ASK_AI_NATIVE_AUDIO=false.
     ASK_AI_NATIVE_AUDIO: bool = True
-    ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION: bool = True
+    # When True, the native Gemini live model is the SOLE transcriber of the
+    # private ask (the YOU bubble): the Deepgram ask stream and the Google-STT
+    # snapshot ask transcriber are both skipped. This eliminates the
+    # multi-writer race (garbled/truncated question text) AND the stale-question
+    # carryover that came from the Deepgram ask stream firing a leftover before
+    # its reset. Deepgram still powers the public FULL TRANSCRIPT conversation
+    # panel. Easy revert: set ASK_AI_NATIVE_ONLY_TRANSCRIPTION=false.
+    ASK_AI_NATIVE_ONLY_TRANSCRIPTION: bool = True
+    # With native-only ownership, the native transcript MUST publish to the
+    # bubble, so suppression is off by default now.
+    ASK_AI_SUPPRESS_NATIVE_TRANSCRIPTION: bool = False
+    # Native Gemini audio must answer immediately on orb release. Transcript
+    # repair happens asynchronously from late Deepgram/Gemini callbacks.
+    ASK_AI_TRANSCRIPT_SETTLE_SECONDS: float = 0.0
+    # Brief settle between orb-release and sending activity_end to Gemini Live.
+    # With native-only ask transcription, activity_end tells Gemini to STOP
+    # processing input and start answering — if its input_transcription is still
+    # lagging, the tail of the question ("...name?") never gets emitted and the
+    # YOU bubble shows a half question. This short window lets the final audio
+    # land AND lets Gemini finish transcribing the full question before it
+    # pivots to the answer. Kept small so the answer still feels immediate.
+    # Set to 0.0 to restore the previous instant-activity_end behavior.
+    ASK_AI_ACTIVITY_END_DELAY_SECONDS: float = 0.4
     ASK_AI_LOCAL_MIC_SUPPRESS_GRACE_SECONDS: float = 1.25
     AI_VOICE_LEAK_GRACE_SECONDS: float = 8.0
     AI_VOICE_LEAK_STRICT_POST_PLAYBACK_SECONDS: float = 2.0

@@ -25,6 +25,12 @@ from app.ai_assets import (
 )
 from app.models.negotiation import NegotiationSession, NegotiationState
 from app.config import settings
+from app.services.ask_transcript_state import (
+    ask_entry_id,
+    is_short_private_partial,
+    record_candidate,
+    should_replace_frontend_text,
+)
 from app.services.response_validator import ResponseValidator
 from app.services.session_store import session_store
 from app.utils.conversation_audit import log_conversation_event
@@ -1361,6 +1367,21 @@ class GeminiClient:
         # When MULTILANG_ENABLED=False, response_language is ignored downstream
         # and the legacy English-only line is emitted — identical to old behavior.
         effective_response_language = response_language if settings.MULTILANG_ENABLED else None
+        # Language to PIN the spoken transcriptions to (input question + AI reply).
+        # Empty AudioTranscriptionConfig() lets Gemini auto-detect per utterance,
+        # which renders English speech in Devanagari/Hindi when auto/multi is on —
+        # the "I set English but it transcribed Hindi" bug. The chosen language is
+        # effective_response_language (pinned/selected), or the en-US default when
+        # MULTILANG is off. A single code keeps the script deterministic.
+        _transcription_lang = (
+            effective_response_language or settings.GEMINI_LIVE_LANGUAGE_CODE or "en-US"
+        ).strip()
+        # IMPORTANT: language_codes on AudioTranscriptionConfig is a VERTEX-only
+        # feature — the AI Studio (Gemini API) endpoint rejects it with
+        # "language_codes parameter is not supported in Gemini API" and the whole
+        # Live connect fails. So only pin the language on Vertex; on AI Studio fall
+        # back to the auto-detect config (unchanged behavior).
+        _supports_tx_lang = _rc.google_use_vertex()
         full_system_instruction = build_live_system_instruction(
             context, response_language=effective_response_language
         )
@@ -1420,9 +1441,20 @@ class GeminiClient:
                 top_k=LIVE_GENERATION_TOP_K,
             ),
 
-            # Transcriptions
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
+            # Transcriptions — pinned to the session language on Vertex (see
+            # _transcription_lang / _supports_tx_lang above). On AI Studio the
+            # language_codes field is unsupported, so use the plain auto-detect
+            # config there to keep the Live connection working.
+            input_audio_transcription=(
+                types.AudioTranscriptionConfig(language_codes=[_transcription_lang])
+                if _supports_tx_lang
+                else types.AudioTranscriptionConfig()
+            ),
+            output_audio_transcription=(
+                types.AudioTranscriptionConfig(language_codes=[_transcription_lang])
+                if _supports_tx_lang
+                else types.AudioTranscriptionConfig()
+            ),
             enable_affective_dialog=bool(
                 settings.GEMINI_LIVE_ENABLE_AFFECTIVE_DIALOG or settings.ENABLE_AFFECTIVE_DIALOG
             ),
@@ -1729,9 +1761,7 @@ class GeminiClient:
                             transcript_payload["context"] = "ask_ai"
                             transcript_payload["source"] = "gemini_live_input"
                             capture = dict(getattr(session, "current_ask_capture", {}) or {})
-                            started_at_ms = capture.get("started_at_ms")
-                            if started_at_ms:
-                                transcript_payload["id"] = f"ask_ai_{started_at_ms}"
+                            transcript_payload["id"] = capture.get("entry_id") or ask_entry_id(session, capture)
                         
                         # Enhanced logging for speaker labeling verification
                         logger.info("=" * 70)
@@ -1758,6 +1788,13 @@ class GeminiClient:
                                 if transcript_payload.get("id"):
                                     current_ask_capture["entry_id"] = transcript_payload["id"]
                                 session.current_ask_capture = current_ask_capture
+                                current_ask_capture = record_candidate(
+                                    session,
+                                    text=input_text,
+                                    source="gemini_live_input",
+                                    entry_id=transcript_payload.get("id"),
+                                    is_final=False,
+                                )
                                 try:
                                     trace = get_session_trace(session_id)
                                     if trace:
@@ -1813,12 +1850,18 @@ class GeminiClient:
                             suppress_for_native_ask
                             and ask_context_active
                             and not current_ask_capture.get("frontend_question_final_sent", False)
+                            and not is_short_private_partial(input_text)
                         ) if session else False
                         publish_upgrade_native_ask = bool(
                             suppress_for_native_ask
                             and ask_context_active
                             and current_ask_capture.get("frontend_question_final_sent", False)
-                            and existing_question_source == "partial"
+                            and should_replace_frontend_text(
+                                existing_question_source,
+                                "gemini_live_input",
+                                current_ask_capture.get("frontend_question_text"),
+                                input_text,
+                            )
                             and (
                                 not incoming_question_entry_id
                                 or not existing_question_entry_id
@@ -1832,12 +1875,31 @@ class GeminiClient:
                             )
                         else:
                             if (publish_missing_native_ask or publish_upgrade_native_ask) and session:
+                                previous_audit_text = current_ask_capture.get("transcript_audit_text")
+                                audit_was_logged = bool(current_ask_capture.get("transcript_audit_logged"))
                                 current_ask_capture["frontend_question_final_sent"] = True
                                 current_ask_capture["frontend_question_text"] = input_text
                                 current_ask_capture["frontend_question_source"] = "gemini_live_input"
                                 if incoming_question_entry_id:
                                     current_ask_capture["entry_id"] = incoming_question_entry_id
                                 session.current_ask_capture = current_ask_capture
+                                if audit_was_logged and input_text != previous_audit_text:
+                                    log_conversation_event(
+                                        session_id=session.session_id,
+                                        event="ai_query_update",
+                                        speaker="user",
+                                        text=input_text,
+                                        timestamp_ms=int(time.time() * 1000),
+                                        context="ask_ai",
+                                        response_mode=getattr(session, "response_mode", None),
+                                        metadata={
+                                            "ask_entry_id": incoming_question_entry_id,
+                                            "source": "gemini_live_input",
+                                            "replaces_text": previous_audit_text,
+                                        },
+                                    )
+                                    current_ask_capture["transcript_audit_text"] = input_text
+                                    session.current_ask_capture = current_ask_capture
                             # Send user transcripts immediately for separate display
                             # This ensures each question appears separately in the UI
                             logger.info(f"✅ Sending transcript to FRONTEND (speaker={speaker.upper()}) [{session_id}]")
@@ -2055,7 +2117,7 @@ class GeminiClient:
                                     session_id,
                                     session.current_ask_capture,
                                 )
-                                session.current_ask_capture = {}
+                                session.current_ask_capture["completed_at_ms"] = int(time.time() * 1000)
 
                             # If this was an ask-AI turn and the AI produced no audio or text,
                             # send a visible fallback so the user isn't left in silence.
