@@ -170,7 +170,21 @@ _LOGIN_PAGE_TEMPLATE = """\
 
       // Not signed in — show the form and start polling for completion.
       setStatus('');
-      Clerk.mountSignIn(document.getElementById('clerk-mount'), {{ routing: 'virtual' }});
+      // CRITICAL for PRODUCTION Clerk: without an explicit redirect, the sign-in
+      // component falls back to the instance Home URL (e.g. https://balaastratech.com)
+      // and navigates there the instant you authenticate — before our poll can grab
+      // the token. Force it back to THIS login page (which preserves ?redirect= and
+      // then forwards the clerk_token to the desktop loopback). Both legacy and
+      // current prop names are set for SDK-version compatibility.
+      Clerk.mountSignIn(document.getElementById('clerk-mount'), {{
+        routing: 'virtual',
+        forceRedirectUrl: window.location.href,
+        fallbackRedirectUrl: window.location.href,
+        signInForceRedirectUrl: window.location.href,
+        signUpForceRedirectUrl: window.location.href,
+        afterSignInUrl: window.location.href,
+        afterSignUpUrl: window.location.href,
+      }});
       startSessionPoll();
     }} catch (e) {{
       setStatus('Clerk error: ' + e.message, 'err');
