@@ -36,6 +36,25 @@ class ConnectionManager:
         self.active_connections[session_id] = {"websocket": websocket, "session": session}
         logger.info("Registered connection", extra={"session_id": session_id})
 
+    async def broadcast_backend_ready(self) -> None:
+        """Notify every connected client that the backend finished its startup
+        probes and is now safe to start a session. Sent once when readiness flips
+        so clients that connected during startup can enable their Start button."""
+        from app.services.readiness import readiness
+
+        payload = {"type": "BACKEND_READY", "payload": readiness.snapshot()}
+        for session_id, data in list(self.active_connections.items()):
+            websocket = data.get("websocket")
+            if websocket is None:
+                continue
+            try:
+                await websocket.send_json(payload)
+            except Exception as exc:
+                logger.debug(
+                    "Failed to send BACKEND_READY",
+                    extra={"session_id": session_id, "error": str(exc)},
+                )
+
     async def unregister(self, session_id: str, preserve_runtime: bool = False) -> None:
         connection_data = self.active_connections.pop(session_id, None)
         if connection_data is None:

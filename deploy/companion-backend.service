@@ -1,0 +1,27 @@
+# Phase D — systemd unit for the lean backend (uvicorn).
+# Install: sudo cp deploy/companion-backend.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable --now companion-backend
+# Logs:    journalctl -u companion-backend -f
+#
+# Adjust User and the /opt/companion path to match where you cloned the repo.
+
+[Unit]
+Description=AI Negotiation Companion backend (uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/companion/backend
+EnvironmentFile=/opt/companion/backend/.env
+# Bind to localhost only — Caddy is the public entrypoint (TLS terminates there).
+ExecStart=/opt/companion/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+# Give the lean profile a moment for the first (cold) capability probe.
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -331,14 +331,15 @@ async def analyze_vision_frames(
 
     model_name = settings.effective_vision_model  # gemini-2.5-flash by default (fast)
 
-    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+    from app.providers import runtime_config as _rc
+    if _rc.google_use_vertex():
         client = genai.Client(
             vertexai=True,
             project=settings.GOOGLE_CLOUD_PROJECT,
             location=settings.GOOGLE_CLOUD_LOCATION,
         )
     else:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = genai.Client(api_key=_rc.google_api_key())
 
     # Build multimodal content: text prompt + inline JPEG images
     prompt_text = VISION_EXTRACTION_PROMPT.format(
@@ -379,6 +380,14 @@ async def analyze_vision_frames(
         "max_output_tokens": 1500,          # slightly higher for documents with long text
         "response_mime_type": "application/json",  # KEY FIX: forces complete, valid JSON
     }
+    # CRITICAL latency fix: gemini-2.5-flash enables "thinking" by default and was
+    # burning ~1400 thoughts_tokens per vision call → ~11s latency AND finish_reason
+    # MAX_TOKENS (thinking ate the budget, truncating the JSON). Vision analysis is a
+    # structured extraction, not a reasoning task — disable thinking entirely.
+    try:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+    except Exception:
+        pass
 
     from app.utils.trace_helpers import (
         TraceTimer, model_block, model_route, text_preview,
@@ -409,14 +418,36 @@ async def analyze_vision_frames(
         artifacts=vision_artifacts,
     )
     try:
-        _vision_response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: client.models.generate_content(
-                model=model_name,
-                contents=[types.Content(role="user", parts=parts)],
-                config=types.GenerateContentConfig(**config_kwargs),
-            ),
-        )
+        from app.providers import runtime_config as _rc
+        from app.providers.registry import SLOT_VISION as _SLOT_VISION
+        if not _rc.is_google(_SLOT_VISION):
+            from app.providers import text_client as _tc
+
+            class _VisionResponse:
+                __slots__ = ("text",)
+                def __init__(self, text):
+                    self.text = text
+
+            _vis_text = await _tc.generate(
+                _SLOT_VISION,
+                user_text=prompt_text,
+                images=list(frames),
+                image_mime="image/jpeg",
+                json_mode=True,
+                temperature=0.1,
+                max_output_tokens=1500,
+                timeout=settings.VISION_PRO_COOLDOWN_SECONDS + 12.0,
+            )
+            _vision_response = _VisionResponse(_vis_text)
+        else:
+            _vision_response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: client.models.generate_content(
+                    model=model_name,
+                    contents=[types.Content(role="user", parts=parts)],
+                    config=types.GenerateContentConfig(**config_kwargs),
+                ),
+            )
     except Exception as exc:
         _vision_exc = exc
         logger.warning(
@@ -694,14 +725,15 @@ async def generate_tactical_advice(
 
     # Build a Pro-tier text-generation client. Reuses Vertex AI / API-key setup
     # from the running listener_agent's client choice.
-    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+    from app.providers import runtime_config as _rc
+    if _rc.google_use_vertex():
         client = genai.Client(
             vertexai=True,
             project=settings.GOOGLE_CLOUD_PROJECT,
             location=settings.GOOGLE_CLOUD_LOCATION,
         )
     else:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = genai.Client(api_key=_rc.google_api_key())
 
     model_name = settings.effective_advice_model
 
@@ -765,15 +797,35 @@ async def generate_tactical_advice(
         },
     )
     try:
-        # Use the async generate_content endpoint (Pro is text/multimodal, not Live)
-        response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: client.models.generate_content(
-                model=model_name,
-                contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
-                config=types.GenerateContentConfig(**config_kwargs),
-            ),
-        )
+        from app.providers import runtime_config as _rc
+        from app.providers.registry import SLOT_REASONING as _SLOT_REASONING
+        if not _rc.is_google(_SLOT_REASONING):
+            from app.providers import text_client as _tc
+
+            class _AdviceResponse:
+                __slots__ = ("text",)
+                def __init__(self, text):
+                    self.text = text
+
+            _adv_text = await _tc.generate(
+                _SLOT_REASONING,
+                user_text=prompt,
+                system=system_instruction,
+                temperature=settings.ADVICE_GENERATION_TEMPERATURE,
+                max_output_tokens=max(settings.ADVICE_GENERATION_MAX_TOKENS, 4096),
+                timeout=max(settings.ADVICE_GENERATION_TIMEOUT_SECONDS, 8.0),
+            )
+            response = _AdviceResponse(_adv_text)
+        else:
+            # Use the async generate_content endpoint (Pro is text/multimodal, not Live)
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: client.models.generate_content(
+                    model=model_name,
+                    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+                    config=types.GenerateContentConfig(**config_kwargs),
+                ),
+            )
     except Exception as exc:
         _rec(
             session.session_id,
@@ -1276,7 +1328,7 @@ class GeminiClient:
     async def open_live_session(
         api_key: str,
         context: str,
-        model: str = GEMINI_MODEL_PRIMARY,
+        model: str | None = None,
         *,
         response_language: str | None = None,
     ):
@@ -1285,15 +1337,24 @@ class GeminiClient:
         if settings.GOOGLE_CLOUD_PROJECT:
             os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
 
-        if settings.GOOGLE_GENAI_USE_VERTEXAI:
+        from app.providers import runtime_config as _rc
+        # Resolve Live model IDs for the EFFECTIVE backend at call time (Vertex and
+        # AI Studio use different model strings). Vertex path is byte-identical to
+        # before (effective_model / effective_fallback_model).
+        primary_model, fallback_model = _rc.google_live_models()
+        if not model:
+            model = primary_model
+        if _rc.google_use_vertex():
             client = genai.Client(
                 vertexai=True,
                 project=settings.GOOGLE_CLOUD_PROJECT,
                 location=settings.GOOGLE_CLOUD_LOCATION
             )
         else:
+            # Prefer the runtime (UI) Google key; fall back to the api_key passed in
+            # by the caller (which itself comes from .env GEMINI_API_KEY).
             client = genai.Client(
-                api_key=api_key,
+                api_key=_rc.google_api_key() or api_key,
                 http_options=types.HttpOptions(api_version='v1alpha'),
             )
         
@@ -1387,18 +1448,18 @@ class GeminiClient:
                 yield session
         except Exception as e:
             logger.warning(f"Primary model {model} failed: {e}. Trying fallback.")
-            
-            if model != GEMINI_MODEL_FALLBACK:
+
+            if fallback_model and model != fallback_model:
                 try:
                     async with client.aio.live.connect(
-                        model=GEMINI_MODEL_FALLBACK, config=config
+                        model=fallback_model, config=config
                     ) as session:
-                        logger.info(f"Gemini Live fallback session opened: {GEMINI_MODEL_FALLBACK}")
+                        logger.info(f"Gemini Live fallback session opened: {fallback_model}")
                         yield session
                     return
                 except Exception as e2:
                     logger.warning(f"Fallback model failed: {e2}")
-            
+
             raise GeminiUnavailableError("All Live API models failed") from e
 
     @staticmethod
@@ -1542,32 +1603,47 @@ class GeminiClient:
                                     session.ai_audio_playing = True
                                 await websocket.send_bytes(pcm_bytes)
                             elif part.text:
-                                await handle_gemini_text(websocket, session_id, part.text)
-                                _append_ai_response_text(session, part.text)
-                                if session and not getattr(session, 'ai_is_speaking', False):
-                                    session.ai_is_speaking = True
-                                    await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
-                                
-                                # Send real-time partial transcript for private AI advice (Ask AI)
-                                response_context = "ask_ai" if (
-                                    session and (
-                                        getattr(session, "direct_query_in_flight", False)
-                                        or getattr(session, "ask_window_active", False)
+                                # Native-audio models emit their THINKING/reasoning as
+                                # text parts (part.thought=True) ALONGSIDE the spoken
+                                # audio answer. Response modality is AUDIO-only, so the
+                                # real answer is the audio (transcribed below via
+                                # output_audio_transcription). Displaying these thought
+                                # parts is exactly the "thinking instead of the response,
+                                # and different from what I hear the AI say" bug. Skip
+                                # thoughts entirely — do not display or accumulate them.
+                                if bool(getattr(part, "thought", False)):
+                                    logger.debug(
+                                        "[GeminiClient] Skipping AI thought text part [%s]: %r",
+                                        session_id, (part.text or "")[:80],
                                     )
-                                ) else "advisor"
-                                if response_context == "ask_ai" and session and getattr(session, "current_ai_response", None):
-                                    await websocket.send_json({
-                                        "type": "TRANSCRIPT_PARTIAL",
-                                        "payload": {
-                                            "id": _current_ask_response_entry_id(session),
-                                            "speaker": "ai",
-                                            "text": session.current_ai_response,
-                                            "timestamp": int(time.time() * 1000),
-                                            "context": "ask_ai",
-                                            "is_partial": True,
-                                            "source": "gemini_live_output",
-                                        }
-                                    })
+                                else:
+                                    await handle_gemini_text(websocket, session_id, part.text)
+                                    _append_ai_response_text(session, part.text)
+                                    if session and not getattr(session, 'ai_is_speaking', False):
+                                        session.ai_is_speaking = True
+                                        await websocket.send_json({"type": "AI_SPEAKING", "payload": {}})
+
+                                    # Send real-time partial transcript for private AI advice (Ask AI)
+                                    response_context = "ask_ai" if (
+                                        session and (
+                                            getattr(session, "direct_query_in_flight", False)
+                                            or getattr(session, "ask_window_active", False)
+                                            or bool(getattr(session, "current_ask_capture", None))
+                                        )
+                                    ) else "advisor"
+                                    if response_context == "ask_ai" and session and getattr(session, "current_ai_response", None):
+                                        await websocket.send_json({
+                                            "type": "TRANSCRIPT_PARTIAL",
+                                            "payload": {
+                                                "id": _current_ask_response_entry_id(session),
+                                                "speaker": "ai",
+                                                "text": session.current_ai_response,
+                                                "timestamp": int(time.time() * 1000),
+                                                "context": "ask_ai",
+                                                "is_partial": True,
+                                                "source": "gemini_live_output",
+                                            }
+                                        })
                             elif hasattr(part, 'function_call') and part.function_call:
                                 # Handle function call from Gemini
                                 function_name = part.function_call.name
@@ -1616,6 +1692,20 @@ class GeminiClient:
                                 )
                             )
                         )
+
+                        # Gemini Live sends input_transcription as incremental
+                        # DELTAS (" Ju", "st", " explain"...), NOT the full text.
+                        # The old code treated each delta as the whole question, so
+                        # the UI showed only the last shard ("the", "right now.") and
+                        # overlay/full caught different shards. Accumulate the deltas
+                        # per ask turn so the YOU bubble shows the COMPLETE question.
+                        # Spacing is already in the deltas → plain concatenation.
+                        if ask_context_active and session:
+                            _cap = dict(getattr(session, "current_ask_capture", {}) or {})
+                            _accum = (_cap.get("gemini_input_accum") or "") + input_text
+                            _cap["gemini_input_accum"] = _accum
+                            session.current_ask_capture = _cap
+                            input_text = _accum.strip()
 
                         # Single active path: manual current speaker for public turns.
                         # Native ASK_AI input transcriptions are private user questions,
@@ -1787,6 +1877,7 @@ class GeminiClient:
                                 session and (
                                     getattr(session, "direct_query_in_flight", False)
                                     or getattr(session, "ask_window_active", False)
+                                    or bool(getattr(session, "current_ask_capture", None))
                                 )
                             ) else "advisor"
                             if response_context == "ask_ai" and session and getattr(session, "current_ai_response", None):
@@ -1835,8 +1926,9 @@ class GeminiClient:
                             response_context = "ask_ai" if (
                                 getattr(session, "direct_query_in_flight", False)
                                 or getattr(session, "ask_window_active", False)
+                                or bool(getattr(session, "current_ask_capture", None))
                             ) else "advisor"
-                            
+
                             # ResponseValidator disabled in native audio mode — sending
                             # correction text via send() causes the model to SPEAK it
                             # aloud, creating an infinite loop of spoken system messages.

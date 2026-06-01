@@ -1,0 +1,26 @@
+# Phase C2 / D — Caddy reverse proxy with automatic HTTPS + WSS (Let's Encrypt).
+#
+# Caddy obtains and renews a TLS cert for the hostname automatically (ports 80/443
+# must be reachable — see DEPLOY.md for the OCI Security List + VM firewall step).
+# It transparently upgrades the /ws path to a websocket (Caddy proxies the
+# Upgrade/Connection headers by default), so the desktop app's
+# wss://api.balaastratech.com/ws works through this single block. The long
+# transport timeouts keep a quiet stretch on a call from cutting the WS stream.
+#
+# Install path on Ubuntu: /etc/caddy/Caddyfile  (then: sudo systemctl reload caddy)
+
+api.balaastratech.com {
+	reverse_proxy 127.0.0.1:8000 {
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
+
+	encode gzip
+
+	log {
+		output file /var/log/caddy/companion.log
+		level INFO
+	}
+}

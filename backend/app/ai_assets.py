@@ -23,7 +23,12 @@ DEFAULT_SUPPORTED_AUTO_SPEAKER_LANGUAGES = "en-US,hi-IN,gu-IN,es-US"
 LIVE_RESPONSE_MODALITIES = ["AUDIO"]
 LIVE_VOICE_NAME = "Aoede"
 LIVE_GENERATION_TEMPERATURE = 0.3
-LIVE_GENERATION_MAX_OUTPUT_TOKENS = 1024
+# NOTE: the Live model runs in native-AUDIO output mode, so this budget is spent
+# on AUDIO tokens (far denser than text). At 1024 the spoken answer was cut off
+# cleanly mid-sentence after ~2 sentences (~256 transcribed chars) — observed as
+# the AI "stopping half way" with a clean turn_complete and no interruption.
+# 8192 gives the voice answer real headroom; raise further if long answers still clip.
+LIVE_GENERATION_MAX_OUTPUT_TOKENS = 8192
 LIVE_GENERATION_CANDIDATE_COUNT = 1
 LIVE_GENERATION_TOP_P = 0.8
 LIVE_GENERATION_TOP_K = 20

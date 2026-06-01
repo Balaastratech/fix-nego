@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 import time
 import uuid
 from typing import Any
@@ -19,11 +20,33 @@ from app.utils.session_trace import get_session_trace
 
 logger = logging.getLogger(__name__)
 
+def _resolved_stt_provider() -> str:
+    """STT provider for the live path, honoring the in-app Settings selection.
+
+    Falls back to .env TRANSCRIPTION_PROVIDER when no UI selection / override is
+    off (runtime_config handles that mapping internally), so existing behavior is
+    preserved and revertable.
+    """
+    try:
+        from app.providers import runtime_config, registry
+        return (runtime_config.provider_for(registry.SLOT_STT) or "").strip().lower()
+    except Exception:
+        return (getattr(settings, "TRANSCRIPTION_PROVIDER", "") or "").strip().lower()
+
+
+def _deepgram_api_key() -> str:
+    try:
+        from app.providers import runtime_config
+        return runtime_config.api_key_for("deepgram")
+    except Exception:
+        return getattr(settings, "DEEPGRAM_API_KEY", "") or ""
+
+
 def _deepgram_streaming_enabled() -> bool:
-    return (
-        getattr(settings, "TRANSCRIPTION_PROVIDER", "").strip().lower() == "deepgram"
-        and bool(getattr(settings, "DEEPGRAM_API_KEY", ""))
-    )
+    # Streaming is Deepgram-only. Every other STT provider (google, openai, groq,
+    # assemblyai, elevenlabs) runs through the per-utterance batch path in
+    # SpeechTranscriptionService, which resolves its own provider/key/model.
+    return _resolved_stt_provider() == "deepgram" and bool(_deepgram_api_key())
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -328,6 +351,16 @@ class CompanionRuntime:
                 chunk=chunk,
                 now=now,
             )
+            # Also transcribe the ask audio with the user's CONFIGURED STT (Deepgram,
+            # multi/pinned per the UI language selection) for an accurate, MULTILINGUAL
+            # question transcript. Gemini Live still receives the audio above (to hear
+            # and answer); this Deepgram transcript owns the YOU bubble and is far more
+            # accurate than Gemini's native input_transcription for non-English.
+            if _deepgram_streaming_enabled():
+                try:
+                    await self._push_ask_to_deepgram_stream(session, websocket, chunk)
+                except Exception as exc:
+                    logger.debug("[ask-stt] deepgram ask push failed [session=%s]: %s", session.session_id, exc)
             return
 
         if (
@@ -709,19 +742,97 @@ class CompanionRuntime:
         """Forward a PCM chunk to the Deepgram live stream for this session/source."""
         from app.services.deepgram_stream import DeepgramStreamSession
 
-        dg = DeepgramStreamSession.get_or_create(session.session_id, settings.DEEPGRAM_API_KEY)
+        dg = DeepgramStreamSession.get_or_create(session.session_id, _deepgram_api_key())
 
         # Register transcript callback the first time we see this source
         cb_key = f"_dg_cb_{source}"
         if not getattr(session, cb_key, False):
             speaker = "user" if source == "local_mic" else "counterparty"
             # Track a stable ID for the current utterance so partial→final replaces in place
-            utterance_state = {"id": None, "started_at": None}
+            utterance_state = {"id": None, "started_at": None, "last_conf": 0.0, "last_lang": None}
             # Transcript Segment Assembler: Deepgram emits multiple is_final=True
             # segments per utterance (e.g. mid-sentence pauses). We buffer every
             # finalized segment here, update one UI row with the accumulated
-            # sentence, and flush to the listener only when speech_final=True.
+            # sentence, and flush it as a completed turn on EITHER speech_final
+            # (audio silence) OR UtteranceEnd (word-gap — robust to a noisy mic).
             segment_acc: list[str] = []
+
+            async def _flush_current(reason: str = "utterance_end") -> None:
+                """Finalize the currently-accumulated turn and feed it downstream.
+                Called on speech_final and on Deepgram UtteranceEnd. No-op if empty."""
+                full_text = " ".join(s for s in segment_acc if s).strip()
+                if not full_text:
+                    utterance_state["id"] = None
+                    utterance_state["started_at"] = None
+                    segment_acc.clear()
+                    return
+                confidence = float(utterance_state.get("last_conf") or 0.0)
+                detected_language = utterance_state.get("last_lang")
+                ts_now = int(time.time() * 1000)
+                utterance_state["id"] = None
+                utterance_state["started_at"] = None
+
+                log_conversation_event(
+                    session_id=session.session_id,
+                    event="negotiation_turn",
+                    speaker=speaker,
+                    text=full_text,
+                    timestamp_ms=ts_now,
+                    context="conversation",
+                )
+                try:
+                    from app.utils.session_logger import get_session_logger as _gsl
+                    _sl = _gsl(session.session_id)
+                    if _sl:
+                        _sl.transcript(
+                            speaker=speaker,
+                            text=full_text,
+                            confidence=confidence,
+                            duration_ms=None,
+                            source=f"desktop_{source}",
+                        )
+                except Exception:
+                    pass
+                trace = get_session_trace(session.session_id)
+                if trace:
+                    _stt_provider = getattr(settings, "TRANSCRIPTION_PROVIDER", "deepgram")
+                    _stt_model = (
+                        getattr(settings, "DEEPGRAM_MODEL", None)
+                        if _stt_provider == "deepgram"
+                        else getattr(settings, "GOOGLE_STT_MODEL", None)
+                    )
+                    _stt_lang = settings.resolve_deepgram_language(
+                        getattr(session, "language_profile", None),
+                        getattr(session, "per_source_language", {}).get(source) if isinstance(getattr(session, "per_source_language", {}), dict) else None,
+                    ) if hasattr(settings, "resolve_deepgram_language") else None
+                    event = trace.record(
+                        category="transcript",
+                        name="stream_transcript_final",
+                        summary=f"Final transcript received for {speaker}",
+                        data={
+                            "speaker": speaker,
+                            "text": full_text,
+                            "chars": len(full_text or ""),
+                            "confidence": confidence,
+                            "source": f"desktop_{source}",
+                            "end_reason": reason,
+                            "stt": {"provider": _stt_provider, "model": _stt_model, "language": _stt_lang},
+                        },
+                    )
+                    trace.remember("last_transcript_event_id", event["event_id"])
+                    session.trace_refs["last_transcript_event_id"] = event["event_id"]
+
+                listener = getattr(session, "listener_agent", None)
+                segment_acc.clear()
+                if listener and full_text:
+                    label = "User" if speaker == "user" else "Counterparty"
+                    elapsed = time.time() - listener._session_start_time
+                    mins, secs = int(elapsed // 60), int(elapsed % 60)
+                    listener._append_accumulated_transcript(label, full_text, f"{mins}:{secs:02d}")
+                    asyncio.create_task(
+                        listener._run_text_extraction_cycle(),
+                        name=f"dg-extract-{session.session_id[:8]}",
+                    )
 
             async def on_transcript(
                 text: str,
@@ -809,89 +920,28 @@ class CompanionRuntime:
                 except Exception:
                     pass
 
-                if not speech_final:
-                    return
+                # Remember the latest confidence/language so a UtteranceEnd-driven
+                # flush (which carries no text) can attribute the turn correctly.
+                utterance_state["last_conf"] = confidence
+                utterance_state["last_lang"] = detected_language
 
-                full_text = display_text or text
-                utterance_state["id"] = None
-                utterance_state["started_at"] = None
-
-                log_conversation_event(
-                    session_id=session.session_id,
-                    event="negotiation_turn",
-                    speaker=speaker,
-                    text=full_text,
-                    timestamp_ms=ts_now,
-                    context="conversation",
-                )
-
-                # Log to per-session file (millisecond precision)
-                try:
-                    from app.utils.session_logger import get_session_logger as _gsl
-                    _sl = _gsl(session.session_id)
-                    if _sl:
-                        _sl.transcript(
-                            speaker=speaker,
-                            text=full_text,
-                            confidence=confidence,
-                            duration_ms=None,
-                            source=f"desktop_{source}",
-                        )
-                except Exception:
-                    pass
-                trace = get_session_trace(session.session_id)
-                if trace:
-                    # STT attribution — record which engine/model produced this
-                    # final transcript so the report can show provider routing.
-                    _stt_provider = getattr(settings, "TRANSCRIPTION_PROVIDER", "deepgram")
-                    _stt_model = (
-                        getattr(settings, "DEEPGRAM_MODEL", None)
-                        if _stt_provider == "deepgram"
-                        else getattr(settings, "GOOGLE_STT_MODEL", None)
-                    )
-                    # Per-source language resolution mirrors deepgram_stream usage.
-                    _stt_lang = settings.resolve_deepgram_language(
-                        getattr(session, "language_profile", None),
-                        getattr(session, "per_source_language", {}).get(source) if isinstance(getattr(session, "per_source_language", {}), dict) else None,
-                    ) if hasattr(settings, "resolve_deepgram_language") else None
-                    event = trace.record(
-                        category="transcript",
-                        name="stream_transcript_final",
-                        summary=f"Final transcript received for {speaker}",
-                        data={
-                            "speaker": speaker,
-                            "text": full_text,
-                            "chars": len(full_text or ""),
-                            "confidence": confidence,
-                            "source": f"desktop_{source}",
-                            "speech_final": speech_final,
-                            "stt": {
-                                "provider": _stt_provider,
-                                "model": _stt_model,
-                                "language": _stt_lang,
-                            },
-                        },
-                    )
-                    trace.remember("last_transcript_event_id", event["event_id"])
-                    session.trace_refs["last_transcript_event_id"] = event["event_id"]
-
-                # Feed FULL accumulated sentence (all is_final segments joined)
-                # into the listener for context extraction. Without this buffer
-                # only the last is_final segment (the speech_final one) reached
-                # the AI, discarding earlier parts of multi-clause utterances.
-                listener = getattr(session, "listener_agent", None)
-                segment_acc.clear()
-                if listener and full_text:
-                    label = "User" if speaker == "user" else "Counterparty"
-                    elapsed = time.time() - listener._session_start_time
-                    mins, secs = int(elapsed // 60), int(elapsed % 60)
-                    listener._append_accumulated_transcript(label, full_text, f"{mins}:{secs:02d}")
-                    asyncio.create_task(
-                        listener._run_text_extraction_cycle(),
-                        name=f"dg-extract-{session.session_id[:8]}",
-                    )
+                # Line-break policy (user preference):
+                #   • Break a NEW line at every sentence end (. ? ! incl. CJK) so each
+                #     complete sentence is its own readable line.
+                #   • Otherwise finalize the turn after a ~1s pause (speech_final from
+                #     endpointing, or UtteranceEnd word-gap). This is what stops a long
+                #     turn from sitting forever as one unfinalized "half" partial.
+                _stripped = display_text.rstrip().rstrip('"”\'’)]')
+                if _stripped and _stripped[-1] in ".?!。？！":
+                    await _flush_current("sentence_end")
+                elif speech_final:
+                    await _flush_current("speech_final")
 
             dg.register_callback(source, on_transcript)
+            # Word-gap end-of-turn flush (optional capability — degrade to
+            # speech_final-only if the stream impl doesn't support it).
+            if hasattr(dg, "register_utterance_end_callback"):
+                dg.register_utterance_end_callback(source, _flush_current)
             setattr(session, cb_key, True)
 
         # When MULTILANG_ENABLED is off, resolve_deepgram_language() always
@@ -905,6 +955,87 @@ class CompanionRuntime:
             per_source_choice,
         )
         await dg.push(source, pcm_bytes, language=language)
+
+    async def _push_ask_to_deepgram_stream(self, session: Any, websocket: WebSocket, chunk: bytes) -> None:
+        """Transcribe the private ASK audio with the user's configured STT (Deepgram,
+        multi/pinned per the UI language selection). This owns the accurate,
+        multilingual YOU question bubble; Gemini's native input_transcription is
+        suppressed once this publishes (frontend_question_source='deepgram_ask')."""
+        from app.services.deepgram_stream import DeepgramStreamSession
+        dg = DeepgramStreamSession.get_or_create(session.session_id, _deepgram_api_key())
+        source = "ask_ai"
+        cb_key = "_dg_cb_ask_ai"
+        if not getattr(session, cb_key, False):
+            acc: list[str] = []
+            state = {"last_id": None}
+
+            def _ask_entry_id() -> str:
+                cap = getattr(session, "current_ask_capture", None) or {}
+                sa = cap.get("started_at_ms")
+                if sa:
+                    return f"ask_ai_{sa}"
+                return getattr(session, "question_capture_id", None) or f"ask_ai_{int(time.time() * 1000)}"
+
+            def _is_noise(t: str) -> bool:
+                # Deepgram emits non-speech markers like "<noise>", "[BLANK_AUDIO]",
+                # "(silence)" — never treat these as a real question.
+                s = t.strip().lower()
+                if not s:
+                    return True
+                return bool(re.fullmatch(r"[<\[(].*[>\])]", s)) or s in ("<noise>", "[blank_audio]", "(silence)")
+
+            async def on_ask_transcript(text, is_final, speech_final, confidence, detected_language=None):
+                text = (text or "").strip()
+                if _is_noise(text):
+                    return
+                entry_id = _ask_entry_id()
+                # New ask (new hold) → reset the accumulator so questions never
+                # bleed together. We do NOT reset on speech_final: a single hold may
+                # contain pauses (which fire speech_final), but it's ONE question, so
+                # we keep accumulating for the whole hold (fixes truncated asks like
+                # "What context do you have on the").
+                if entry_id != state["last_id"]:
+                    acc.clear()
+                    state["last_id"] = entry_id
+                if not is_final:
+                    disp = " ".join(acc + [text]).strip()
+                    await websocket.send_json({"type": "TRANSCRIPT_PARTIAL", "payload": {
+                        "id": entry_id, "speaker": "user", "text": disp,
+                        "timestamp": int(time.time() * 1000), "context": "ask_ai",
+                        "is_partial": True, "source": "desktop_ask_deepgram",
+                        "lang": detected_language,
+                        "display_language": getattr(session, "display_language", None)}})
+                    return
+                acc.append(text)
+                disp = " ".join(acc).strip()
+                # Tell the Gemini-native path that Deepgram owns this question now.
+                cap = dict(getattr(session, "current_ask_capture", {}) or {})
+                cap["frontend_question_final_sent"] = True
+                cap["frontend_question_source"] = "deepgram_ask"
+                cap["frontend_question_text"] = disp
+                cap["entry_id"] = entry_id
+                cap["ask_question_text"] = disp
+                session.current_ask_capture = cap
+                await websocket.send_json({"type": "TRANSCRIPT_UPDATE", "payload": {
+                    "id": entry_id, "speaker": "user", "text": disp,
+                    "timestamp": int(time.time() * 1000), "context": "ask_ai",
+                    "transcription_confidence": confidence, "source": "desktop_ask_deepgram",
+                    "lang": detected_language,
+                    "display_language": getattr(session, "display_language", None)}})
+                # NOTE: deliberately do NOT clear `acc` on speech_final/UtteranceEnd —
+                # one hold = one question even if the user pauses. acc resets only when
+                # a NEW ask starts (entry_id change), handled above.
+
+            dg.register_callback(source, on_ask_transcript)
+            setattr(session, cb_key, True)
+
+        # The ask is the USER speaking → use the same language resolution as their mic.
+        per_source_choice = (getattr(session, "per_source_language", None) or {}).get("LOCAL_MIC_PCM")
+        language = settings.resolve_deepgram_language(
+            getattr(session, "language_profile", None),
+            per_source_choice,
+        )
+        await dg.push(source, chunk, language=language)
 
     async def _emit_degraded_update(self, websocket: WebSocket, session: Any) -> None:
         try:

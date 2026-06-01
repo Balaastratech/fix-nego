@@ -1,0 +1,26 @@
+# Phase F3 — files to EXCLUDE when copying the backend to the Oracle VM.
+# Keeps the deploy image lean and off the attack surface (dev scripts, evals,
+# local venv, PII/runtime data). Usage:
+#   rsync -av --exclude-from=deploy/rsync-exclude.txt backend/ ubuntu@VM:/opt/companion/backend/
+# (Or just `git clone` the repo on the VM and never copy these in the first place.)
+
+venv/
+__pycache__/
+*.pyc
+.env
+.env.test
+data/
+backups/
+*.bck
+tests/
+evals/
+*_eval_reports/
+device_verification_log.txt
+error_output.txt
+out2.txt
+test_models.txt
+check_device.py
+fix_torchaudio.py
+verify_*.py
+download_*.py
+runtime_providers.json

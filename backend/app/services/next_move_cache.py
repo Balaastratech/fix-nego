@@ -236,17 +236,41 @@ async def _generate_flash(session: "NegotiationSession") -> Optional[str]:
 
     prompt = f"{intel}\n\n{advisor_query}"
 
-    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+    # Multi-provider: route the fast next-move generation through the configured
+    # Fast Text provider when it is not Google. Google keeps its existing path.
+    from app.providers import runtime_config
+    from app.providers.registry import SLOT_FAST_TEXT
+    if not runtime_config.is_google(SLOT_FAST_TEXT):
+        try:
+            from app.providers import text_client
+            text = await asyncio.wait_for(
+                text_client.generate(
+                    SLOT_FAST_TEXT,
+                    user_text=prompt,
+                    temperature=0.2,
+                    max_output_tokens=512,
+                    timeout=settings.NEXT_MOVE_FAST_TIMEOUT_SECONDS,
+                ),
+                timeout=settings.NEXT_MOVE_FAST_TIMEOUT_SECONDS,
+            )
+            text = (text or "").strip()
+            return text or None
+        except Exception as exc:
+            logger.warning("[next_move_cache] provider flash call failed session=%s err=%s", session.session_id, exc)
+            return None
+
+    from app.providers import runtime_config as _rc
+    if _rc.google_use_vertex():
         client = genai.Client(
             vertexai=True,
             project=settings.GOOGLE_CLOUD_PROJECT,
             location=settings.GOOGLE_CLOUD_LOCATION,
         )
     else:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = genai.Client(api_key=_rc.google_api_key())
 
     from app.ai_assets import qualify_model_name
-    model_name = qualify_model_name(settings.NEXT_MOVE_FAST_MODEL, settings.GOOGLE_GENAI_USE_VERTEXAI)
+    model_name = qualify_model_name(settings.NEXT_MOVE_FAST_MODEL, _rc.google_use_vertex())
 
     config_kwargs = {
         "temperature": 0.2,

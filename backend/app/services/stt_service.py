@@ -91,13 +91,37 @@ def _pcm_to_wav(pcm_data: bytes) -> bytes:
 class SpeechTranscriptionService:
     def __init__(self, session: NegotiationSession):
         self.session = session
-        self._provider = (settings.TRANSCRIPTION_PROVIDER or "google_stt").strip().lower()
+        self._provider, self._stt_model = self._resolve_stt_selection()
         self._clients: dict[str, Any] = {}
         self._ensured_recognizers: set[tuple[str, str, str]] = set()
         self._global_limiter = GlobalLimiter.get(
             f"stt:{self._provider}",
             settings.STT_GLOBAL_CONCURRENCY,
         )
+
+    @staticmethod
+    def _resolve_stt_selection() -> tuple[str, str]:
+        """Resolve the STT provider + model from the runtime provider config.
+
+        Returns an internal provider value compatible with this service:
+        'google_stt' | 'deepgram' | 'openai' | 'groq' | 'assemblyai'. Falls back
+        to the legacy TRANSCRIPTION_PROVIDER env when no runtime/env override is
+        set, so default behavior is unchanged.
+        """
+        try:
+            from app.providers import runtime_config as _rc
+            from app.providers.registry import SLOT_STT as _SLOT_STT
+            prov = (_rc.provider_for(_SLOT_STT) or "").strip().lower()
+            model = (_rc.model_for(_SLOT_STT) or "").strip()
+        except Exception:
+            prov, model = "", ""
+        if not prov:
+            prov = (settings.TRANSCRIPTION_PROVIDER or "google_stt").strip().lower()
+        # runtime_config maps Google Cloud STT to the public id "google"; this
+        # service uses the internal value "google_stt".
+        if prov == "google":
+            prov = "google_stt"
+        return prov, model
 
     def _get_client(self, location_override: str | None = None):
         _sanitize_broken_loopback_proxy_env()
@@ -589,6 +613,162 @@ class SpeechTranscriptionService:
             adaptation_phrases=adaptation_phrases,
         )
 
+    def _recognize_openai_compatible_sync(
+        self,
+        audio: bytes,
+        language_hint: str | None = None,
+    ) -> dict[str, Any]:
+        """Whisper-style STT via an OpenAI-compatible /audio/transcriptions endpoint.
+
+        Covers OpenAI (whisper-1, gpt-4o-transcribe, gpt-4o-mini-transcribe) and
+        Groq (whisper-large-v3, whisper-large-v3-turbo).
+        """
+        import httpx
+        from app.providers import runtime_config as _rc
+        from app.providers import registry as _reg
+
+        meta = _reg.provider_meta(self._provider) or {}
+        base_url = (meta.get("base_url") or "").rstrip("/")
+        api_key = _rc.api_key_for(self._provider)
+        if not api_key:
+            raise RuntimeError(f"{self._provider.upper()}_API_KEY is not configured")
+        model = self._stt_model or (
+            _reg.FALLBACK_MODELS.get(self._provider, {}).get(_reg.SLOT_STT, [""]) or [""]
+        )[0]
+
+        wav = _pcm_to_wav(audio)
+        data = {"model": model, "response_format": "json"}
+        lang_root = (language_hint or "").split("-")[0].strip().lower()
+        if lang_root and lang_root != "multi":
+            data["language"] = lang_root
+        files = {"file": ("audio.wav", wav, "audio/wav")}
+
+        with httpx.Client(timeout=settings.STT_RPC_TIMEOUT_SECONDS) as client:
+            resp = client.post(
+                f"{base_url}/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                data=data,
+                files=files,
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"{self._provider} transcription failed status={resp.status_code} body={resp.text[:400]}"
+            )
+        body = resp.json()
+        text = str(body.get("text") or "").strip()
+        return {
+            "text": text,
+            "confidence": None,
+            "language_code": body.get("language") or language_hint,
+            "diarized_turns": [],
+            "adaptation_phrases": [],
+            "provider": self._provider,
+        }
+
+    def _recognize_assemblyai_sync(
+        self,
+        audio: bytes,
+        language_hint: str | None = None,
+    ) -> dict[str, Any]:
+        """AssemblyAI batch STT: upload → create transcript → poll until done."""
+        import time as _time
+        import httpx
+        from app.providers import runtime_config as _rc
+
+        api_key = _rc.api_key_for("assemblyai")
+        if not api_key:
+            raise RuntimeError("ASSEMBLYAI_API_KEY is not configured")
+        model = (self._stt_model or "best").strip()
+        wav = _pcm_to_wav(audio)
+        headers = {"Authorization": api_key}
+        deadline = _time.monotonic() + settings.STT_END_TO_END_TIMEOUT_SECONDS
+
+        with httpx.Client(timeout=settings.STT_RPC_TIMEOUT_SECONDS) as client:
+            up = client.post(
+                "https://api.assemblyai.com/v2/upload",
+                headers={**headers, "Content-Type": "application/octet-stream"},
+                content=wav,
+            )
+            if up.status_code != 200:
+                raise RuntimeError(f"AssemblyAI upload failed status={up.status_code} body={up.text[:300]}")
+            audio_url = up.json().get("upload_url")
+
+            create_body: dict[str, Any] = {"audio_url": audio_url, "speech_model": model}
+            lang_root = (language_hint or "").split("-")[0].strip().lower()
+            if lang_root and lang_root != "multi":
+                create_body["language_code"] = lang_root
+            cr = client.post(
+                "https://api.assemblyai.com/v2/transcript",
+                headers=headers,
+                json=create_body,
+            )
+            if cr.status_code not in (200, 201):
+                raise RuntimeError(f"AssemblyAI create failed status={cr.status_code} body={cr.text[:300]}")
+            tid = cr.json().get("id")
+
+            while True:
+                poll = client.get(
+                    f"https://api.assemblyai.com/v2/transcript/{tid}",
+                    headers=headers,
+                )
+                pb = poll.json()
+                status = pb.get("status")
+                if status == "completed":
+                    return {
+                        "text": str(pb.get("text") or "").strip(),
+                        "confidence": pb.get("confidence"),
+                        "language_code": pb.get("language_code") or language_hint,
+                        "diarized_turns": [],
+                        "adaptation_phrases": [],
+                        "provider": "assemblyai",
+                    }
+                if status == "error":
+                    raise RuntimeError(f"AssemblyAI transcription error: {pb.get('error')}")
+                if _time.monotonic() > deadline:
+                    raise RuntimeError("AssemblyAI transcription timed out")
+                _time.sleep(0.4)
+
+    def _recognize_elevenlabs_sync(
+        self,
+        audio: bytes,
+        language_hint: str | None = None,
+    ) -> dict[str, Any]:
+        """ElevenLabs Scribe STT (batch). POST /v1/speech-to-text, xi-api-key auth."""
+        import httpx
+        from app.providers import runtime_config as _rc
+
+        api_key = _rc.api_key_for("elevenlabs")
+        if not api_key:
+            raise RuntimeError("ELEVENLABS_API_KEY is not configured")
+        model = (self._stt_model or "scribe_v2").strip()
+        wav = _pcm_to_wav(audio)
+        data = {"model_id": model}
+        lang_root = (language_hint or "").split("-")[0].strip().lower()
+        if lang_root and lang_root != "multi":
+            data["language_code"] = lang_root
+        files = {"file": ("audio.wav", wav, "audio/wav")}
+
+        with httpx.Client(timeout=settings.STT_RPC_TIMEOUT_SECONDS) as client:
+            resp = client.post(
+                "https://api.elevenlabs.io/v1/speech-to-text",
+                headers={"xi-api-key": api_key},
+                data=data,
+                files=files,
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"ElevenLabs transcription failed status={resp.status_code} body={resp.text[:400]}"
+            )
+        body = resp.json()
+        return {
+            "text": str(body.get("text") or "").strip(),
+            "confidence": None,
+            "language_code": body.get("language_code") or language_hint,
+            "diarized_turns": [],
+            "adaptation_phrases": [],
+            "provider": "elevenlabs",
+        }
+
     def _recognize_sync(
         self,
         audio: bytes,
@@ -600,6 +780,24 @@ class SpeechTranscriptionService:
                 audio,
                 language_hint=language_hint,
                 response_language_hint=response_language_hint,
+            )
+
+        if self._provider in ("openai", "groq"):
+            return self._recognize_openai_compatible_sync(
+                audio,
+                language_hint=language_hint,
+            )
+
+        if self._provider == "assemblyai":
+            return self._recognize_assemblyai_sync(
+                audio,
+                language_hint=language_hint,
+            )
+
+        if self._provider == "elevenlabs":
+            return self._recognize_elevenlabs_sync(
+                audio,
+                language_hint=language_hint,
             )
 
         from google.cloud.speech_v2.types import cloud_speech

@@ -17,8 +17,94 @@ logger = logging.getLogger(__name__)
 
 class Config(BaseSettings):
     GEMINI_API_KEY: str = ""
+
+    # ── Phase C — minimal shared-secret auth (hosted/public box) ──────────────
+    # When EMPTY (default), auth is DISABLED → localhost dev and current behavior
+    # are unchanged. When set (in the Oracle VM's backend/.env), the websocket
+    # (?token=…) and the sensitive REST endpoints (Authorization: Bearer /
+    # X-Companion-Token) require this token. See app/api/auth.py.
+    COMPANION_SHARED_TOKEN: str = ""
+
+    # ── Clerk identity (Phase auth) ───────────────────────────────────────────
+    # Obtain these from https://dashboard.clerk.com → API Keys.
+    # CLERK_PUBLISHABLE_KEY: pk_live_... or pk_test_...
+    # CLERK_JWKS_URL: https://<frontend-api>.clerk.accounts.dev/.well-known/jwks.json
+    # CLERK_ISSUER: https://<frontend-api>.clerk.accounts.dev (no trailing slash)
+    # CLERK_AUTHORIZED_PARTY: leave empty to skip azp check (recommended for
+    #   desktop PKCE flows where the 'azp' claim is not consistently set).
+    CLERK_PUBLISHABLE_KEY: str = ""
+    CLERK_JWKS_URL: str = ""
+    CLERK_ISSUER: str = ""
+    CLERK_AUTHORIZED_PARTY: str = ""
+
+    # ── App-session JWT (minted by us after Clerk verification) ──────────────
+    # JWT_SECRET_KEY: long random string — generate with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+    JWT_SECRET_KEY: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TTL_MINUTES: int = 30
+    JWT_REFRESH_TTL_DAYS: int = 30
+
+    # ── Auth kill-switch ──────────────────────────────────────────────────────
+    # When False (default): /ws and REST accept ANY valid token OR no token at
+    # all (preserves today's open behavior). Flip True in the VM .env after
+    # verifying the full Clerk→desktop flow end-to-end.
+    AUTH_REQUIRED: bool = False
+
+    # ── Multi-provider API keys (additive; empty = provider unavailable) ──────
+    # These seed the runtime provider config as DEFAULTS only. The in-app
+    # Settings page writes to backend/data/runtime_providers.json which overrides
+    # these at runtime without a restart. Leaving them empty keeps today's
+    # Google-only behavior exactly.
+    OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    ASSEMBLYAI_API_KEY: str = ""
+    ELEVENLABS_API_KEY: str = ""
+
+    # Master revert switch for the multi-provider runtime layer. When False, the
+    # in-app Settings JSON is ignored entirely and ALL provider/key/STT resolution
+    # falls back to the .env values below — i.e. exact pre-multi-provider behavior.
+    # Flip to false via env if anything misbehaves; no code change needed.
+    PROVIDER_RUNTIME_OVERRIDE_ENABLED: bool = True
+
+    # Phase G — per-session BYOK. When True, a desktop client may send a
+    # PROVIDER_CONFIG message right after CONNECTION_ESTABLISHED carrying its own
+    # keys + slot/model + google_backend choices. Those are scoped to that one
+    # websocket session (via a ContextVar overlay in runtime_config) and never
+    # written to the global runtime_providers.json — so concurrent testers with
+    # DIFFERENT keys don't overwrite each other. When False, PROVIDER_CONFIG is
+    # ignored and resolution is exactly the global-JSON/.env path (full revert).
+    PER_SESSION_PROVIDER_OVERRIDE_ENABLED: bool = True
+
+    # ── Per-task-slot provider/model defaults ────────────────────────────────
+    # Default to the current Google values so an empty runtime config behaves
+    # identically to before. Live Voice is Google-only this release.
+    LIVE_VOICE_PROVIDER: str = "google"
+    LIVE_VOICE_MODEL: str = DEFAULT_GEMINI_LIVE_MODEL
+    REASONING_PROVIDER: str = "google"
+    REASONING_MODEL: str = "gemini-2.5-pro"
+    FAST_TEXT_PROVIDER: str = "google"
+    FAST_TEXT_MODEL: str = DEFAULT_GEMINI_FLASH_MODEL
+    VISION_PROVIDER: str = "google"
+    VISION_MODEL: str = "gemini-2.5-flash"
+    # STT provider default mirrors the existing TRANSCRIPTION_PROVIDER below.
+    # runtime_config resolves stt provider from STT_PROVIDER → TRANSCRIPTION_PROVIDER.
+    STT_PROVIDER: str = ""
+    STT_MODEL: str = ""
+
     GEMINI_MODEL: str = DEFAULT_GEMINI_LIVE_MODEL
     GEMINI_MODEL_FALLBACK: str = DEFAULT_GEMINI_FALLBACK_MODEL
+
+    # Live API model IDs differ between backends, so the AI Studio (Gemini API)
+    # Live models are separate from the Vertex ones above. Verified May 2026 from
+    # https://ai.google.dev/gemini-api/docs/models — native-audio preview + a
+    # newer Gemini-3 Live model as fallback. Override via .env if Google renames
+    # them (no code change needed).
+    GEMINI_LIVE_MODEL_AISTUDIO: str = "gemini-2.5-flash-native-audio-preview-12-2025"
+    GEMINI_LIVE_FALLBACK_AISTUDIO: str = "gemini-3.1-flash-live-preview"
     GEMINI_LIVE_VOICE_NAME: str = "Aoede"
     GEMINI_LIVE_LANGUAGE_CODE: str = "en-US"
     GEMINI_LIVE_ENABLE_AFFECTIVE_DIALOG: bool = False
@@ -76,7 +162,20 @@ class Config(BaseSettings):
     DEEPGRAM_LANGUAGE_CODES: str = DEFAULT_GOOGLE_STT_LANGUAGE_CODES
     DEEPGRAM_DIARIZATION_ENABLED: bool = False
     DEEPGRAM_UTTERANCE_SPLIT: float = 0.45
-    DEEPGRAM_STREAM_ENDPOINTING_MS: int = 150
+    # Deepgram streaming endpointing: ms of AUDIO SILENCE before the stream fires
+    # speech_final. This alone is unreliable with a noisy mic (headphone mic that
+    # also plays the call → never truly silent), so we ALSO use utterance_end_ms
+    # below (word-timing based, ignores non-speech noise) as the primary turn
+    # boundary. Endpointing stays moderate so clean pauses still finalize quickly.
+    # ~1s turn-end (user preference). Lines ALSO break immediately at sentence
+    # boundaries (. ? !) in companion_runtime, so this 1000ms only governs when a
+    # turn that did NOT end in punctuation finalizes — it won't over-merge.
+    DEEPGRAM_STREAM_ENDPOINTING_MS: int = 1000
+    # Word-gap (ms) after which Deepgram emits an UtteranceEnd message → we flush
+    # the current turn. NOTE: Deepgram REQUIRES >= 1000 — any lower value is ignored
+    # (the param isn't sent, disabling UtteranceEnd). Keep at 1000 to honor the ~1s
+    # turn-end. Set 0 to fully disable. Requires interim_results=true (always sent).
+    DEEPGRAM_UTTERANCE_END_MS: int = 1000
     DEEPGRAM_STREAM_LANGUAGE: str = "en-US"
     DEEPGRAM_STREAM_KEEPALIVE_SECONDS: float = 3.0
 
@@ -303,16 +402,28 @@ class Config(BaseSettings):
         # Treat bare BCP-47 as a pinned monolingual stream.
         return candidate
     
+    def _effective_use_vertex(self) -> bool:
+        """The EFFECTIVE Google backend (Vertex vs AI Studio), honoring a runtime
+        Settings toggle when present, else the env flag. Model qualification below
+        must use THIS (not the raw env flag) so the `google/` prefix always matches
+        the client's actual auth mode. Lazy import avoids a config↔providers cycle.
+        """
+        try:
+            from app.providers import runtime_config
+            return runtime_config.google_use_vertex()
+        except Exception:
+            return self.GOOGLE_GENAI_USE_VERTEXAI
+
     @property
     def effective_model(self) -> str:
         """Return model name with google/ prefix for Vertex AI."""
-        return qualify_model_name(self.GEMINI_MODEL, self.GOOGLE_GENAI_USE_VERTEXAI)
-    
+        return qualify_model_name(self.GEMINI_MODEL, self._effective_use_vertex())
+
     @property
     def effective_fallback_model(self) -> str:
         """Return fallback model name with google/ prefix for Vertex AI."""
-        return qualify_model_name(self.GEMINI_MODEL_FALLBACK, self.GOOGLE_GENAI_USE_VERTEXAI)
-    
+        return qualify_model_name(self.GEMINI_MODEL_FALLBACK, self._effective_use_vertex())
+
     @property
     def effective_flash_model(self) -> str:
         """Return reasoning model name with google/ prefix for Vertex AI.
@@ -321,17 +432,17 @@ class Config(BaseSettings):
         background reasoning model (gemini-2.5-pro by default) used for
         extraction, research, and advice. Live audio still uses Flash.
         """
-        return qualify_model_name(DEFAULT_GEMINI_FLASH_MODEL, self.GOOGLE_GENAI_USE_VERTEXAI)
+        return qualify_model_name(DEFAULT_GEMINI_FLASH_MODEL, self._effective_use_vertex())
 
     @property
     def effective_advice_model(self) -> str:
         """Return Pro advice generation model name with google/ prefix for Vertex AI."""
-        return qualify_model_name(self.ADVICE_GENERATION_MODEL, self.GOOGLE_GENAI_USE_VERTEXAI)
+        return qualify_model_name(self.ADVICE_GENERATION_MODEL, self._effective_use_vertex())
 
     @property
     def effective_vision_model(self) -> str:
         """Return vision analysis model name with google/ prefix for Vertex AI."""
-        return qualify_model_name(self.VISION_ANALYSIS_MODEL, self.GOOGLE_GENAI_USE_VERTEXAI)
+        return qualify_model_name(self.VISION_ANALYSIS_MODEL, self._effective_use_vertex())
 
     class Config:
         env_file = ".env"

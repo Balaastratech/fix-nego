@@ -34,6 +34,7 @@ class DeepgramStreamSession:
         # SET_LANGUAGE_PROFILE lands. Empty until the first push().
         self._active_language: dict[str, str] = {}
         self._callbacks: dict[str, Callable] = {}
+        self._utterance_end_callbacks: dict[str, Callable] = {}
 
     # ── Registry helpers ──────────────────────────────────────────────────────
 
@@ -58,6 +59,12 @@ class DeepgramStreamSession:
     def register_callback(self, source: str, callback: Callable) -> None:
         """Register an async callback(text, is_final, speech_final, confidence) for a source."""
         self._callbacks[source] = callback
+
+    def register_utterance_end_callback(self, source: str, callback: Callable) -> None:
+        """Register an async callback() invoked when Deepgram emits UtteranceEnd
+        for a source (word-gap based end-of-turn). Used to flush the current turn
+        even when audio never goes silent (noisy mic)."""
+        self._utterance_end_callbacks[source] = callback
 
     async def push(self, source: str, pcm_bytes: bytes, language: str = "en-US") -> None:
         """Forward a raw PCM chunk to the live stream for this source.
@@ -99,6 +106,8 @@ class DeepgramStreamSession:
                 on_transcript=cb,
                 language=desired_lang,
                 endpointing_ms=settings.DEEPGRAM_STREAM_ENDPOINTING_MS,
+                utterance_end_ms=int(getattr(settings, "DEEPGRAM_UTTERANCE_END_MS", 0) or 0),
+                on_utterance_end=self._utterance_end_callbacks.get(source),
                 keepalive_seconds=settings.DEEPGRAM_STREAM_KEEPALIVE_SECONDS,
             )
             self._clients[source] = client
@@ -166,12 +175,14 @@ class DeepgramLiveClient:
         model: str = "nova-3",
         sample_rate: int = 16000,
         endpointing_ms: int = 300,    # finalize 300ms after speech stops
-        utterance_end_ms: int = 500,  # shorter wait for final result
+        utterance_end_ms: int = 0,    # 0 = disabled; >=1000 enables UtteranceEnd
+        on_utterance_end: Optional[Callable] = None,
         keepalive_seconds: float = 3.0,
     ):
         self.api_key = api_key
         self.source = source
         self.on_transcript = on_transcript
+        self.on_utterance_end = on_utterance_end
         self.language = language
         self.model = model
         self.sample_rate = sample_rate
@@ -200,6 +211,11 @@ class DeepgramLiveClient:
             ("smart_format", "true"),
             ("language", self.language),
         ]
+        # Word-gap end-of-turn detection (robust to non-speech noise). Requires
+        # interim_results=true (sent above). NOT using vad_events (it previously
+        # triggered HTTP 400); utterance_end_ms alone yields UtteranceEnd messages.
+        if self.utterance_end_ms and self.utterance_end_ms >= 1000:
+            params.append(("utterance_end_ms", str(self.utterance_end_ms)))
         return f"{self.WS_URL}?{urlencode(params)}"
 
     async def start(self) -> None:
@@ -381,6 +397,11 @@ class DeepgramLiveClient:
 
         elif etype == "UtteranceEnd":
             logger.debug("[DGStream] UtteranceEnd source=%s", self.source)
+            if self.on_utterance_end is not None:
+                try:
+                    await self.on_utterance_end()
+                except Exception as exc:
+                    logger.debug("[DGStream] on_utterance_end error source=%s: %s", self.source, exc)
 
         elif etype == "Error":
             logger.error("[DGStream] API error source=%s: %s", self.source, event)

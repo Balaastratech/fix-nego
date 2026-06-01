@@ -120,6 +120,28 @@ class SessionStore:
                     conn.execute(
                         "ALTER TABLE sessions ADD COLUMN per_source_language_json TEXT NOT NULL DEFAULT '{}'"
                     )
+
+                # ── Auth tables (Phase auth — Clerk+JWT) ──────────────────────
+                conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        clerk_sub TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        email_verified INTEGER NOT NULL DEFAULT 0,
+                        created_at REAL NOT NULL,
+                        last_login_at REAL NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS refresh_tokens (
+                        jti TEXT PRIMARY KEY,
+                        clerk_sub TEXT NOT NULL,
+                        expires_at REAL NOT NULL,
+                        revoked INTEGER NOT NULL DEFAULT 0,
+                        created_at REAL NOT NULL
+                    );
+                    """
+                )
+
             self._initialized = True
             logger.info("SessionStore initialized", extra={"db_path": str(self.db_path)})
 

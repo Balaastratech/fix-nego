@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 
 # Valid messages per state
 VALID_MESSAGES: Dict[NegotiationState, list[str]] = {
-    NegotiationState.IDLE:      ["PRIVACY_CONSENT_GRANTED", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
-    NegotiationState.CONSENTED: ["START_NEGOTIATION", "ENROLLMENT_START", "ENROLLMENT_AUDIO", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
+    NegotiationState.IDLE:      ["PRIVACY_CONSENT_GRANTED", "PROVIDER_CONFIG", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
+    NegotiationState.CONSENTED: ["START_NEGOTIATION", "PROVIDER_CONFIG", "ENROLLMENT_START", "ENROLLMENT_AUDIO", "TRACE_CLIENT_EVENT", "CAPTURE_HEALTH"],
     NegotiationState.ACTIVE:    [
         "VISION_FRAME",
         "SCREEN_FRAME",
@@ -307,6 +307,103 @@ class NegotiationEngine:
         result = await session.enrollment_service.start_enrollment()
         await websocket.send_json(result)
         
+    @staticmethod
+    async def handle_provider_config(session: NegotiationSession, payload: dict, websocket: WebSocket) -> None:
+        """Phase G — per-session BYOK. The desktop sends its OWN keys + slot/model +
+        google_backend right after CONNECTION_ESTABLISHED (before START). We store
+        them on the session as a runtime_config overlay (never to the global JSON),
+        bind them to the current task's ContextVar so every resolver call in this
+        session uses them, and re-key the Gemini Live preconnect if the effective
+        Google key/backend changed. Keys are NEVER echoed back."""
+        from app.providers import runtime_config as _rc
+
+        if not getattr(settings, "PER_SESSION_PROVIDER_OVERRIDE_ENABLED", True):
+            await websocket.send_json({
+                "type": "PROVIDER_CONFIG_ACK",
+                "payload": {"applied": False, "reason": "per_session_disabled"},
+            })
+            return
+
+        slots = payload.get("slots") if isinstance(payload.get("slots"), dict) else {}
+        keys = payload.get("keys") if isinstance(payload.get("keys"), dict) else {}
+        cfg_settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+        overrides = {
+            "slots": {str(k): v for k, v in (slots or {}).items() if isinstance(v, dict)},
+            "keys": {str(k): str(v).strip() for k, v in (keys or {}).items() if str(v or "").strip()},
+            "settings": {str(k): v for k, v in (cfg_settings or {}).items()},
+        }
+        session.provider_overrides = overrides
+        # Bind to THIS task now so the (re)preconnect task below — and every later
+        # message in this session's receive loop — resolves against these overrides.
+        _rc.set_session_overrides(session.provider_overrides)
+
+        # Re-key the Gemini Live preconnect if the effective Google credential changed.
+        # The initial preconnect (websocket.py) ran with the .env key (or no-op'd when
+        # the hosted .env has none); now that the client's own key has arrived, tear a
+        # stale preconnect down and reopen under the session overlay so START reuses it.
+        try:
+            effective_key = _rc.google_api_key()
+            use_vertex = _rc.google_use_vertex()
+        except Exception:
+            effective_key, use_vertex = "", False
+
+        prev_key = session.api_key or ""
+        needs_rekey = (bool(effective_key) and effective_key != prev_key) or use_vertex
+        if needs_rekey:
+            if session.live_preconnect_task and not session.live_session:
+                session.live_preconnect_task.cancel()
+                session.live_preconnect_task = None
+            if session.live_session and session.live_session_cm:
+                if session.live_session_keepalive_task:
+                    session.live_session_keepalive_task.cancel()
+                    session.live_session_keepalive_task = None
+                try:
+                    await session.live_session_cm.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                session.live_session = None
+                session.live_session_cm = None
+                session.live_preconnected_context = ""
+                session.live_preconnected_at = None
+            NegotiationEngine.start_live_preconnect(
+                session,
+                effective_key,
+                context="Desktop companion virtual meeting session",
+            )
+
+        providers_with_keys = sorted(overrides["keys"].keys())
+        slot_choices = {s: (c.get("provider") or "") for s, c in overrides["slots"].items()}
+        try:
+            from app.utils.session_trace import get_session_trace
+            trace = get_session_trace(session.session_id)
+            if trace:
+                trace.record(
+                    category="session",
+                    name="provider_config_applied",
+                    summary="Per-session provider overrides applied (BYOK)",
+                    data={
+                        "providers_with_keys": providers_with_keys,
+                        "slots": slot_choices,
+                        "google_backend": _rc.google_backend(),
+                        "rekeyed_live": needs_rekey,
+                    },
+                )
+        except Exception:
+            pass
+        logger.info(
+            "Applied per-session provider overrides [session=%s] providers_with_keys=%s slots=%s rekey=%s",
+            session.session_id, providers_with_keys, slot_choices, needs_rekey,
+        )
+        await websocket.send_json({
+            "type": "PROVIDER_CONFIG_ACK",
+            "payload": {
+                "applied": True,
+                "providers_with_keys": providers_with_keys,
+                "slots": slot_choices,
+                "google_backend": _rc.google_backend(),
+            },
+        })
+
     @staticmethod
     async def handle_start(session: NegotiationSession, payload: dict, websocket: WebSocket, api_key: str) -> None:
         context = payload.get("context", "")
@@ -1245,7 +1342,9 @@ class NegotiationEngine:
                 f"Routing message: {msg_type}",
                 extra={"message_type": msg_type, "payload": payload, "session_id": session.session_id},
             )
-        if msg_type == "PRIVACY_CONSENT_GRANTED":
+        if msg_type == "PROVIDER_CONFIG":
+            await NegotiationEngine.handle_provider_config(session, payload, websocket)
+        elif msg_type == "PRIVACY_CONSENT_GRANTED":
             await NegotiationEngine.handle_consent(session, payload, websocket)
         elif msg_type == "START_NEGOTIATION":
             await NegotiationEngine.handle_start(session, payload, websocket, settings.GEMINI_API_KEY)
@@ -2029,7 +2128,7 @@ class NegotiationEngine:
             # by the press handler and this timer becomes a no-op — preventing
             # the previous cycle's stale timer from killing the new ask window.
             my_gen = getattr(session, "ask_cycle_gen", 0)
-            async def _close_ask_window_if_orphaned(sess=session, gen=my_gen, grace_s: float = 8.0):
+            async def _close_ask_window_if_orphaned(sess=session, gen=my_gen, grace_s: float = 25.0):
                 await asyncio.sleep(grace_s)
                 if gen != getattr(sess, "ask_cycle_gen", 0):
                     # A newer ask cycle has started; we are stale, do nothing.

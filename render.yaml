@@ -1,0 +1,80 @@
+# Render Blueprint — hosted desktop-companion backend (lean BYOK profile).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# This deploys backend/ as a free Python web service with auto HTTPS/WSS.
+# No Docker, no Caddy, no firewall — Render handles TLS and the public URL.
+#
+# Build/start/env are all pre-filled here so the dashboard needs zero manual
+# typing: in Render → New → Blueprint → pick this repo → Apply.
+#
+# Env profile mirrors deploy/.env.oracle.example (the proven lean profile):
+# BYOK (all provider keys EMPTY — sent per-session from the desktop), every
+# heavy speaker/diarization path disabled, Google in AI-Studio mode (no Vertex).
+#
+# AUTH starts OFF (AUTH_REQUIRED=False) so the first deploy just works and you
+# can verify /health. Phase 2 (lock it down): in the Render dashboard set
+# COMPANION_SHARED_TOKEN to a random value AND flip AUTH_REQUIRED to True, then
+# point the desktop at it with the same token. See deploy/DEPLOY.md.
+
+services:
+  - type: web
+    name: companion-backend
+    runtime: python
+    plan: free
+    region: singapore          # closest free region to India; change if you prefer
+    rootDir: backend
+    branch: main
+    buildCommand: "pip install -r requirements-desktop.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Pin a Python with wheels for every lean dep (avoids 3.13 build surprises).
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # ── Auth: OFF for first boot. Flip True + set the token below in phase 2. ──
+      - key: AUTH_REQUIRED
+        value: "False"
+      # Shared bearer token — leave UNSET here; set it in the dashboard (Secret)
+      # when you lock the box down. sync:false keeps it out of git.
+      - key: COMPANION_SHARED_TOKEN
+        sync: false
+
+      # ── Google: AI Studio / BYOK (no Vertex, no GCP project) ──
+      - key: GOOGLE_GENAI_USE_VERTEXAI
+        value: "False"
+      - key: GOOGLE_CLOUD_PROJECT
+        value: ""
+      - key: GEMINI_API_KEY
+        value: ""
+
+      # ── STT: Deepgram over HTTP/WS (key sent per-session from desktop) ──
+      - key: TRANSCRIPTION_PROVIDER
+        value: "deepgram"
+      - key: DEEPGRAM_API_KEY
+        value: ""
+
+      # ── Multi-provider keys: EMPTY (BYOK — desktop sends them per session) ──
+      - key: PROVIDER_RUNTIME_OVERRIDE_ENABLED
+        value: "true"
+      - key: PER_SESSION_PROVIDER_OVERRIDE_ENABLED
+        value: "true"
+
+      # ── Heavy/ML paths DISABLED (their packages aren't in the lean wheel set) ──
+      - key: SPEAKER_RECOGNITION_ENABLED
+        value: "False"
+      - key: SPEECHBRAIN_ENABLED
+        value: "False"
+      - key: RESEMBLYZER_ENABLED
+        value: "False"
+      - key: WESPEAKER_ENABLED
+        value: "False"
+      - key: PERFECT_LISTENER_ENABLED
+        value: "False"
+
+      # ── Behavior / logging ──
+      - key: ASK_AI_NATIVE_AUDIO
+        value: "true"
+      - key: LOG_LEVEL
+        value: "INFO"

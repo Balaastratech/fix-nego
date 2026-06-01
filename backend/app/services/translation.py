@@ -90,6 +90,39 @@ async def translate_text(
     if cached is not None:
         return cached
 
+    src_hint = source_lang or "auto-detect"
+    prompt = (
+        f"Translate the following text from {src_hint} to {target_lang}. "
+        "Return ONLY the translation, no quotes, no explanation, no language tags.\n\n"
+        f"TEXT:\n{text}"
+    )
+
+    # Multi-provider: when the Fast Text slot is NOT Google, route translation
+    # through the provider-agnostic text client. Google keeps its existing path.
+    from app.providers import runtime_config
+    from app.providers.registry import SLOT_FAST_TEXT
+    if not runtime_config.is_google(SLOT_FAST_TEXT):
+        try:
+            from app.providers import text_client
+            translated = await asyncio.wait_for(
+                text_client.generate(
+                    SLOT_FAST_TEXT,
+                    user_text=prompt,
+                    temperature=0.0,
+                    max_output_tokens=max(512, min(4096, len(text) * 3)),
+                    timeout=settings.TRANSLATION_TIMEOUT_SECONDS,
+                ),
+                timeout=settings.TRANSLATION_TIMEOUT_SECONDS,
+            )
+            translated = (translated or "").strip()
+            if not translated:
+                return text
+            _cache_put(key, translated)
+            return translated
+        except Exception as exc:
+            logger.warning("translate_text: provider path failed (%s); returning original", exc)
+            return text
+
     # Lazy import — keep this module importable when google-genai isn't installed
     # (e.g. unit tests with the flag off).
     try:
@@ -99,14 +132,15 @@ async def translate_text(
         logger.warning("translate_text: google-genai unavailable (%s); returning original", exc)
         return text
 
-    if settings.GOOGLE_GENAI_USE_VERTEXAI:
+    from app.providers import runtime_config as _rc
+    if _rc.google_use_vertex():
         client = genai.Client(
             vertexai=True,
             project=settings.GOOGLE_CLOUD_PROJECT,
             location=settings.GOOGLE_CLOUD_LOCATION,
         )
     else:
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        client = genai.Client(api_key=_rc.google_api_key())
 
     src_hint = source_lang or "auto-detect"
     prompt = (

@@ -49,6 +49,11 @@ httpx>=0.27.0
 #   Light (no torch). Must stay or the backend won't import.
 huggingface_hub>=0.23.0
 
+# ── Auth — Clerk JWT verification + app-session tokens ───────────────────────
+# python-jose[cryptography]: RS256 (Clerk JWKS) + HS256 (app access/refresh).
+# Pure-python, no torch. cryptography provides the RSA public-key primitives.
+python-jose[cryptography]>=3.3.0
+
 # ── AI providers (BYOK — keys supplied per-session by the desktop) ────────────
 # google-genai: Gemini Live (hold-to-ask), advice, vision. AI Studio + Vertex.
 google-genai>=1.0.0

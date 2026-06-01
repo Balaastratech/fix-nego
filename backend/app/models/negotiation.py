@@ -66,6 +66,11 @@ class NegotiationSession(BaseModel):
     live_session_cm: Optional[Any] = None
     # API key stored for auto-reconnect on 1007 codec errors
     api_key: Optional[str] = None
+    # Phase G — per-session BYOK overlay sent by the desktop via PROVIDER_CONFIG.
+    # Shape mirrors the runtime JSON: {"slots":{}, "keys":{}, "settings":{}}.
+    # Scoped to this websocket session only (applied through a runtime_config
+    # ContextVar in the WS receive loop); never persisted to the global JSON.
+    provider_overrides: Optional[dict] = None
     live_session_receive_task: Optional[Any] = None
     live_session_keepalive_task: Optional[Any] = None
     live_session_monitor_task: Optional[Any] = None

@@ -6,9 +6,12 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.connection_manager import connection_manager
 from app.models.negotiation import NegotiationSession, NegotiationState
 from app.services.negotiation_engine import NegotiationEngine
+from app.services.readiness import readiness
 from app.services.session_store import session_store
 from app.utils.session_trace import create_session_trace, get_session_trace
 from app.config import settings
+from app.providers import runtime_config
+from app.api.auth import websocket_get_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -52,6 +55,15 @@ def _restore_session_from_bundle(session: NegotiationSession, bundle: dict) -> N
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Auth gate: accept a valid app JWT or the shared admin token. When
+    # AUTH_REQUIRED=False and no token at all, returns an anonymous user so
+    # dev/localhost behavior is completely unchanged.
+    auth_user = websocket_get_user(websocket)
+    if auth_user is None:
+        await websocket.close(code=1008)  # 1008 = policy violation
+        logger.warning("WebSocket rejected: invalid or missing token")
+        return
+
     requested_session_id = websocket.query_params.get("session_id")
     restored = False
     restored_bundle = None
@@ -104,9 +116,15 @@ async def websocket_endpoint(websocket: WebSocket):
             "resume_token": session.resume_token,
             "trace_jsonl_path": session.trace_jsonl_path,
             "trace_report_path": session.trace_report_path,
-            "ready_to_start": True,
+            "ready_to_start": readiness.is_ready,
+            "readiness": readiness.snapshot(),
         }
     })
+    # Phase G — bind this task to the session's provider overlay (None until a
+    # PROVIDER_CONFIG message arrives → identical to pre-Phase-G behavior). The
+    # initial preconnect below therefore uses the .env key; once the client sends
+    # its own key, handle_provider_config re-keys the Live session.
+    runtime_config.set_session_overrides(session.provider_overrides)
     NegotiationEngine.start_live_preconnect(
         session,
         settings.GEMINI_API_KEY,
@@ -145,7 +163,12 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             try:
                 message = await websocket.receive()
-                
+
+                # Phase G — keep this task bound to the latest session overlay so
+                # message handlers and any task they spawn resolve providers/keys
+                # against the client's own config (set by an earlier PROVIDER_CONFIG).
+                runtime_config.set_session_overrides(session.provider_overrides)
+
                 if message.get("type") == "websocket.disconnect":
                     active_trace = get_session_trace(session_id)
                     if active_trace:

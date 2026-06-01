@@ -1,4 +1,9 @@
-from fastapi import FastAPI, Request, Body, HTTPException
+import base64
+import json as _json
+from urllib.parse import quote
+
+from fastapi import FastAPI, Request, Body, HTTPException, Depends
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import asyncio
@@ -31,8 +36,11 @@ _hf_file_download.hf_hub_download = _patched_hf_hub_download
 # ─────────────────────────────────────────────────────────────────────────────
 
 from app.config import settings
+from app.api.auth import get_current_user
 from app.models.negotiation import NegotiationSession
 from app.services.capability_registry import capability_registry, CapabilityStatus
+from app.services.connection_manager import connection_manager
+from app.services.readiness import readiness
 from app.services.session_store import session_store
 from app.services.speechbrain_service import speechbrain_service
 from app.services.stt_service import SpeechTranscriptionService
@@ -45,9 +53,15 @@ app = FastAPI(title="AI Negotiation Copilot", version="1.0.0")
 
 app.add_middleware(CorrelationIdMiddleware)
 
+# Desktop (Electron) renderer pages load from file:// so their Origin header is
+# "null". Add desktop-friendly origins alongside the configurable web origins so
+# the in-app Settings page can call the REST config API. These fetches send no
+# credentials, so echoing the "null" origin is safe.
+_DESKTOP_ORIGINS = ["null", "file://", "app://.", "http://localhost:8000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=settings.cors_origins_list + _DESKTOP_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -224,6 +238,19 @@ async def _run_capability_probes_in_background() -> None:
         },
     )
 
+    # Probes are done — the backend is now safe to start a session against.
+    # Flip the readiness flag (and wake any websocket clients waiting on it) so
+    # the desktop UI can enable the Start button with a clear "ready" indicator.
+    readiness.mark_ready(
+        {
+            "capability_path": capability_registry.active_path(),
+            "stt_provider": stt_provider,
+            "stt_available": stt_ok,
+        }
+    )
+    await connection_manager.broadcast_backend_ready()
+    logger.info("Backend marked ready for sessions")
+
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Starting AI Negotiation Copilot with primary model: {settings.GEMINI_MODEL}")
@@ -240,6 +267,10 @@ async def startup_event():
         },
     )
     session_store.initialize()
+    # auth_db must be configured AFTER session_store.initialize() (which creates
+    # the auth tables) so auth_db can open connections to the same DB file.
+    from app.services import auth_db
+    auth_db.configure(settings.SESSION_DB_PATH)
     asyncio.create_task(_run_capability_probes_in_background(), name="startup-capability-probes")
     logger.info(
         "Capability probes scheduled in background",
@@ -261,6 +292,60 @@ async def startup_event():
         },
     )
 
+@app.get("/")
+async def clerk_root_handler(
+    request: Request,
+    __clerk_handshake: str | None = None,
+    __clerk_db_jwt: str | None = None,
+):
+    """Handle every browser landing on the backend root during the Clerk flow.
+
+    Two cases both end by bouncing the browser back to /auth/login-page:
+
+    1. **Handshake** (``?__clerk_handshake=<JWT>``): Clerk JS, loaded on our origin
+       (different from Clerk's own domain), redirects here to sync its session
+       cookies. We decode the JWT and replay the Set-Cookie headers it carries.
+
+    2. **Post-sign-in landing** (no handshake param): after a successful sign-in
+       Clerk navigates to its default ``afterSignInUrl`` of ``/``. There's no
+       handshake here — we simply redirect back to the login page, where Clerk JS
+       now sees an authenticated session and completes the token handoff.
+
+    The ``_clerk_redirect`` cookie (set when the login page was first served) tells
+    us the loopback callback URL to thread back through.
+    """
+    redirect_uri = request.cookies.get("_clerk_redirect", "")
+    signout = request.cookies.get("_clerk_signout", "")
+
+    login_url = "/auth/login-page"
+    params = []
+    if redirect_uri:
+        params.append(f"redirect={quote(redirect_uri, safe='')}")
+    if signout == "1":
+        # Preserve the signout intent across this handshake so Clerk.user can be
+        # populated before we sign out. /auth/clear-signout deletes the flag once
+        # the sign-out completes — do NOT delete it here (that broke mid-handshake).
+        params.append("signout=1")
+    if params:
+        login_url += "?" + "&".join(params)
+
+    response = RedirectResponse(url=login_url, status_code=302)
+
+    handshake_jwt = __clerk_handshake or __clerk_db_jwt
+    if handshake_jwt:
+        # Decode the payload (no signature verify — it's just a cookie transport).
+        try:
+            parts = handshake_jwt.split(".")
+            padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
+            payload = _json.loads(base64.urlsafe_b64decode(padded))
+            for cookie_str in payload.get("handshake", []):
+                response.headers.append("Set-Cookie", cookie_str)
+        except Exception:
+            logger.warning("Failed to decode Clerk handshake JWT", exc_info=True)
+
+    return response
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "healthy"}
@@ -269,11 +354,19 @@ async def health_check():
 async def health_check_root():
     return {"status": "healthy"}
 
-@app.get("/api/sessions")
+@app.get("/api/ready")
+async def readiness_check():
+    """Plain readiness snapshot for the desktop UI. Returns whether the AI
+    capability probes have finished (i.e. it is safe to start a session) plus a
+    plain-language status message. Polled by the full window so its Start button
+    and status banner don't depend on the overlay's BroadcastChannel relay."""
+    return readiness.snapshot()
+
+@app.get("/api/sessions", dependencies=[Depends(get_current_user)])
 async def list_sessions(limit: int = 20):
     return {"sessions": session_store.list_sessions(limit=limit)}
 
-@app.get("/api/sessions/{session_id}")
+@app.get("/api/sessions/{session_id}", dependencies=[Depends(get_current_user)])
 async def get_session_history(session_id: str):
     bundle = session_store.load_session_bundle(session_id)
     if bundle is None:
@@ -291,3 +384,9 @@ async def log_frontend_message(request: Request, payload: Dict[str, Any] = Body(
 
 from app.api.websocket import router as websocket_router
 app.include_router(websocket_router)
+
+from app.api.providers import router as providers_router
+app.include_router(providers_router)
+
+from app.api.auth_routes import router as auth_router
+app.include_router(auth_router)

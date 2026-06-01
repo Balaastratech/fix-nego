@@ -167,13 +167,14 @@ class ListenerAgent:
         self._text_extraction_in_flight: bool = False
 
         # Flash client - supports both Vertex AI and Gemini API
-        if settings.GOOGLE_GENAI_USE_VERTEXAI:
+        from app.providers import runtime_config as _rc
+        if _rc.google_use_vertex():
             import os
             if settings.GOOGLE_APPLICATION_CREDENTIALS:
                 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
             if settings.GOOGLE_CLOUD_PROJECT:
                 os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
-            
+
             self._client = genai.Client(
                 vertexai=True,
                 project=settings.GOOGLE_CLOUD_PROJECT,
@@ -181,7 +182,7 @@ class ListenerAgent:
             )
             logger.info(f"[ListenerAgent] Using Vertex AI in {settings.GOOGLE_CLOUD_LOCATION}")
         else:
-            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            self._client = genai.Client(api_key=_rc.google_api_key())
             logger.info("[ListenerAgent] Using Gemini API")
         
         # Use the effective model name (with google/ prefix for Vertex AI)
@@ -931,10 +932,39 @@ class ListenerAgent:
             )
 
         async def do_extract():
+            # Multi-provider: route extraction through the configured Fast Text
+            # provider when it is not Google. Google keeps its existing async path.
+            from app.providers import runtime_config
+            from app.providers.registry import SLOT_FAST_TEXT
+            if not runtime_config.is_google(SLOT_FAST_TEXT):
+                from app.providers import text_client
+
+                class _TextResponse:
+                    __slots__ = ("text",)
+                    def __init__(self, text):
+                        self.text = text
+
+                out = await text_client.generate(
+                    SLOT_FAST_TEXT,
+                    user_text=prompt,
+                    json_mode=True,
+                    temperature=0.1,
+                    max_output_tokens=2048,
+                    timeout=settings.TEXT_EXTRACTION_TIMEOUT_SECONDS,
+                )
+                return _TextResponse(out)
+            # Latency fix: disable gemini-2.5-flash default "thinking" (was burning
+            # ~2000 thoughts_tokens → ~12s per extraction). Extraction is structured
+            # JSON, not a reasoning task.
+            _extract_cfg_kwargs = {"temperature": 0.1}
+            try:
+                _extract_cfg_kwargs["thinking_config"] = genai_types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
             return await self._client.aio.models.generate_content(
                 model=self._flash_model,
                 contents=prompt,
-                config=genai_types.GenerateContentConfig(temperature=0.1),
+                config=genai_types.GenerateContentConfig(**_extract_cfg_kwargs),
             )
 
         _extract_t0 = time.perf_counter()
