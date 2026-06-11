@@ -12,6 +12,10 @@ Read `HANDOFF.md` before planning, editing, running commands, testing, resuming 
 
 `HANDOFF.md` is shared execution context and history. It is not the place for the relay protocol itself.
 
+## Codebase reference map
+
+`docs/code_map/00_INDEX.md` is a maintained structural reference for the whole repo (backend services/API/models/providers/config/prompts, frontend, desktop Electron app, and a doc/test/deploy catalog), with `path:line` references and a "where do I go for X" lookup table. Any agent should check it before exploring/searching the codebase for unfamiliar areas, to avoid re-discovering structure that is already mapped. `HANDOFF.md` remains the source for *recent session history and in-flight context*; `docs/code_map/` is the source for *where things live in the code*. If a significant structural change lands (new/renamed/deleted module, new settings-flag category, newly-found dead code), update the relevant `docs/code_map/0N_*.md` file.
+
 ## What belongs in HANDOFF.md
 
 Write whatever the next agent genuinely needs in order to continue without re-discovering the repo state. That usually includes:
