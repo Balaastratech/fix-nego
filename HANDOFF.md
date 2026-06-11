@@ -3045,3 +3045,29 @@ The brief demoted transcript to "Use this as private background context only…A
 3. If the vision precedence rule STILL loses to native frames, next lever (non-suppressive) is reducing vision-frame cadence during the ask window or injecting an explicit "USER-STATED FACTS" block above the screen — discuss before implementing.
 
 **Files edited this batch:** backend/app/ai_assets.py, backend/app/config.py, backend/app/services/negotiation_engine.py.
+
+---
+
+## [Agent: Claude Code] 2026-06-11 — New `docs/code_map/` reference map for future Claude sessions
+
+**Objective (user request):** "Amylase the code and make full report and structure ... so other Claude model can understand this code better and do not need to amylase and find all thing in code ... with less token consumption". Built a structured, navigable code-reference map covering the ENTIRE repo so future sessions can jump straight to `path:line` instead of re-exploring.
+
+**What was built — `docs/code_map/` (9 files, ~360KB total):**
+- `00_INDEX.md` — master navigation index: project overview, "I need to work on X → start here" quick-lookup table, and a consolidated list of the top 12 cross-cutting gotchas/feature flags/dead-code pointers (READ THIS FIRST in future sessions).
+- `01_backend_core.md` — `services/negotiation_engine.py` (3459L), `services/gemini_client.py` (2357L), `services/companion_runtime.py` (1245L).
+- `02_backend_listener.md` — `listener_agent.py`, `perfect_listener.py`, `stt_service.py`, `next_move_cache.py`, `market_research.py` (dead).
+- `03_backend_speaker_infra.md` — 23 files: speaker recognition stack, session/connection infra, auth helpers, `readiness.py` (added this session), + dead modules list.
+- `04_backend_api_models_providers.md` — `main.py`, `config.py` (full settings table), `ai_assets.py` (all prompts), `api/*`, `models/*`, `providers/*` (BYOK/runtime config).
+- `05_frontend.md` — Next.js frontend (flags `frontend/lib/types.ts` missing but imported by 6 files — build-breaking).
+- `06_desktop.md` — Electron companion app (main/preload/overlay/full/app.js-legacy/login + PowerShell scripts).
+- `07_repo_catalog.md` — whole-repo doc/test/deploy inventory with stale/current flags.
+- `08_backend_utils_logging.md` — NEW this session: `utils/session_logger.py`, `logging_config.py`, `session_trace.py`, `trace_helpers.py`, `conversation_audit.py`, `speechbrain_patch.py`, `speaker_debug.py` (the 5 separate logging/tracing streams), summarized in a comparison table.
+
+**Process notes:**
+- All `backend/app` Python files are now covered (verified via `find backend/app -name "*.py"` against the index — 53 files, all accounted for across files 01/02/03/04/08).
+- Source material came from 6 prior research-subagent reports (`/tmp/agent_reports/*.md`) plus direct reads of `readiness.py` and the 7 `utils/` logging files done in this session. Files were `cp`'d into `docs/code_map/` (not regenerated) to avoid large-output-token errors after a prior 32K-output-token API error.
+- HANDOFF.md content was NOT rewritten/trimmed — only appended to, per repo instructions.
+
+**Verification status:** All 9 files written and confirmed on disk (`ls -la docs/code_map/`). Not yet committed/pushed at time of this entry — next action is `git add docs/code_map/ HANDOFF.md && git commit && git push -u origin claude/code-analysis-documentation-ejrtef`.
+
+**Next action for incoming agent:** if the user requests further depth (e.g. per-function call graphs, sequence diagrams for the ask-AI flow, or a frontend↔backend message-type cross-reference), extend the relevant numbered file rather than creating new top-level docs. Keep `00_INDEX.md`'s gotcha list in sync if new feature flags/dead code are discovered.
