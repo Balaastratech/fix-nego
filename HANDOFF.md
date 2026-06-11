@@ -3071,3 +3071,22 @@ The brief demoted transcript to "Use this as private background context only…A
 **Verification status:** All 9 files written and confirmed on disk (`ls -la docs/code_map/`). Not yet committed/pushed at time of this entry — next action is `git add docs/code_map/ HANDOFF.md && git commit && git push -u origin claude/code-analysis-documentation-ejrtef`.
 
 **Next action for incoming agent:** if the user requests further depth (e.g. per-function call graphs, sequence diagrams for the ask-AI flow, or a frontend↔backend message-type cross-reference), extend the relevant numbered file rather than creating new top-level docs. Keep `00_INDEX.md`'s gotcha list in sync if new feature flags/dead code are discovered.
+
+---
+
+## [Agent: Claude Code] 2026-06-11 — Deep market research: monetization & product strategy
+
+**Objective (user request):** real web research on what pain points people actually pay for, how to monetize, how to split web vs desktop functionality, and what to fix/enhance to sell this product.
+
+**Method:** 5 parallel web-research agents (competitor pricing/gaps, real-time copilot category, buyer segments/willingness-to-pay, legal/platform risk, retention/GTM) + 2 adversarial verification agents that re-checked the 20 most load-bearing claims against primary sources (court orders, statutes, leginfo, vendor pricing pages, TechCrunch). 13 confirmed, 6 partly-confirmed (corrections applied), 1 corrected.
+
+**Deliverables (committed this session):**
+- `docs/plans/2026-06-11-market-research-monetization.md` — synthesized strategy: verified market gap (real-time × negotiation-specific × self-serve is unowned; Trellus/Winn.ai are adjacent), positioning (transparent NOT stealth — Cluely failed, Granola won $1.5B), pricing tiers (Free / Pro $29-39 / Team $59-79 / consumer Event Pass $49-149 one-time), web-vs-desktop split ("desktop captures, web shares"), compliance must-dos (consent-by-design, CIPA Ambriz vendor liability, EU AI Act Art 5(1)(f)), GTM wedge, and a P0-P3 fix-first list tying market evidence to known codebase issues.
+- `docs/plans/research-2026-06-11/` — 7 raw research/verification reports with all source URLs.
+
+**Key verified facts the strategy hinges on:** Cresta latency threshold (>1.5s degrades real-time UX); 11 all-party-consent states; Ambriz v. Google MTD denied 2/10/2025 (vendor "capability" CIPA liability); Otter.ai consolidated class action ongoing; Teams third-party-bot lobby gating (MC1251206) GA ~June 2026 — favors our no-bot local-capture desktop architecture; Pactum $54M Series C proves negotiation-AI demand; CarEdge $999/$149 proves consumer event-fee WTP.
+
+**P0 items identified (revenue-blocking):** (1) end-to-end ask latency budget <1.5s perceived; (2) `frontend/lib/types.ts` missing — build-breaking (see docs/code_map/05_frontend.md); (3) consent flow (pre-session prompt, geo-aware for all-party states). P1: vision-dominance bug (still open from prior sessions), glanceable cue-card output, web debrief/share page (productize session_trace report.md). P2: HubSpot CRM sync, negotiation-specific artifacts (concession tracker, BATNA memory).
+
+**Verification status:** report written and committed; no code changed this session.
+**Next action for incoming agent:** user decides which P0 to start with; latency instrumentation (P0-1) and the consent flow (P0-3) are independent and can run in parallel. Raw research in docs/plans/research-2026-06-11/ has source URLs for any claim that needs re-checking.
