@@ -44,6 +44,8 @@ runtime_providers.json
 *.key
 secrets.*
 *_secret*
+service-account-key.json
+backend/service-account-key.json
 
 # Node.js
 node_modules/
