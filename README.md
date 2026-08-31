@@ -1,601 +1,330 @@
 # AI Negotiation Copilot
 
-A multimodal real-time negotiation assistant powered by Google Gemini Live API. It listens to your negotiation, analyzes context in real time, and gives you live strategic coaching so you can negotiate better prices, terms, and agreements.
+A real-time AI meeting/negotiation copilot. It listens in on a live conversation, transcribes and analyzes it as it happens, and gives you private, spoken coaching — prices, sentiment, leverage points, and direct answers to questions you ask it mid-conversation without the other party hearing.
 
-Built for the **Gemini Live Agent Challenge**.
+Started as a submission for the **Gemini Live Agent Challenge**; has since grown into a two-client product built around one backend:
 
----
+- **Desktop Companion** (`desktop/`) — Windows Electron app, the actively developed client. Binds to a meeting window (Zoom/Meet/Teams/etc.), captures your mic and the meeting audio as separate sources, and plays AI replies only to you.
+- **Browser Dashboard** (`frontend/`) — the original hackathon UI. Runs entirely in the browser using your mic. Lighter to set up, good for a quick demo, but not the client new features land on first.
 
-## 🚀 Live Demo (No Setup Required)
-
-| Service | URL |
-|---|---|
-| **Frontend (Live App)** | https://negotiation-frontend-219079068693.us-central1.run.app |
-| **Backend Health Check** | https://negotiation-backend-219079068693.us-central1.run.app/health |
-
-> Both services are deployed on **Google Cloud Run** in `us-central1`.
-> No login required. Just open the frontend URL in **Chrome** and allow microphone access.
+Both talk to the same **FastAPI backend** (`backend/`) over a single WebSocket.
 
 ---
 
 ## Table of Contents
 
-- [Live Demo](#-live-demo-no-setup-required)
-- [Reproducible Testing](#-reproducible-testing)
-- [Overview](#overview)
+- [What It Does](#what-it-does)
+- [Architecture](#architecture)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
+- [Repo Layout](#repo-layout)
 - [Prerequisites](#prerequisites)
-- [Local Setup](#local-setup)
+- [Install & Run](#install--run)
+  - [1. Backend](#1-backend)
+  - [2. Desktop Companion (primary client)](#2-desktop-companion-primary-client)
+  - [3. Browser Dashboard (alt client)](#3-browser-dashboard-alt-client)
 - [Environment Variables](#environment-variables)
-- [How It Works](#how-it-works)
 - [WebSocket API](#websocket-api)
+- [Testing](#testing)
 - [Deployment](#deployment)
-- [Automated Tests](#automated-tests)
 - [Troubleshooting](#troubleshooting)
+- [Project Status & Known Gaps](#project-status--known-gaps)
+- [License](#license)
 
 ---
 
-## ✅ Reproducible Testing
+## What It Does
 
-### Option A — Test the Live Deployed App (Fastest, No Setup)
+- **Dual-model architecture**: Gemini Live handles the real-time voice conversation (including native-audio spoken answers); a background Gemini Flash "listener" agent continuously extracts prices, sentiment, and context from the conversation and injects that intel into the Live session so its advice is grounded, not generic.
+- **Multi-provider STT**: Google Cloud Speech, Deepgram (nova-3, multi-language), or Gemini Live's own native transcription — selectable per deployment via `TRANSCRIPTION_PROVIDER`.
+- **BYOK multi-provider text/vision layer**: swap the reasoning/vision/fast-text/STT provider per slot between Google, OpenAI, Anthropic, Groq, DeepSeek, and OpenRouter without a restart, via an in-app Settings page or `.env`.
+- **Hold-to-Ask**: hold a button/hotkey to privately ask the AI a direct question mid-conversation. The desktop app mutes your forwarded mic to the meeting during the hold (via a virtual audio cable) so only the AI hears the question; it answers back with native spoken audio.
+- **Optional speaker recognition**: SpeechBrain ECAPA-TDNN voice-print enrollment + pyannote overlap detection + Conv-TasNet speech separation, for distinguishing "you" from "them" automatically instead of manual speaker-tagging. Heavy (torch-based), off by default in the hosted profile.
+- **Session outcome summary**: savings/effectiveness scoring at the end of a session.
+- **Auto-reconnect** on Gemini Live session drops, with degraded-mode signaling to the client.
 
-**Requirements:** A modern browser (Chrome recommended) with a working microphone.
+## Architecture
 
-**Step 1 — Verify the backend is running:**
 ```
-GET https://negotiation-backend-219079068693.us-central1.run.app/health
-```
-Expected response: `{"status": "healthy"}`
-
-**Step 2 — Open the frontend:**
-```
-https://negotiation-frontend-219079068693.us-central1.run.app
-```
-
-**Step 3 — Run a full end-to-end test:**
-
-1. **Allow microphone** when the browser prompts
-2. Click **"I Understand, Continue"** on the privacy consent screen
-3. Optionally enter a negotiation context (e.g. `"Buying a used laptop, seller asking $800"`)
-4. Click **"Start Negotiation"**
-5. Wait for `AI is connected` status indicator (green)
-6. **Speak out loud** — say something like: *"I think $800 is too high, what do you think?"*
-7. Watch the **Transcript panel** update in real time with your speech
-8. Watch the **Strategy panel** update with AI coaching advice
-9. Hold the **"Ask AI"** button and ask a direct question: *"What should I offer?"*
-10. Listen for the **AI voice response** through your speakers
-11. Click **"End Negotiation"** — see the outcome summary with effectiveness score
-
-**Expected results at each step:**
-| Step | What you should see |
-|---|---|
-| After Step 4 | Status changes to `AI Connecting...` then `AI Listening` |
-| After Step 6 | Transcript panel shows your speech with speaker label |
-| After Step 7 | Strategy panel shows negotiation advice (price analysis, recommended tactic) |
-| After Step 9 | AI state changes to `AI Thinking` → `AI Speaking`, voice plays back |
-| After Step 11 | Outcome summary card appears with deal score |
-
----
-
-### Option B — Run Locally
-
-**Requirements:** Python 3.11+, Node.js 18+, a Gemini API key from https://aistudio.google.com/app/apikey
-
-**Step 1 — Clone and set up backend:**
-```bash
-git clone https://github.com/your-username/ai-negotiation-copilot.git
-cd ai-negotiation-copilot/backend
-
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-
-pip install -r requirements.txt
-cp .env.example .env
+                    ┌─────────────────────────┐
+                    │   FastAPI backend        │
+   Desktop Companion│   (backend/app/)          │  Browser Dashboard
+   (Electron, Win)  │                           │  (Next.js, any OS)
+        │           │  single WebSocket: /ws    │        │
+        └──────────►│  REST: /health, /api/*   │◄────────┘
+       LOCAL_MIC_PCM│                           │  mic PCM (browser)
+      REMOTE_APP_PCM│  ┌─────────────────────┐  │
+        ASK_AI_PCM  │  │ Gemini Live session  │  │  AI_RESPONSE / audio
+        SCREEN_FRAME│  │ (native audio)       │  │  TRANSCRIPT_UPDATE
+                    │  └─────────┬───────────┘  │  STRATEGY_UPDATE
+                    │            │ intel         │
+                    │  ┌─────────▼───────────┐  │
+                    │  │ Listener agent        │  │
+                    │  │ (Gemini Flash, bg)    │  │
+                    │  └───────────────────────┘  │
+                    │  STT: Google / Deepgram      │
+                    │  Speaker-ID: SpeechBrain(opt)│
+                    └─────────────────────────────┘
 ```
 
-Edit `backend/.env`:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-CORS_ORIGINS=http://localhost:3000
-```
-
-**Step 2 — Start the backend:**
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-Verify: `curl http://localhost:8000/health` → `{"status":"healthy"}`
-
-**Step 3 — Set up and start the frontend:**
-```bash
-cd ../frontend
-npm install
-npm run dev
-```
-
-**Step 4 — Open the app:**
-```
-http://localhost:3000
-```
-
-Follow the same test steps as Option A above.
-
----
-
-### Option C — Run Automated Tests
-
-**Backend tests (pytest):**
-```bash
-cd backend
-venv\Scripts\activate
-pip install -r requirements-dev.txt
-pytest tests/ -v
-```
-
-**Frontend tests (Vitest):**
-```bash
-cd frontend
-npm test                   # Run all tests once
-npm run test:coverage      # With coverage report
-npm run test:ui            # Interactive test UI in browser
-```
-
----
-
-### Option D — Redeploy to Google Cloud (Full Reproducibility)
-
-**Requirements:** Google Cloud SDK, a GCP project with billing enabled.
-
-```bash
-# 1. Authenticate
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-
-# 2. Enable APIs
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com aiplatform.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
-
-# 3. Create image registry
-gcloud artifacts repositories create negotiation-app --repository-format=docker --location=us-central1
-
-# 4. Store API key
-echo -n "YOUR_GEMINI_API_KEY" | gcloud secrets create GEMINI_API_KEY --data-file=- --replication-policy=automatic
-
-# 5. Build and deploy backend
-cd backend
-gcloud builds submit --tag us-central1-docker.pkg.dev/YOUR_PROJECT_ID/negotiation-app/backend:latest .
-gcloud run deploy negotiation-backend --image=us-central1-docker.pkg.dev/YOUR_PROJECT_ID/negotiation-app/backend:latest --region=us-central1 --allow-unauthenticated --port=8080 --memory=2Gi --cpu=2 --timeout=3600 --min-instances=1 --set-env-vars="GEMINI_MODEL=gemini-live-2.5-flash-native-audio,GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GOOGLE_CLOUD_LOCATION=us-central1,GOOGLE_GENAI_USE_VERTEXAI=True" --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest"
-
-# 6. Build and deploy frontend (replace BACKEND_URL with output from step 5)
-cd ../frontend
-gcloud builds submit --config=cloudbuild.yaml .
-gcloud run deploy negotiation-frontend --image=us-central1-docker.pkg.dev/YOUR_PROJECT_ID/negotiation-app/frontend:latest --region=us-central1 --allow-unauthenticated --port=8080 --memory=1Gi --cpu=1
-
-# 7. Update CORS
-gcloud run services update negotiation-backend --region=us-central1 --update-env-vars="CORS_ORIGINS=YOUR_FRONTEND_URL"
-```
-
----
-
-## Overview
-
-The AI Negotiation Copilot sits in the background during a real-world negotiation (buying a car, negotiating a salary, closing a deal) and provides live AI coaching through voice and text.
-
-It uses a **dual-model architecture**:
-- **Gemini Live** — handles real-time voice interaction with the user
-- **Gemini Flash (ListenerAgent)** — runs in the background extracting prices, sentiment, and context from the conversation, then injects that intel into the Live session
-
----
+The desktop app tags every audio chunk with its source (`LOCAL_MIC_PCM` = you, `REMOTE_APP_PCM` = the meeting/counterparty, `ASK_AI_PCM` = a private Hold-to-Ask question) so the backend never has to guess who's speaking on that path. The browser dashboard instead relies on manual "User" / "Counterparty" speaker buttons (or optional speaker-recognition once enrolled).
 
 ## Features
 
 - Real-time voice capture and transcription for both speakers
-- Manual speaker identification (User / Counterparty buttons)
-- Live AI coaching via Gemini Live API with audio responses
-- Background market research via Google Search
-- Proactive Copilot mode — AI alerts you to critical moments automatically
-- Ask AI mode — hold a button to ask the AI a direct question mid-negotiation
-- Response modes: Advice (detailed explanation) or Command (tactical one-liner)
-- Session outcome summary with savings and effectiveness analysis
-- Auto-reconnect on Gemini Live session drops
-
----
+- Live AI coaching via Gemini Live with spoken responses
+- Background market research via Google Search grounding
+- Proactive Copilot mode — the AI can alert you to critical moments unprompted
+- Hold-to-Ask — hold a button/hotkey to ask the AI a private question mid-conversation
+- Response modes: detailed "advice" vs. tactical one-line "command"
+- Multi-language support (Deepgram multi-language + response-language translation)
+- BYOK: bring your own API keys for any supported provider, switch per session
+- Session outcome summary (savings, effectiveness score)
+- Auto-reconnect on Gemini Live session drops with degraded-mode signaling
+- Desktop-only: system/meeting-window audio capture, screen-frame vision context, VB-Cable-based mic isolation during Hold-to-Ask
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 15, React 19, TypeScript, TailwindCSS |
-| Backend | Python 3.11+, FastAPI, Uvicorn |
-| AI | Google Gemini Live API, Gemini 2.0 Flash |
-| Real-time | WebSockets (binary audio + JSON control frames) |
-| Audio | Web Audio API (AudioWorklet) |
-| Logging | Pino (frontend), python-json-logger (backend) |
-| Testing | Vitest (frontend), pytest (backend) |
-| Deployment | Docker, Google Cloud Run |
+| Backend | Python 3.11+, FastAPI, Uvicorn, WebSockets |
+| Conversational AI | Google Gemini Live (native audio) + Gemini Flash (background listener) |
+| STT | Google Cloud Speech, Deepgram nova-3 (Sarvam AI streaming STT integration in progress, not yet wired into config) |
+| Speaker ID (optional) | SpeechBrain ECAPA-TDNN, pyannote.audio, WeSpeaker, Conv-TasNet |
+| Multi-provider BYOK | OpenAI, Anthropic, Groq, DeepSeek, OpenRouter (OpenAI-compatible adapter) |
+| Auth | Clerk (JWT) + app-session tokens + shared bearer token for hosted deployments |
+| Desktop client | Electron 31, native Windows audio routing, VB-Cable integration |
+| Browser client | Next.js 15, React 19, TypeScript, TailwindCSS, Web Audio API (AudioWorklet), VAD |
+| Logging | Structured JSON logging + per-session trace files + conversation audit log |
+| Testing | pytest (backend), Vitest (frontend) |
+| Deployment | Oracle Cloud (Always-Free Ampere A1 VM) behind Caddy, systemd-managed |
 
----
-
-## Project Structure
+## Repo Layout
 
 ```
-ai-negotiation-copilot/
+fix-nego/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                   # FastAPI app entry point
-│   │   ├── config.py                 # Environment config (Pydantic Settings)
-│   │   ├── api/
-│   │   │   └── websocket.py          # WebSocket endpoint + message routing
-│   │   ├── models/
-│   │   │   ├── negotiation.py        # Session state machine (IDLE > CONSENTED > ACTIVE > ENDING)
-│   │   │   └── messages.py           # Pydantic models for all WebSocket message types
-│   │   ├── services/
-│   │   │   ├── gemini_client.py      # Gemini Live API integration
-│   │   │   ├── listener_agent.py     # Background context extraction (dual-model)
-│   │   │   ├── negotiation_engine.py # Message routing + business logic
-│   │   │   ├── market_research.py    # Google Search market intelligence
-│   │   │   ├── connection_manager.py # WebSocket session tracking
-│   │   │   ├── audio_buffer.py       # Circular audio buffer
-│   │   │   ├── response_validator.py # AI response validation
-│   │   │   └── master_prompt.py      # Gemini system prompt
-│   │   └── utils/
-│   │       └── logging_config.py     # Structured JSON logging
-│   ├── tests/                        # pytest test suite
-│   ├── requirements.txt              # Production dependencies
-│   ├── requirements-dev.txt          # Dev/test dependencies
-│   ├── .env.example                  # Environment variable template
-│   └── Dockerfile                    # Container config (port 8080)
+│   │   ├── main.py              # FastAPI entry point, startup patches, CORS, /health, /api/ready
+│   │   ├── config.py            # All settings (Pydantic Settings) — see this for the full env var list
+│   │   ├── api/                 # REST + WebSocket routes (auth, providers, websocket)
+│   │   ├── models/               # Pydantic message/session models
+│   │   ├── services/             # Gemini client, negotiation engine, STT, speaker-ID, providers, etc.
+│   │   └── utils/                 # Logging, tracing, patches
+│   ├── tests/                    # pytest suite
+│   ├── requirements.txt          # Full local/research profile (adds torch/SpeechBrain/pyannote)
+│   ├── requirements-desktop.txt  # Lean BYOK profile — what production actually runs
+│   ├── .env.example              # Full annotated env var reference
+│   └── Dockerfile
 │
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx                  # Main page (dashboard entry point)
-│   │   ├── layout.tsx                # Root layout
-│   │   └── globals.css               # Global styles
-│   ├── components/
-│   │   ├── negotiation/              # NegotiationDashboard + strategy UI
-│   │   ├── enrollment/               # Speaker enrollment components
-│   │   └── ui/                       # Reusable UI components
-│   ├── hooks/
-│   │   ├── useNegotiation.ts         # Core hook: WebSocket + audio management
-│   │   ├── useNegotiationState.ts    # Negotiation state reducer
-│   │   └── useAskAI.ts               # Ask AI button logic
-│   ├── lib/
-│   │   ├── websocket.ts              # WebSocket client (text + binary frames)
-│   │   ├── types.ts                  # TypeScript interfaces for all message types
-│   │   └── audio-worklet-manager.ts  # Mic capture + speaker playback
-│   ├── utils/
-│   │   ├── api.ts                    # API helpers
-│   │   └── logger.ts                 # Pino logger
-│   ├── tests/                        # Vitest test suite
-│   ├── package.json
-│   └── next.config.js
+├── desktop/                      # Electron companion app (primary client)
+│   ├── src/                      # main.js, preload.js, overlay/dashboard renderer
+│   ├── scripts/                  # VB-Cable installer, PowerShell helpers
+│   └── .env.example
 │
-├── README.md
-└── .gitignore
+├── frontend/                     # Next.js browser dashboard (alt client)
+│   ├── app/, components/, hooks/, lib/, utils/
+│   └── tests/                    # Vitest suite
+│
+├── deploy/                       # Oracle Cloud production deploy (Caddy, systemd, setup script)
+│   └── DEPLOY.md                 # Full VM provisioning walkthrough
+│
+├── docs/code_map/                # Structured code map with path:line references — read this to
+│                                  # navigate the codebase before grepping around blind
+│
+└── xr-application/                # Separate side project (pitch-deck generator) — not part of the core product
 ```
 
----
+`docs/code_map/00_INDEX.md` is the maintained, authoritative map of every backend service, settings flag, and known gotcha — check it before spelunking through `services/` yourself.
 
 ## Prerequisites
 
-- **Node.js** 18+ LTS — https://nodejs.org
-- **Python** 3.11+ — https://python.org
-- **Git** — https://git-scm.com
-- **Google Gemini API Key** — https://aistudio.google.com/app/apikey
+- **Python 3.11+**
+- **Node.js 18+** (for the browser dashboard) — https://nodejs.org
+- **A Google Gemini API key** (AI Studio) — https://aistudio.google.com/app/apikey — or a GCP project with Vertex AI enabled
+- To run the **desktop companion**: **Windows 10/11** (system-audio capture and VB-Cable integration are Windows-only)
+- Optional, for true Hold-to-Ask privacy on desktop: **[VB-CABLE](https://vb-audio.com/Cable/)** virtual audio driver (bundled installer script provided)
+- Optional BYOK keys for any provider you want to use instead of/alongside Gemini: Deepgram, OpenAI, Anthropic, Groq, DeepSeek, OpenRouter
 
-Optional (for deployment):
-- **Docker** — https://docker.com
-- **Google Cloud SDK** — https://cloud.google.com/sdk
+## Install & Run
 
----
+### 1. Backend
 
-## Local Setup
+The backend has **two dependency profiles** — pick one, don't install both into the same environment:
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/your-username/ai-negotiation-copilot.git
-cd ai-negotiation-copilot
-```
-
-### 2. Backend setup
+| Profile | File | What it adds | When to use |
+|---|---|---|---|
+| **Lean / BYOK** | `requirements-desktop.txt` | Nothing heavy — no torch, no ML | Recommended. This is what production actually runs. Speaker-recognition features stay off. |
+| **Full / research** | `requirements.txt` | torch, SpeechBrain, pyannote, WeSpeaker, Conv-TasNet, Whisper | Only if you want local speaker diarization / voice-print recognition. Multi-GB install, pinned `torch==2.1.0` + `numpy<2` (do not upgrade — `k2`/torch ABI compatibility). |
 
 ```bash
-cd backend
+git clone https://github.com/Balaastratech/fix-nego.git
+cd fix-nego/backend
 
-# Create and activate a virtual environment
 python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
 
-# Windows
-venv\Scripts\activate
+pip install -r requirements-desktop.txt   # or requirements.txt for the full profile
 
-# macOS / Linux
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy the environment template
 cp .env.example .env
 ```
 
-Open `backend/.env` and fill in your values:
+Edit `backend/.env` — at minimum:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash-native-audio-preview-12-2025
-GEMINI_MODEL_FALLBACK=gemini-2.0-flash-live-preview-04-09
+GOOGLE_GENAI_USE_VERTEXAI=False
+TRANSCRIPTION_PROVIDER=deepgram
+DEEPGRAM_API_KEY=your_deepgram_api_key_here   # only if TRANSCRIPTION_PROVIDER=deepgram
 CORS_ORIGINS=http://localhost:3000
-LOG_LEVEL=INFO
-SESSION_TTL_SECONDS=3600
 ```
 
-### 3. Frontend setup
+`.env.example` is fully annotated with every setting (STT tuning, speaker-recognition thresholds, auth, feature flags) — read it before touching `config.py` directly.
+
+Run it:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Verify:
+
+```bash
+curl http://localhost:8000/health      # {"status": "healthy"}
+curl http://localhost:8000/api/ready   # {"ready": true, ...}
+```
+
+### 2. Desktop Companion (primary client)
+
+Windows only.
+
+```powershell
+cd desktop
+npm install
+copy .env.example .env
+```
+
+Edit `desktop/.env` to point at your local backend:
+
+```env
+COMPANION_BACKEND_WS=ws://localhost:8000/ws
+```
+
+```powershell
+npm start
+```
+
+For real Hold-to-Ask privacy (the meeting app never hears your private question), install VB-Cable and route the meeting app's mic input through it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-vbcable.ps1
+```
+
+Then in the app: pick the meeting window to capture, pick your listening output for AI replies, pick the virtual-cable output as the meeting-route output, and select that virtual cable as the microphone inside Zoom/Meet/Teams. Full walkthrough in [`desktop/README.md`](desktop/README.md).
+
+### 3. Browser Dashboard (alt client)
 
 ```bash
 cd frontend
 npm install
+npm run dev
 ```
 
-The frontend auto-connects to `ws://localhost:8000/ws`. To override, create `frontend/.env.local`:
+Open `http://localhost:3000`, grant microphone access, and use the "User"/"Counterparty" buttons to tag each speaker manually (there's no automatic source-tagging on this client the way there is on desktop). To point it at a non-default backend, create `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 ```
 
-### 4. Run the app
-
-Open two terminals:
-
-**Terminal 1 — Backend:**
-
-```bash
-cd backend
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-
-uvicorn app.main:app --reload --port 8000
-```
-
-Backend runs at `http://localhost:8000`
-Health check: `http://localhost:8000/health`
-
-**Terminal 2 — Frontend:**
-
-```bash
-cd frontend
-npm run dev
-```
-
-Frontend runs at `http://localhost:3000`
-
-Open http://localhost:3000 in your browser and grant microphone permissions when prompted.
-
----
-
 ## Environment Variables
 
-### Backend (`backend/.env`)
+Each surface ships a fully annotated example file — treat these as the source of truth, not the table below:
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GEMINI_API_KEY` | Yes | — | Your Google Gemini API key |
-| `GEMINI_MODEL` | No | `gemini-2.5-flash-native-audio-preview-12-2025` | Primary Gemini Live model |
-| `GEMINI_MODEL_FALLBACK` | No | `gemini-2.0-flash-live-preview-04-09` | Fallback model on session drop |
-| `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated allowed origins |
-| `LOG_LEVEL` | No | `INFO` | DEBUG, INFO, WARNING, or ERROR |
-| `SESSION_TTL_SECONDS` | No | `3600` | Session timeout in seconds |
-| `GOOGLE_CLOUD_PROJECT` | yes | — | GCP project ID (Vertex AI only) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | yes | — | Path to GCP service account JSON (Vertex AI only) |
-| `GOOGLE_GENAI_USE_VERTEXAI` | yes | false` | Use Vertex AI instead of Gemini API |
+- [`backend/.env.example`](backend/.env.example) — every backend setting (STT, speaker-recognition thresholds, auth, feature flags)
+- [`desktop/.env.example`](desktop/.env.example) — backend WS URL, privacy-mode, VB-Cable toggle
+- [`deploy/.env.oracle.example`](deploy/.env.oracle.example) — the lean production profile used on the live Oracle deployment
 
-### Frontend (`frontend/.env.local`)
+The handful that matter for a first local run:
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `NEXT_PUBLIC_WS_URL` | No | `ws://<host>:8000/ws` | Backend WebSocket URL |
-
----
-
-## How It Works
-
-### Session flow
-
-```
-Browser
-  |
-  |-- Connects to WebSocket (/ws)
-  |-- Grants privacy consent
-  |-- Clicks "Start Negotiation"
-  |     |-- Mic capture starts (16kHz PCM, binary frames)
-  |     |-- Gemini Live session opens
-  |
-  |-- User / Counterparty speaks
-  |     |-- Audio chunks stream to backend
-  |     |-- Gemini Live transcribes and analyzes
-  |     |-- ListenerAgent extracts context in background
-  |
-  |-- AI sends back:
-  |     |-- TRANSCRIPT_UPDATE  (speaker + text)
-  |     |-- STATE_UPDATE       (item, prices, sentiment)
-  |     |-- RESEARCH_COMPLETE  (market data)
-  |     |-- AI_RESPONSE        (coaching advice)
-  |
-  |-- Clicks "End Negotiation"
-        |-- OUTCOME_SUMMARY sent (savings, effectiveness score)
-```
-
-### Dual-model architecture
-
-- **Gemini Live** — Real-time voice conversation. The user can speak directly to it by holding the "Ask AI" button. It responds with audio.
-- **Gemini Flash (ListenerAgent)** — Runs continuously in the background, analyzing the negotiation audio. Extracts prices, sentiment, and leverage points. Injects this as `LISTENER_INTEL` into the Live session so the AI gives informed advice.
-
-### Speaker identification
-
-Click the "User" or "Counterparty" button before each person speaks. The backend labels the transcript accordingly. No automatic voice fingerprinting required.
-
----
+| Variable | Where | Required | Default | Description |
+|---|---|---|---|---|
+| `GEMINI_API_KEY` | backend | Yes (unless using Vertex) | — | Google AI Studio key |
+| `GOOGLE_GENAI_USE_VERTEXAI` | backend | No | `True` | `False` = AI Studio/BYOK (no GCP project needed), `True` = Vertex |
+| `TRANSCRIPTION_PROVIDER` | backend | No | `google_stt` | `google_stt` or `deepgram` |
+| `DEEPGRAM_API_KEY` | backend | If using Deepgram | — | Required when `TRANSCRIPTION_PROVIDER=deepgram` |
+| `CORS_ORIGINS` | backend | No | `http://localhost:3000` | Comma-separated allowed browser origins |
+| `SPEAKER_RECOGNITION_ENABLED` | backend | No | `True` in `requirements.txt` profile, must be `False` on the lean profile | Gates the whole torch/SpeechBrain path |
+| `COMPANION_SHARED_TOKEN` | backend + desktop | No | empty (auth disabled) | Set matching values on both sides to gate a hosted backend |
+| `AUTH_REQUIRED` | backend | No | `False` | Enables Clerk JWT login |
+| `COMPANION_BACKEND_WS` | desktop | No | production URL | Point at `ws://localhost:8000/ws` for local dev |
+| `NEXT_PUBLIC_WS_URL` | frontend | No | `ws://<host>:8000/ws` | Backend WebSocket URL |
 
 ## WebSocket API
 
-All communication happens over a single WebSocket at `/ws`. Text frames carry JSON control messages. Binary frames carry raw PCM audio.
+All client↔server traffic goes over a single WebSocket at `/ws`: JSON text frames for control messages, binary frames for raw PCM audio. This is a representative sample, not the full catalog — see `docs/code_map/04_backend_api_models_providers.md` and `backend/app/models/messages.py` for every message type.
 
-### Client to Server
+**Client → Server** (JSON): `PRIVACY_CONSENT_GRANTED`, `START_NEGOTIATION`, `VISION_FRAME`, `SET_RESPONSE_LANGUAGE`, `SET_LANGUAGE_PROFILE`, `MEETING_BINDING`, `END_NEGOTIATION`
+**Client → Server** (binary, source-tagged): `LOCAL_MIC_PCM`, `REMOTE_APP_PCM`, `ASK_AI_PCM`
 
-| Message | Description |
-|---|---|
-| `PRIVACY_CONSENT_GRANTED` | User accepts audio monitoring |
-| `START_NEGOTIATION` | Begin session with optional context string |
-| `SPEAKER_IDENTIFIED` | Manual speaker label (`user` or `counterparty`) |
-| `SPEAKER_STOPPED` | VAD detected silence |
-| `USER_ADDRESSING_AI` | User is holding the Ask AI button |
-| `START_COPILOT` | Activate proactive monitoring mode |
-| `SET_RESPONSE_MODE` | Set AI response style (`advice` or `command`) |
-| `END_NEGOTIATION` | End session with optional final/initial price |
-| `VISION_FRAME` | Send base64 image for visual context |
+**Server → Client**: `CONNECTION_ESTABLISHED`, `CONSENT_ACKNOWLEDGED`, `SESSION_STARTED`, `SESSION_RESTORED`, `SESSION_RECONNECTING`, `TRANSCRIPT_UPDATE`, `STRATEGY_UPDATE`, `AI_RESPONSE`, `AI_DEGRADED`, `HOLD_TO_ASK_STATE`, `MEETING_BINDING_UPDATE`, `CAPTURE_HEALTH_UPDATE`, `LANGUAGE_UPDATE`, `VISION_STATUS`, `PERSISTENCE_STATUS`, `AUDIO_INTERRUPTED`, `ERROR`
+**Server → Client** (binary): 24kHz Int16 PCM (Gemini voice response)
 
-Binary frames: raw 16kHz Int16 PCM audio chunks.
+## Testing
 
-### Server to Client
+```bash
+# Backend
+cd backend
+venv\Scripts\activate           # or source venv/bin/activate
+pip install -r requirements-dev.txt
+pytest tests/ -v
 
-| Message | Description |
-|---|---|
-| `CONNECTION_ESTABLISHED` | WebSocket ready, session ID assigned |
-| `CONSENT_ACKNOWLEDGED` | Consent recorded |
-| `SESSION_STARTED` | Gemini Live connected |
-| `TRANSCRIPT_UPDATE` | New transcript line (speaker + text) |
-| `STATE_UPDATE` | Extracted negotiation context (item, prices, sentiment) |
-| `RESEARCH_STARTED` / `RESEARCH_COMPLETE` | Market research progress |
-| `AI_RESPONSE` | AI coaching text |
-| `STRATEGY_UPDATE` | Recommended negotiation strategy |
-| `OUTCOME_SUMMARY` | Final deal analysis |
-| `AI_CONNECTING` / `AI_LISTENING` / `AI_THINKING` / `AI_SPEAKING` | AI state indicators |
-| `COPILOT_STARTED` | Proactive mode activated |
-| `RESPONSE_MODE_SET` | Mode confirmation |
-| `SESSION_RECONNECTING` | Auto-reconnect in progress |
-| `AI_DEGRADED` | Feature degradation notice |
-| `ERROR` | Error with code and message |
-
-Binary frames from server: 24kHz Int16 PCM audio (Gemini voice response).
-
----
+# Frontend
+cd frontend
+npm test                  # run once
+npm run test:coverage     # with coverage
+npm run test:ui           # interactive UI
+```
 
 ## Deployment
 
-### Docker
+Production runs the **lean profile** (`requirements-desktop.txt`) on an **Oracle Cloud Always-Free Ampere A1 VM**, behind Caddy for automatic HTTPS/WSS, managed by systemd. The full walkthrough — VM creation, firewall (two layers), DNS, env setup, the one-shot `setup-oracle.sh` provisioning script, verification, and rollback — is in [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
-```bash
-# Build backend image
-docker build -t negotiation-backend ./backend
-
-# Run backend
-docker run -p 8080:8080 \
-  -e GEMINI_API_KEY=your_key_here \
-  -e CORS_ORIGINS=https://your-frontend-url.com \
-  negotiation-backend
-```
-
-The backend Dockerfile uses `python:3.11-slim`, runs as a non-root user, exposes port `8080`, and includes a health check at `/health`.
-
-For the frontend, create `frontend/Dockerfile`:
-
-```dockerfile
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM node:18-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
-
-### Google Cloud Run
-
-```bash
-# Authenticate
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-
-# Deploy backend
-gcloud run deploy negotiation-backend \
-  --source ./backend \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=your_key,CORS_ORIGINS=https://your-frontend-url.com
-
-# Deploy frontend
-gcloud run deploy negotiation-frontend \
-  --source ./frontend \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars NEXT_PUBLIC_WS_URL=wss://your-backend-url/ws
-```
-
-After deploying the backend, update `NEXT_PUBLIC_WS_URL` in the frontend deployment to point to the backend Cloud Run URL. Use `wss://` (not `ws://`) for HTTPS deployments.
-
-For production, store `GEMINI_API_KEY` in Google Secret Manager and reference it in Cloud Run instead of passing it as a plain environment variable.
-
----
-
-## Automated Tests
-
-### Backend
-
-```bash
-cd backend
-venv\Scripts\activate   # Windows / source venv/bin/activate on macOS/Linux
-
-pip install -r requirements-dev.txt
-
-pytest tests/ -v
-```
-
-### Frontend
-
-```bash
-cd frontend
-
-npm test                  # Run once
-npm run test:coverage     # With coverage report
-npm run test:ui           # Interactive UI
-```
-
----
+If you fork this to run your own hosted backend, set `COMPANION_SHARED_TOKEN` on both the VM and your desktop build — without it, anyone who finds the WebSocket URL can connect using their own BYOK keys.
 
 ## Troubleshooting
 
-**Microphone not working**
-- You must be on `http://localhost:3000` or an HTTPS URL — browsers block mic access on other origins.
-- Check that you granted microphone permission in the browser prompt.
+**Microphone not working (browser dashboard)**
+- You must be on `http://localhost:3000` or an HTTPS origin — browsers block mic access elsewhere.
+- Check the browser actually granted the permission prompt.
 
 **WebSocket connection fails**
-- Confirm the backend is running: `http://localhost:8000/health` should return `{"status": "healthy"}`.
-- Check that `CORS_ORIGINS` in `backend/.env` includes `http://localhost:3000`.
+- Confirm the backend is up: `http://localhost:8000/health` → `{"status":"healthy"}`.
+- Check `CORS_ORIGINS` in `backend/.env` includes your client's origin.
+- If a shared token is set, a wrong/missing `COMPANION_SHARED_TOKEN` closes the WS during handshake with code `1008`.
 
 **Gemini API errors**
-- Verify `GEMINI_API_KEY` is set correctly in `backend/.env`.
-- Confirm the model name in `GEMINI_MODEL` is available in your account/region.
-- The app automatically falls back to `GEMINI_MODEL_FALLBACK` on session drops.
+- Verify `GEMINI_API_KEY` is set and valid.
+- Confirm the model in `GEMINI_MODEL`/`GEMINI_LIVE_MODEL_AISTUDIO` is available for your account/region — the app auto-falls-back to `GEMINI_MODEL_FALLBACK` on session drops.
 
-**Audio playback issues**
-- The browser requires a user gesture before audio can play — click anywhere on the page first.
-- Corrupted audio is usually a codec mismatch; the fallback model handles this automatically.
+**Desktop: meeting app still hears me during Hold-to-Ask**
+- The meeting app's microphone input must be the VB-Cable output, not your real mic — see `desktop/README.md`'s device-pairing pattern.
+- `virtual_mic_helper_unavailable` degraded state means no virtual route output is selected in the app.
+
+**Speaker recognition install fails (torch/numpy)**
+- This only applies to the full `requirements.txt` profile. `torch==2.1.0` is pinned against `numpy<2` for `k2`/ABI compatibility — don't upgrade either independently.
+- If you don't need automatic speaker diarization, use `requirements-desktop.txt` instead and skip this entirely.
 
 **CORS errors in browser console**
-- `CORS_ORIGINS` must exactly match the frontend origin including protocol and port.
-- Example: `CORS_ORIGINS=http://localhost:3000`
+- `CORS_ORIGINS` must exactly match the frontend origin including protocol and port, e.g. `CORS_ORIGINS=http://localhost:3000`.
 
----
+## Project Status & Known Gaps
+
+- The **desktop companion** is the actively developed client; the **browser dashboard** is the original hackathon UI and may lag behind on newer features (multi-provider BYOK, Hold-to-Ask native audio, meeting-window binding).
+- Sarvam AI streaming STT (`backend/app/services/sarvam_stream.py`) is an in-progress integration, not yet wired into `config.py`'s provider validation.
+- No `LICENSE` file is present yet — all rights are reserved by default until one is added.
+- See `docs/code_map/` for a maintained, more granular list of dead code and open gotchas per subsystem.
 
 ## License
 
-Built for the Gemini Live Agent Challenge. All rights reserved by the developer.
+No license file yet. All rights reserved by the author until one is added.
