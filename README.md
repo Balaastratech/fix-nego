@@ -1,5 +1,7 @@
 # AI Negotiation Copilot
 
+> **This repo has two parts.** 🖥️ **`desktop/`** — a downloadable Windows app (Electron, packaged as an NSIS installer) that captures your mic + the meeting's system audio and is the actively developed client. 🌐 **`frontend/`** — a browser-only dashboard (mic-only, no install) that was the original hackathon demo client. Both are separate clients talking to the same `backend/` over one WebSocket — see [Architecture](#architecture) below for how they differ.
+
 A real-time AI meeting/negotiation copilot. It listens in on a live conversation, transcribes and analyzes it as it happens, and gives you private, spoken coaching — prices, sentiment, leverage points, and direct answers to questions you ask it mid-conversation without the other party hearing.
 
 Started as a submission for the **Gemini Live Agent Challenge**; has since grown into a two-client product built around one backend:
