@@ -1,4 +1,0 @@
-# file: D:\Balaastra\hackothon\project code\backend\app\services\gemini_client.py
-# hypothesis_version: 6.151.9
-
-[0.01, 0.7, 100, 150, 540, 600, 1000, 16000, '1007', 'AI_DEGRADED', 'AI_LISTENING', 'AI_RESPONSE', 'AI_SPEAKING', 'AUDIO', 'AUDIO_INTERRUPTED', 'GOOGLE_CLOUD_PROJECT', 'GeminiClient', 'No transcript', 'Not available', 'Not mentioned', 'Recent Transcript:\n', 'STRATEGY_UPDATE', 'TRANSCRIPT_UPDATE', 'Unknown', '_chunk_counter', 'activityEnd', 'activityStart', 'ai', 'audio/pcm', 'audio/pcm;rate=16000', 'build_advisor_query', 'build_system_prompt', 'coaching', 'gemini-2.0-flash', 'handle_gemini_text', 'image/jpeg', 'inputaudio', 'item', 'market_data', 'max_price', 'message', 'open_live_session', 'output_transcription', 'payload', 'receive_responses', 'response_type', 'seller_price', 'send_audio_chunk', 'send_vision_frame', 'speaker', 'target_price', 'text', 'timestamp', 'transcript', 'turn_complete', 'type', 'user', 'v1alpha', '{context}']

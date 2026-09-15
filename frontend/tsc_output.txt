@@ -1,1 +1,0 @@
-﻿components/negotiation/StrategyPanel.tsx(3,44): error TS2305: Module '"lucide-react"' has no exported member 'Handshake'.

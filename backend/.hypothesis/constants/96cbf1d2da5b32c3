@@ -1,4 +1,0 @@
-# file: D:\Balaastra\hackothon\project code\backend\app\models\negotiation.py
-# hypothesis_version: 6.151.9
-
-['ACTIVE', 'CONSENTED', 'ENDING', 'IDLE']

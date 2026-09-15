@@ -185,3 +185,50 @@ docs/real-user-e2e-test/
 
 # Auto-generated per-session debug reports
 backend/data/logs/session_traces/
+
+# Agent relay/instruction files (own tooling convenience, not needed to run/understand the product)
+/AGENTS.md
+/CLAUDE.md
+/HANDOFF.md
+
+# More root/backend junk log dumps and scratch scripts
+LOD2.MD
+loged.md.txt
+plan_entry2_raw.txt
+backend/.hypothesis/
+backend/=2.0.10
+backend/backups/
+backend/data/audio_eval_reports/
+backend/data/eval_reports/
+backend/check_device.py
+backend/conn_test.py
+backend/device_verification_log.txt
+backend/error_output.txt
+backend/fix_dependencies.sh
+backend/fix_deps.ps1
+backend/fix_torchaudio.py
+backend/fix_wespeaker.py
+backend/manual_test.py
+backend/out.py
+backend/out2.txt
+backend/test_models.txt
+backend/verify_device_and_dependencies.py
+backend/verify_setup.py
+backend/verify_task_6_3.py
+backend/download_models.py
+backend/download_wespeaker_model.py
+backend/DEPLOYMENT_GUIDE.md
+backend/.env.test
+backend/pretrained_models/
+backend/test_heavy_components_disabled.py
+backend/test_pyannote_loading.py
+backend/test_vad_audio.py
+backend/test_vertex_extraction.py
+backend/test_voice_encoder_manual.py
+backend/test_voice_recognition.py
+backend/test_wespeaker_integration.py
+docs/AI Negotiation Copilot — Complete P.txt
+frontend/tsc_output.txt
+
+# Unrelated side project (Android XR pitch deck, not core product per docs/code_map)
+xr-application/

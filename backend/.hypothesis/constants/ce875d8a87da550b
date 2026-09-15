@@ -1,4 +1,0 @@
-# file: D:\Balaastra\hackothon\project code\backend\app\services\negotiation_engine.py
-# hypothesis_version: 6.151.9
-
-[0.0, '1.0', 'ALREADY_ACTIVE', 'AUDIO_CHUNK', 'CONSENT_ACKNOWLEDGED', 'END_NEGOTIATION', 'ERROR', 'GEMINI_UNAVAILABLE', 'INVALID_STATE', 'Invalid operation.', 'NOT_CONSENTED', 'NOT_STARTED', 'OUTCOME_SUMMARY', 'Recent Transcript:\n', 'SESSION_ENDING', 'SESSION_STARTED', 'START_NEGOTIATION', 'Unknown', 'VISION_FRAME', 'audio', 'code', 'context', 'deal_reached', 'effectiveness_score', 'features', 'final_price', 'image', 'initial_price', 'key_moves', 'live', 'live_session_cm', 'market_value', 'message', 'mode', 'model', 'payload', 'recording_active', 'savings', 'savings_percentage', 'session_id', 'speaker', 'text', 'transcript_summary', 'type', 'version', 'vision', 'vs_market', 'web_search']
