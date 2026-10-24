@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 
 from app.providers import registry
 from app.providers import runtime_config
@@ -87,6 +88,17 @@ async def generate(
     raise ProviderNotConfigured(f"unsupported provider '{provider}' for slot '{slot}'")
 
 
+# Claude 3.x and 4.0-4.6 ids (aliases or dated) still honour temperature.
+# ponytail: id allow-list; unknown/new models just run without it (never a 400).
+_ANTHROPIC_TEMPERATURE_OK = re.compile(
+    r"^claude-(3[-.]|(opus|sonnet|haiku)-4(-[0-6])?(-\d{8})?$)"
+)
+
+
+def _anthropic_accepts_temperature(model: str) -> bool:
+    return bool(_ANTHROPIC_TEMPERATURE_OK.match(model.lower()))
+
+
 async def _generate_anthropic(
     model, api_key, system, user_text, images, image_mime,
     json_mode, temperature, max_output_tokens, timeout,
@@ -112,11 +124,18 @@ async def _generate_anthropic(
     kwargs: dict = {
         "model": model,
         "max_tokens": max_output_tokens,
-        "temperature": temperature,
         "messages": [{"role": "user", "content": content}],
     }
     if system:
         kwargs["system"] = system
+    # anthropic SDK >=1.0 dropped `temperature` from messages.create (TypeError);
+    # the API still takes it via extra_body, which every SDK version supports.
+    # Newer models (Opus 4.7+, Sonnet/Opus/Haiku 5+) reject it with a 400, so it
+    # is sent only to models that still accept it; others run at model default.
+    if _anthropic_accepts_temperature(model):
+        kwargs["extra_body"] = {"temperature": temperature}
+    else:
+        logger.debug("anthropic model %s takes no temperature; omitting %s", model, temperature)
     resp = await client.messages.create(**kwargs)
     parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
     return "".join(parts).strip()
