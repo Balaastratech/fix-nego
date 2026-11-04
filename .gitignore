@@ -38,6 +38,9 @@ venv.bak/
 # Runtime provider config — CONTAINS PASTED API KEYS, never commit
 backend/data/runtime_providers.json
 data/runtime_providers.json
+
+# API usage kept locally when Mission Control's credit fence is unreachable (no keys; import later)
+backend/data/api-credit-unrecorded.jsonl
 runtime_providers.json
 # Any stray secret/key material
 *.pem

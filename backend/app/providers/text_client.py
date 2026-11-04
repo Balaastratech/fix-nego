@@ -22,6 +22,7 @@ import base64
 import logging
 import re
 
+from app.providers import credit_fence
 from app.providers import registry
 from app.providers import runtime_config
 
@@ -136,7 +137,10 @@ async def _generate_anthropic(
         kwargs["extra_body"] = {"temperature": temperature}
     else:
         logger.debug("anthropic model %s takes no temperature; omitting %s", model, temperature)
-    resp = await client.messages.create(**kwargs)
+    # Every Anthropic call goes through the API credit fence (refused = never sent).
+    resp = await credit_fence.create(
+        client, own_key=bool(runtime_config._sess_key("anthropic")), **kwargs
+    )
     parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
     return "".join(parts).strip()
 

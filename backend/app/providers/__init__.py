@@ -11,4 +11,5 @@ Modules:
 - runtime_config  : hot-apply overlay (JSON) over env defaults; resolvers
 - model_catalog   : live model discovery from each provider's own list API
 - text_client     : provider-agnostic async text/vision generation
+- credit_fence    : every Anthropic call passes Mission Control's API credit fence
 """

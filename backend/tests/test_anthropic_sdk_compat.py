@@ -19,7 +19,9 @@ except ImportError:
 
 
 @pytest.fixture
-def captured(monkeypatch):
+def captured(monkeypatch, tmp_path):
+    # the credit fence may keep usage locally; never in the repo's data folder
+    monkeypatch.setenv("API_CREDIT_UNRECORDED_PATH", str(tmp_path / "unrecorded.jsonl"))
     requests: list[dict] = []
 
     def handler(request):
