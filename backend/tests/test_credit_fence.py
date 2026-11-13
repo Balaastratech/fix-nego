@@ -91,7 +91,7 @@ def no_fence(tmp_path, monkeypatch):
 
 async def _generate(model="claude-sonnet-4-6"):
     return await text_client._generate_anthropic(
-        model, "sk-ant-test-placeholder", "sys", "hello", None, "image/png",
+        model, "fake-test-credential", "sys", "hello", None, "image/png",
         False, 0.2, 64, 5.0,
     )
 
@@ -160,7 +160,7 @@ async def test_real_fence_ledger_gets_the_real_usage(fake_client, monkeypatch, t
     fence = credit_fence._fence()
     assert fence is not None
     # under pytest the fence's ledger lives in a throwaway folder, never the live one
-    assert ".mc-voice" not in str(fence.ledger_dir())
+    assert ".mc-voice" not in str(fence.ledger_dir())  # live-path-ok: asserts the ledger is not the live folder
     assert await _generate("claude-sonnet-4-6") == "ok"
     import sqlite3
     db = fence.ledger_dir() / f"{fence.cycle().key}.db"
