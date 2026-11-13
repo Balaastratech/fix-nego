@@ -157,6 +157,8 @@ REAL_MC = Path(os.environ.get("MC_HOME") or r"C:\Balaastra\MISSION-CONTROL")
 async def test_real_fence_ledger_gets_the_real_usage(fake_client, monkeypatch, tmp_path):
     monkeypatch.setenv("MC_HOME", str(REAL_MC))
     monkeypatch.setenv("API_CREDIT_UNRECORDED_PATH", str(tmp_path / "unrecorded.jsonl"))
+    # an earlier test file may have loaded the fence while it patched things; load it fresh
+    monkeypatch.setattr(credit_fence, "_fence_cache", {})
     fence = credit_fence._fence()
     assert fence is not None
     # under pytest the fence's ledger lives in a throwaway folder, never the live one
