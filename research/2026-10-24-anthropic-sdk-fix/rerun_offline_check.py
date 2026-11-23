@@ -5,15 +5,19 @@ Usage (from the app's top folder, any Python 3.11+):
     python research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py "anthropic==1.17.0"
 
 For each SDK spec (default: the floor 0.39.0 and the newest the requirements
-allow, ">=0.39.0,<3") it builds a throwaway venv in a fresh temp folder,
-installs only that SDK plus pytest/pytest-asyncio/hypothesis/pydantic-settings,
-and runs backend/tests/test_anthropic_sdk_compat.py. The test swaps the SDK's
-HTTP client for an in-memory transport and uses a placeholder key, and every
+allow, ">=0.39.0,<3") it builds a throwaway venv, installs only that SDK plus
+pytest/pytest-asyncio/hypothesis/pydantic-settings, runs
+backend/tests/test_anthropic_sdk_compat.py, then check_task_management.py (the
+task-management project's two Claude call shapes). Both swap the SDK's HTTP
+client for an in-memory transport and use a placeholder key, and every
 *API_KEY/SECRET/TOKEN/CREDENTIAL env var is stripped here: no network call to
 Anthropic, no spend. The venvs go in the git-ignored folder .venv-sdk-check/
-in the app's top folder, which the script removes at the end.
+in the app's top folder, which the script removes at the end. One run at a
+time (lock file .venv-sdk-check.lock); a second run exits 2 with
+"OFFLINE CHECK BUSY".
 
-Pass line (exit 0):  OFFLINE CHECK PASS: 18/18 on anthropic <ver>, <ver>
+Pass line (exit 0):
+    OFFLINE CHECK PASS: 18/18 on anthropic <ver>, <ver> (+ task-management calls)
 """
 
 from __future__ import annotations
@@ -56,10 +60,15 @@ def check(spec: str, root: Path, env: dict[str, str]) -> tuple[bool, str]:
     passed = re.search(r"(\d+) passed", out)
     n = int(passed.group(1)) if passed else 0
     ok = r.returncode == 0 and n == EXPECTED and not re.search(r"\d+ (failed|error)", out)
-    tail = "\n".join(l for l in out.splitlines() if re.search(r"passed|failed|error", l))[-600:]
-    print(f"--- {spec} -> anthropic {ver}: {'PASS' if ok else 'FAIL'} ({n}/{EXPECTED})\n{tail}",
-          flush=True)
-    return ok, ver
+    tail = "\n".join(l for l in out.splitlines() if re.search(r"\d+ (passed|failed|error)", l))[-600:]
+    # Same venv: the task-management project's two Claude calls (shapes of its
+    # app/routes/ai.py on claude-haiku-4-5), also offline.
+    tm = run([str(py), str(Path(__file__).with_name("check_task_management.py"))], env=env)
+    tm_ok = tm.returncode == 0 and "PASS anthropic" in tm.stdout
+    tm_line = (tm.stdout.strip().splitlines() or [tm.stderr.strip()[-300:]])[-1]
+    print(f"--- {spec} -> anthropic {ver}: {'PASS' if ok else 'FAIL'} ({n}/{EXPECTED})\n{tail}\n"
+          f"    task-management: {tm_line}", flush=True)
+    return ok and tm_ok, ver
 
 
 def main() -> int:
@@ -95,7 +104,7 @@ def main() -> int:
         lock.unlink(missing_ok=True)
     vers = ", ".join(v for _, v in results)
     if all(ok for ok, _ in results):
-        print(f"OFFLINE CHECK PASS: {EXPECTED}/{EXPECTED} on anthropic {vers}")
+        print(f"OFFLINE CHECK PASS: {EXPECTED}/{EXPECTED} on anthropic {vers} (+ task-management calls)")
         return 0
     print(f"OFFLINE CHECK FAIL: {results}")
     return 1
