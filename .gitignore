@@ -128,6 +128,9 @@ WHAT_WE_ARE_BUILDING.md
 
 # Lean deploy boot-test venv (Phase B)
 backend/.venv-lean/
+# Throwaway venvs of research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py
+.venv-sdk-check/
+.venv-sdk-check.lock
 
 # Vendored agent-skill toolkits (not product code)
 .minimax/
