@@ -37,7 +37,7 @@ pyttsx3>=2.90; sys_platform == "win32"
 # Multi-provider AI layer (provider-agnostic text/vision + STT routing).
 # One openai-compatible adapter covers OpenAI, Groq, DeepSeek, and OpenRouter.
 openai>=1.40.0
-anthropic>=0.39.0,<3  # adapter checked on 0.39-2.12: tests/test_anthropic_sdk_compat.py
+anthropic>=0.40.0,<3  # 0.40+: httpx 0.28; checked on 0.40-2.12 (API 2023-06-01 and 2026-10-21): tests/test_anthropic_sdk_compat.py
 httpx>=0.27.0
 
 # Auth — Clerk JWT verification + app-session tokens

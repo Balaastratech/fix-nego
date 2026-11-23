@@ -4,12 +4,13 @@ Usage (from the app's top folder, any Python 3.11+):
     python research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py
     python research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py "anthropic==1.17.0"
 
-For each SDK spec (default: the floor 0.39.0 and the newest the requirements
-allow, ">=0.39.0,<3") it builds a throwaway venv, installs only that SDK plus
+For each SDK spec (default: the floor 0.40.0 and the newest the requirements
+allow, ">=0.40.0,<3") it builds a throwaway venv, installs only that SDK plus
 pytest/pytest-asyncio/hypothesis/pydantic-settings, runs
 backend/tests/test_anthropic_sdk_compat.py, then check_task_management.py (the
-task-management project's two Claude call shapes). Both swap the SDK's HTTP
-client for an in-memory transport and use a placeholder key, and every
+task-management project's two Claude call shapes). Both fake only the network
+layer (the SDK still builds its own HTTP client), with a fake server that
+enforces the API-version rules, and use a placeholder key, and every
 *API_KEY/SECRET/TOKEN/CREDENTIAL env var is stripped here: no network call to
 Anthropic, no spend. The venvs go in the git-ignored folder .venv-sdk-check/
 in the app's top folder, which the script removes at the end. One run at a
@@ -17,7 +18,7 @@ time (lock file .venv-sdk-check.lock); a second run exits 2 with
 "OFFLINE CHECK BUSY".
 
 Pass line (exit 0):
-    OFFLINE CHECK PASS: 18/18 on anthropic <ver>, <ver> (+ task-management calls)
+    OFFLINE CHECK PASS: 22/22 on anthropic <ver>, <ver> (+ task-management calls)
 """
 
 from __future__ import annotations
@@ -33,9 +34,9 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[2]
 BACKEND = APP / "backend"
 TEST = "tests/test_anthropic_sdk_compat.py"
-EXPECTED = 18
+EXPECTED = 22
 LOCK_STALE_S = 30 * 60  # a run takes ~2-5 min; older locks are a killed run's
-DEFAULT_SPECS = ["anthropic==0.39.0", "anthropic>=0.39.0,<3"]
+DEFAULT_SPECS = ["anthropic==0.40.0", "anthropic>=0.40.0,<3"]
 EXTRAS = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "hypothesis>=6.0.0", "pydantic-settings"]
 
 

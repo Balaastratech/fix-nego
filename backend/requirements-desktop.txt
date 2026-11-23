@@ -60,11 +60,13 @@ google-genai>=1.0.0
 # openai SDK: the single adapter for OpenAI + Groq + DeepSeek + OpenRouter
 #   (all openai-compatible, differ only by base_url + key).
 openai>=1.40.0
-# anthropic SDK: Claude reasoning/vision. Adapter checked offline on 0.39-2.12
-# (research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py runs
+# anthropic SDK: Claude reasoning/vision. Floor 0.40: older releases crash on
+# httpx 0.28 (removed `proxies`). SDK >=2.0 sends API version 2026-10-21 (no
+# temperature on any model; the adapter handles it). Adapter checked offline on
+# 0.40-2.12 (research/2026-10-24-anthropic-sdk-fix/rerun_offline_check.py runs
 # tests/test_anthropic_sdk_compat.py on the floor and the newest allowed);
 # re-run that before allowing 3.x.
-anthropic>=0.39.0,<3
+anthropic>=0.40.0,<3
 
 # ── STT note ─────────────────────────────────────────────────────────────────
 # Deepgram (live streaming + batch), AssemblyAI, and ElevenLabs are all reached

@@ -99,6 +99,17 @@ def _anthropic_accepts_temperature(model: str) -> bool:
     return bool(_ANTHROPIC_TEMPERATURE_OK.match(model.lower()))
 
 
+# API versions that still take sampling settings. anthropic SDK >=2.0 sends
+# `anthropic-version: 2026-10-21`, where temperature/top_p/top_k are a 400 on
+# every model (even via extra_body). Unknown versions are treated as new.
+_ANTHROPIC_SAMPLING_API_VERSIONS = {"2023-06-01"}
+
+
+def _anthropic_sends_temperature(client, model: str) -> bool:
+    api_version = str(getattr(client, "default_headers", {}).get("anthropic-version", ""))
+    return api_version in _ANTHROPIC_SAMPLING_API_VERSIONS and _anthropic_accepts_temperature(model)
+
+
 async def _generate_anthropic(
     model, api_key, system, user_text, images, image_mime,
     json_mode, temperature, max_output_tokens, timeout,
@@ -128,14 +139,17 @@ async def _generate_anthropic(
     }
     if system:
         kwargs["system"] = system
-    # anthropic SDK >=1.0 dropped `temperature` from messages.create (TypeError);
-    # the API still takes it via extra_body, which every SDK version supports.
-    # Newer models (Opus 4.7+, Sonnet/Opus/Haiku 5+) reject it with a 400, so it
-    # is sent only to models that still accept it; others run at model default.
-    if _anthropic_accepts_temperature(model):
+    # anthropic SDK >=1.0 dropped `temperature` from messages.create (TypeError),
+    # so it goes via extra_body. It is sent only when both still accept it:
+    # - the API version (SDK <2.0 sends 2023-06-01; SDK >=2.0 sends 2026-10-21,
+    #   which rejects sampling settings on every model with a 400), and
+    # - the model (Opus 4.7+, Sonnet/Opus/Haiku 5+ reject it on any version).
+    # Otherwise the call runs at the model's default sampling (temperature 1.0).
+    if _anthropic_sends_temperature(client, model):
         kwargs["extra_body"] = {"temperature": temperature}
     else:
-        logger.debug("anthropic model %s takes no temperature; omitting %s", model, temperature)
+        logger.debug("anthropic %s on this SDK/API version takes no temperature; omitting %s",
+                     model, temperature)
     resp = await client.messages.create(**kwargs)
     parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
     return "".join(parts).strip()
