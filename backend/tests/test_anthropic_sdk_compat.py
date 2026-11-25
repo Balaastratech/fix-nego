@@ -66,7 +66,7 @@ def captured(monkeypatch):
 
 async def _call(model, images=None):
     return await text_client._generate_anthropic(
-        model, "sk-ant-test-placeholder", "sys", "hello", images, "image/png",
+        model, "sk-ant-fake-test-placeholder", "sys", "hello", images, "image/png",
         True, 0.2, 64, 5.0,
     )
 

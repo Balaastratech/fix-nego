@@ -48,7 +48,7 @@ import anthropic  # noqa: E402  (after the transport patch, like the app's impor
 
 
 async def main():
-    client = anthropic.AsyncAnthropic(api_key="sk-ant-test-placeholder")  # as app/routes/ai.py
+    client = anthropic.AsyncAnthropic(api_key="sk-ant-fake-test-placeholder")  # as app/routes/ai.py
     gen = await client.messages.create(  # generate_tasks
         model=MODEL, max_tokens=1024, system="sys",
         messages=[{"role": "user", "content": "Goal: x"}],
